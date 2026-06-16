@@ -1,0 +1,51 @@
+[project]
+name = "recut"
+version = "0.1.0"
+description = "Recut backend — borrow the format, tell your story. Analysis, co-writing, generation, render, MCP."
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "python-multipart>=0.0.9",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "psycopg[binary]>=3.1",
+  "boto3>=1.34",
+  "httpx>=0.27",
+  "mcp>=1.0",
+  "anyio>=4.3",
+]
+
+[project.optional-dependencies]
+models = ["dashscope>=1.17"]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.4",
+  "mypy>=1.9",
+]
+
+[project.scripts]
+recut-api = "recut.api.main:run"
+recut-worker = "recut.worker.main:run"
+recut-mcp = "recut.mcp.server:run"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["recut*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

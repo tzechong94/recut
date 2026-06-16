@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / web
+node_modules/
+dist/
+.vite/
+
+# Env / secrets
+.env
+.env.local
+
+# Local media + scratch
+/tmp/recut/
+assets/uploads/
+*.log
+.DS_Store

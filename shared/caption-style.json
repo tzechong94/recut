@@ -1,0 +1,49 @@
+{
+  "$comment": "ANTI-DRIFT KEYSTONE. The single source of truth for how a slot's {font,size,align} becomes pixel geometry. The React live-preview reads this directly; the Python render generates ASS subtitles from the same numbers. Preview and export cannot diverge because they compute from one spec. Tested by the caption-parity test (web px == python ASS coords).",
+  "canvas": {
+    "width": 1080,
+    "height": 1920,
+    "aspect_ratio": "9:16",
+    "fps": 30
+  },
+  "fonts": {
+    "display": { "family": "Bricolage Grotesque", "weight": 700, "file": "BricolageGrotesque-Bold.ttf" },
+    "clean":   { "family": "DM Sans",            "weight": 600, "file": "DMSans-SemiBold.ttf" },
+    "mono":    { "family": "JetBrains Mono",     "weight": 500, "file": "JetBrainsMono-Medium.ttf" }
+  },
+  "fallback_font": "clean",
+  "sizes": {
+    "s": { "px": 13, "canvas_px": 52 },
+    "m": { "px": 16, "canvas_px": 64 },
+    "l": { "px": 24, "canvas_px": 96 }
+  },
+  "$comment_sizes": "px = preview font-size at the prototype's phone scale (270px wide). canvas_px = render font-size at full 1080px canvas. ratio canvas/preview = 1080/270 = 4.0; canvas_px == px * 4 exactly. The parity test asserts this invariant.",
+  "preview_phone_width": 270,
+  "scale_factor": 4.0,
+  "colors": {
+    "text_fill": "#FFFFFF",
+    "text_stroke": "#17151C",
+    "stroke_width_canvas_px": 6,
+    "shadow": true
+  },
+  "layout": {
+    "safe_margin_canvas_px": 96,
+    "text_card": {
+      "vertical": "center",
+      "max_width_frac": 0.82,
+      "line_spacing": 1.12
+    },
+    "caption": {
+      "vertical": "lower_third",
+      "lower_third_y_frac": 0.72,
+      "max_width_frac": 0.86,
+      "line_spacing": 1.1
+    }
+  },
+  "align_map": {
+    "left":   { "css": "left",   "ass": 1, "anchor_x_frac": 0.07 },
+    "center": { "css": "center", "ass": 2, "anchor_x_frac": 0.5 },
+    "right":  { "css": "right",  "ass": 3, "anchor_x_frac": 0.93 }
+  },
+  "$comment_ass": "ass values are libass alignment codes for the BOTTOM row (1=bottom-left,2=bottom-center,3=bottom-right). The render adds +4 / +8 to move the anchor to middle/top rows as needed per layout.vertical."
+}
