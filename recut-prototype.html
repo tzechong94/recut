@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recut — prototype</title>
+<style>html,body{margin:0;padding:0;background:#F1F0F4;}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+const LUCIDE = {"Upload":[["path",{"d":"M12 3v12"}],["path",{"d":"m17 8-5-5-5 5"}],["path",{"d":"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"}]],"Film":[["rect",{"width":"18","height":"18","x":"3","y":"3","rx":"2"}],["path",{"d":"M7 3v18"}],["path",{"d":"M3 7.5h4"}],["path",{"d":"M3 12h18"}],["path",{"d":"M3 16.5h4"}],["path",{"d":"M17 3v18"}],["path",{"d":"M17 7.5h4"}],["path",{"d":"M17 16.5h4"}]],"Image":[["rect",{"width":"18","height":"18","x":"3","y":"3","rx":"2","ry":"2"}],["circle",{"cx":"9","cy":"9","r":"2"}],["path",{"d":"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"}]],"Sparkles":[["path",{"d":"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"}],["path",{"d":"M20 2v4"}],["path",{"d":"M22 4h-4"}],["circle",{"cx":"4","cy":"20","r":"2"}]],"Type":[["path",{"d":"M12 4v16"}],["path",{"d":"M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"}],["path",{"d":"M9 20h6"}]],"Wand2":[["path",{"d":"m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"}],["path",{"d":"m14 7 3 3"}],["path",{"d":"M5 6v4"}],["path",{"d":"M19 14v4"}],["path",{"d":"M10 2v2"}],["path",{"d":"M7 8H3"}],["path",{"d":"M21 16h-4"}],["path",{"d":"M11 3H9"}]],"UserRound":[["circle",{"cx":"12","cy":"8","r":"5"}],["path",{"d":"M20 21a8 8 0 0 0-16 0"}]],"Check":[["path",{"d":"M20 6 9 17l-5-5"}]],"Play":[["path",{"d":"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"}]],"ArrowRight":[["path",{"d":"M5 12h14"}],["path",{"d":"m12 5 7 7-7 7"}]],"ArrowLeft":[["path",{"d":"m12 19-7-7 7-7"}],["path",{"d":"M19 12H5"}]],"Link2":[["path",{"d":"M9 17H7A5 5 0 0 1 7 7h2"}],["path",{"d":"M15 7h2a5 5 0 1 1 0 10h-2"}],["line",{"x1":"8","x2":"16","y1":"12","y2":"12"}]],"RefreshCw":[["path",{"d":"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"}],["path",{"d":"M21 3v5h-5"}],["path",{"d":"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"}],["path",{"d":"M8 16H3v5"}]],"Clapperboard":[["path",{"d":"m12.296 3.464 3.02 3.956"}],["path",{"d":"M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z"}],["path",{"d":"M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"}],["path",{"d":"m6.18 5.276 3.1 3.899"}]],"ListChecks":[["path",{"d":"M13 5h8"}],["path",{"d":"M13 12h8"}],["path",{"d":"M13 19h8"}],["path",{"d":"m3 17 2 2 4-4"}],["path",{"d":"m3 7 2 2 4-4"}]],"Download":[["path",{"d":"M12 15V3"}],["path",{"d":"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"}],["path",{"d":"m7 10 5 5 5-5"}]],"CheckCircle2":[["circle",{"cx":"12","cy":"12","r":"10"}],["path",{"d":"m9 12 2 2 4-4"}]],"Plus":[["path",{"d":"M5 12h14"}],["path",{"d":"M12 5v14"}]],"MoreHorizontal":[["circle",{"cx":"12","cy":"12","r":"1"}],["circle",{"cx":"19","cy":"12","r":"1"}],["circle",{"cx":"5","cy":"12","r":"1"}]],"Copy":[["rect",{"width":"14","height":"14","x":"8","y":"8","rx":"2","ry":"2"}],["path",{"d":"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"}]],"Trash2":[["path",{"d":"M10 11v6"}],["path",{"d":"M14 11v6"}],["path",{"d":"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"}],["path",{"d":"M3 6h18"}],["path",{"d":"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"}]],"Pencil":[["path",{"d":"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"}],["path",{"d":"m15 5 4 4"}]],"AlignLeft":[["path",{"d":"M21 5H3"}],["path",{"d":"M15 12H3"}],["path",{"d":"M17 19H3"}]],"AlignCenter":[["path",{"d":"M21 5H3"}],["path",{"d":"M17 12H7"}],["path",{"d":"M19 19H5"}]],"AlignRight":[["path",{"d":"M21 5H3"}],["path",{"d":"M21 12H9"}],["path",{"d":"M21 19H7"}]],"X":[["path",{"d":"M18 6 6 18"}],["path",{"d":"m6 6 12 12"}]],"CornerDownLeft":[["path",{"d":"M20 4v7a4 4 0 0 1-4 4H4"}],["path",{"d":"m9 10-5 5 5 5"}]],"Volume2":[["path",{"d":"M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"}],["path",{"d":"M16 9a5 5 0 0 1 0 6"}],["path",{"d":"M19.364 18.364a9 9 0 0 0 0-12.728"}]],"Mic":[["path",{"d":"M12 19v3"}],["path",{"d":"M19 10v2a7 7 0 0 1-14 0v-2"}],["rect",{"x":"9","y":"2","width":"6","height":"13","rx":"3"}]],"Music":[["path",{"d":"M9 18V5l12-2v13"}],["circle",{"cx":"6","cy":"18","r":"3"}],["circle",{"cx":"18","cy":"16","r":"3"}]]};
+;
+function makeIcon(name){
+  return function(props){
+    props = props || {};
+    const size = props.size || 16;
+    const node = LUCIDE[name];
+    if(!node) return null;
+    const out = { width:size, height:size, viewBox:'0 0 24 24',
+      fill: props.fill || 'none', stroke:'currentColor',
+      strokeWidth: (props.strokeWidth != null ? props.strokeWidth : 2),
+      strokeLinecap:'round', strokeLinejoin:'round' };
+    Object.keys(props).forEach(function(k){ if(k!=='size'&&k!=='fill'&&k!=='strokeWidth') out[k]=props[k]; });
+    return React.createElement('svg', out, node.map(function(c,i){
+      return React.createElement(c[0], Object.assign({key:i}, c[1]));
+    }));
+  };
+}
+const _ICONS = {}; ['Upload','Film','Image','Sparkles','Type','Wand2','UserRound','Check','Play','ArrowRight','ArrowLeft','Link2','RefreshCw','Clapperboard','ListChecks','Download','CheckCircle2','Plus','MoreHorizontal','Copy','Trash2','Pencil','AlignLeft','AlignCenter','AlignRight','X','CornerDownLeft','Volume2','Mic','Music'].forEach(function(n){ _ICONS[n]=makeIcon(n); });
+const { Upload, Film, Sparkles, Type, Wand2, UserRound, Check, Play, ArrowRight, ArrowLeft, Link2, RefreshCw, Clapperboard, ListChecks, Download, CheckCircle2, Plus, MoreHorizontal, Copy, Trash2, Pencil, AlignLeft, AlignCenter, AlignRight, X, CornerDownLeft, Volume2, Mic, Music } = _ICONS;
+const ImageIcon = _ICONS['Image'];
+
+
+
+/* ================================================================== */
+/*  Recut — clickable prototype (v2)                                   */
+/*  projects → reference → recipe → script → storyboard → cover        */
+/*  working name + placeholder copy throughout                         */
+/* ================================================================== */
+
+const TYPES = {
+  text:  { label: "Text card",        actor: "auto", hint: "Auto-built",     color: "#64748B", soft: "#EEF1F5", Icon: Type },
+  talk:  { label: "Talking head",     actor: "you",  hint: "Film this",      color: "#FF5C49", soft: "#FFEDEA", Icon: Film },
+  roll:  { label: "Camera roll",      actor: "you",  hint: "Pick a clip",    color: "#0FB5A6", soft: "#E1F6F3", Icon: ImageIcon },
+  broll: { label: "Generated b-roll", actor: "auto", hint: "Auto-generated", color: "#7B5CFF", soft: "#F0ECFF", Icon: Sparkles },
+  illus: { label: "Illustration",     actor: "auto", hint: "Auto-generated", color: "#F5A524", soft: "#FFF3DF", Icon: Wand2 },
+  face:  { label: "Generated face",   actor: "auto", hint: "From your face",  color: "#EC4899", soft: "#FCE8F1", Icon: UserRound },
+};
+const FONTS = { display: "Bricolage Grotesque", clean: "DM Sans", mono: "JetBrains Mono" };
+
+const seedSlots = () => [
+  { id: 1, beat: "Hook",   type: "text",  text: "I saved 60% on marble. Here's how.", dur: 3, filled: false, style: { font: "display", size: "l", align: "center" } },
+  { id: 2, beat: "Setup",  type: "talk",  text: "Everyone overpays for stone. So I went straight to the source.", dur: 4, filled: false, style: { font: "clean", size: "m", align: "left" } },
+  { id: 3, beat: "Cut 1",  type: "roll",  text: "Walking onto the Foshan factory floor", dur: 3, filled: false, style: { font: "clean", size: "m", align: "left" } },
+  { id: 4, beat: "Cut 2",  type: "broll", text: "Slabs on the saw line — sparks, the scale of the warehouse", dur: 3, filled: false, style: { font: "clean", size: "m", align: "left" } },
+  { id: 5, beat: "Cut 3",  type: "roll",  text: "Close-up — hand across the polished slab", dur: 2, filled: false, style: { font: "clean", size: "m", align: "left" } },
+  { id: 6, beat: "Payoff", type: "talk",  text: "Same slab. Sixty percent less. No middleman.", dur: 5, filled: false, style: { font: "clean", size: "m", align: "left" } },
+  { id: 7, beat: "CTA",    type: "text",  text: "Follow for the supplier list →", dur: 2, filled: false, style: { font: "display", size: "m", align: "center" } },
+];
+
+const INIT_PROJECTS = [
+  { id: "p1", name: "Marble sourcing reel", edited: "just now",   stage: 2, tone: "#FF5C49" },
+  { id: "p2", name: "5 renovation mistakes", edited: "yesterday", stage: 4, tone: "#7B5CFF" },
+  { id: "p3", name: "Custom carpentry BTS",  edited: "3 days ago", stage: 5, tone: "#0FB5A6" },
+];
+const STAGES = ["Reference", "Recipe", "Script", "Storyboard", "Cover"];
+
+function App() {
+  const [view, setView] = useState("projects"); // projects | editor
+  const [projects, setProjects] = useState(INIT_PROJECTS);
+  const [activeId, setActiveId] = useState(null);
+
+  const open = (id) => { setActiveId(id); setView("editor"); };
+  const active = projects.find((p) => p.id === activeId);
+
+  return (
+    <div className="rc-root">
+      <style>{css}</style>
+      {view === "projects" ? (
+        <Projects projects={projects} setProjects={setProjects} open={open} />
+      ) : (
+        <Editor key={activeId} project={active} exit={() => setView("projects")} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------- Projects ------------------------------- */
+function Projects({ projects, setProjects, open }) {
+  const [menu, setMenu] = useState(null);
+  const [renaming, setRenaming] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+
+  const create = () => {
+    const id = "p" + Date.now();
+    setProjects([{ id, name: "Untitled project", edited: "just now", stage: 0, tone: "#5B3DF5" }, ...projects]);
+    open(id);
+  };
+  const dup = (p) => {
+    setProjects((ps) => [{ ...p, id: "p" + Date.now(), name: p.name + " copy", edited: "just now" }, ...ps]);
+    setMenu(null);
+  };
+  const del = (id) => { setProjects((ps) => ps.filter((p) => p.id !== id)); setConfirmDel(null); setMenu(null); };
+  const rename = (id, name) => { setProjects((ps) => ps.map((p) => p.id === id ? { ...p, name: name || "Untitled project" } : p)); setRenaming(null); };
+
+  return (
+    <div className="rc-proj-page">
+      <header className="rc-top">
+        <div className="rc-brand">
+          <span className="rc-mark"><Clapperboard size={15} strokeWidth={2.4} /></span>
+          <span className="rc-name">Recut</span>
+        </div>
+        <span className="rc-acct">jellyfuur</span>
+      </header>
+
+      <div className="rc-proj-inner">
+        <div className="rc-proj-head">
+          <div>
+            <h1>Projects</h1>
+            <p>Every post starts from a format you love. Pick up where you left off, or start a new one.</p>
+          </div>
+        </div>
+
+        <div className="rc-grid">
+          <button className="rc-newtile" onClick={create}>
+            <span className="rc-newplus"><Plus size={22} /></span>
+            <span>New project</span>
+          </button>
+
+          {projects.map((p) => (
+            <div className="rc-card" key={p.id}>
+              <button className="rc-cardthumb" style={{ background: `linear-gradient(155deg, ${p.tone}, ${shade(p.tone)})` }} onClick={() => open(p.id)}>
+                <span className="rc-cardstage">{STAGES[p.stage] || "Draft"}</span>
+                <span className="rc-cardplay"><Play size={16} fill="#fff" strokeWidth={0} /></span>
+              </button>
+              <div className="rc-cardrow">
+                <div className="rc-cardinfo">
+                  {renaming === p.id ? (
+                    <input autoFocus className="rc-renameinput" defaultValue={p.name}
+                      onBlur={(e) => rename(p.id, e.target.value.trim())}
+                      onKeyDown={(e) => e.key === "Enter" && rename(p.id, e.target.value.trim())} />
+                  ) : (
+                    <span className="rc-cardname" onClick={() => open(p.id)}>{p.name}</span>
+                  )}
+                  <span className="rc-cardedited">Edited {p.edited}</span>
+                </div>
+                <div className="rc-cardmenu">
+                  <button className="rc-iconbtn" onClick={() => { setMenu(menu === p.id ? null : p.id); setConfirmDel(null); }}>
+                    <MoreHorizontal size={17} />
+                  </button>
+                  {menu === p.id && (
+                    <div className="rc-menu">
+                      <button onClick={() => { setRenaming(p.id); setMenu(null); }}><Pencil size={13} /> Rename</button>
+                      <button onClick={() => dup(p)}><Copy size={13} /> Duplicate</button>
+                      {confirmDel === p.id
+                        ? <button className="rc-del" onClick={() => del(p.id)}><Trash2 size={13} /> Delete for good?</button>
+                        : <button className="rc-del" onClick={() => setConfirmDel(p.id)}><Trash2 size={13} /> Delete</button>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------- Editor -------------------------------- */
+function Editor({ project, exit }) {
+  const [stage, setStage] = useState(0);
+  const [slots, setSlots] = useState(seedSlots());
+  const [drafted, setDrafted] = useState(false);
+  const [generated, setGenerated] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  const go = (n) => setStage(n);
+  const generate = () => {
+    setGenerating(true);
+    setTimeout(() => { setGenerating(false); setGenerated(true); setStage(3); }, 1700);
+  };
+
+  return (
+    <>
+      <header className="rc-top">
+        <div className="rc-brand">
+          <button className="rc-exit" onClick={exit}><ArrowLeft size={16} /></button>
+          <span className="rc-mark"><Clapperboard size={15} strokeWidth={2.4} /></span>
+          <span className="rc-name">Recut</span>
+          <span className="rc-proj">/ {project?.name || "Untitled"}</span>
+        </div>
+        <div className="rc-meta">
+          <span className="rc-ratio">9:16</span>
+          <span className="rc-dur">{slots.reduce((a, s) => a + s.dur, 0)}s</span>
+        </div>
+      </header>
+
+      <div className="rc-bodywrap">
+        <nav className="rc-rail" aria-label="Stages">
+          {STAGES.map((s, i) => {
+            const reachable = i <= stage || (i === 3 && generated);
+            return (
+              <button key={s} disabled={!reachable && i > stage}
+                className={"rc-step" + (i === stage ? " is-active" : "") + (i < stage ? " is-done" : "")}
+                onClick={() => reachable && go(i)}>
+                <span className="rc-num">{i < stage ? <Check size={13} strokeWidth={3} /> : String(i + 1).padStart(2, "0")}</span>
+                <span className="rc-steplabel">{s}</span>
+              </button>
+            );
+          })}
+          <div className="rc-railfoot">Borrow the format.<br />Tell your story.</div>
+        </nav>
+
+        <main className="rc-canvas" key={stage}>
+          {stage === 0 && <Reference next={() => go(1)} />}
+          {stage === 1 && <Recipe slots={slots} next={() => go(2)} back={() => go(0)} />}
+          {stage === 2 && <Script slots={slots} drafted={drafted} setDrafted={setDrafted}
+                                  generate={generate} back={() => go(1)} />}
+          {stage === 3 && <Storyboard slots={slots} setSlots={setSlots} next={() => go(4)} back={() => go(2)} />}
+          {stage === 4 && <Cover back={() => go(3)} />}
+        </main>
+      </div>
+
+      {generating && (
+        <div className="rc-overlay">
+          <div className="rc-gencard">
+            <div className="rc-genspin" />
+            <h3>Building your base cut</h3>
+            <p className="rc-genstep">Assigning slots · generating stand-ins · stitching the timeline</p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ----------------------------- 01 Reference ----------------------------- */
+function Reference({ next }) {
+  const [mode, setMode] = useState("upload"); // upload | link
+  const [url, setUrl] = useState("");
+  const [loaded, setLoaded] = useState(null);
+  const [err, setErr] = useState("");
+
+  const fetchLink = () => {
+    const u = url.trim();
+    if (!u) { setErr("Paste a reel or carousel link to continue."); return; }
+    const platform = /tiktok/i.test(u) ? "TikTok" : "Instagram";
+    setLoaded({ platform, url: u }); setErr("");
+  };
+  const ref = loaded
+    ? { tag: loaded.platform.toUpperCase() + " · linked", cap: loaded.url }
+    : { tag: "REEL · 0:23", cap: "@studio.haul — “Sourcing haul → big reveal”" };
+
+  return (
+    <div className="rc-stage">
+      <Head k="01" t="Drop a post you love the format of" s="One reel or carousel. The agent learns its recipe — the beats, the pacing, the caption rhythm — never its content." />
+      <div className="rc-refgrid">
+        <div className="rc-refcard">
+          <div className="rc-refphone">
+            <div className="rc-refplay"><Play size={20} fill="#fff" strokeWidth={0} /></div>
+            <div className="rc-reftag">{ref.tag}</div>
+            <div className="rc-refcap">{ref.cap}</div>
+          </div>
+          <div className="rc-refmeta">
+            {loaded
+              ? <span className="rc-refstat">fetched from {loaded.platform}</span>
+              : <><span className="rc-refstat">412k plays</span><span className="rc-refstat">7 cuts</span><span className="rc-refstat">fast-cut</span></>}
+          </div>
+        </div>
+        <div className="rc-drop">
+          {mode === "upload" ? (
+            <div className="rc-dropinner">
+              <Upload size={22} strokeWidth={2} />
+              <p className="rc-dropmain">Drop a video or carousel</p>
+              <p className="rc-dropsub">MP4, MOV or images — up to 200MB</p>
+              <div className="rc-or"><span>or</span></div>
+              <button className="rc-ghost" onClick={() => setMode("link")}><Link2 size={15} /> Paste a link</button>
+            </div>
+          ) : (
+            <div className="rc-dropinner rc-linkmode">
+              <Link2 size={22} strokeWidth={2} />
+              <p className="rc-dropmain">Paste a reel or carousel link</p>
+              <div className="rc-linkrow">
+                <input value={url} autoFocus placeholder="https://instagram.com/reel/…"
+                  onChange={(e) => { setUrl(e.target.value); setErr(""); }}
+                  onKeyDown={(e) => e.key === "Enter" && fetchLink()} />
+                <button className="rc-cta sm" onClick={fetchLink}>Fetch</button>
+              </div>
+              {err && <p className="rc-err">{err}</p>}
+              {loaded && <p className="rc-linkok"><Check size={13} /> Pulled from {loaded.platform} — ready to analyse</p>}
+              <button className="rc-ghost rc-uploadinstead" onClick={() => setMode("upload")}><Upload size={15} /> Upload instead</button>
+            </div>
+          )}
+        </div>
+      </div>
+      <Foot right={<button className="rc-cta" onClick={next}>Analyse the format <ArrowRight size={16} /></button>}
+            note={loaded ? "Reference pulled from your link." : "Demo reference loaded — analyse to see the recipe."} />
+    </div>
+  );
+}
+
+/* ------------------------------- 02 Recipe ------------------------------ */
+function Recipe({ slots, next, back }) {
+  let t = 0;
+  const fmt = (sec) => "0:" + String(sec).padStart(2, "0");
+  return (
+    <div className="rc-stage">
+      <Head k="02" t="Here's the recipe we pulled" s="The agent watched the reference — shot by shot, audio and on-screen text — and broke it into seven beats. This structure becomes your template." />
+      <div className="rc-analysis">
+        <span><b>0:23</b> analysed</span><i /><span><b>7</b> shots detected</span><i /><span>audio transcribed</span><i /><span>on-screen text read</span>
+      </div>
+      <div className="rc-recipe">
+        <div className="rc-tl">
+          {slots.map((s) => {
+            const T = TYPES[s.type];
+            const start = t; t += s.dur;
+            return (
+              <div className="rc-tlrow" key={s.id}>
+                <span className="rc-tlts">{fmt(start)}</span>
+                <span className="rc-tlbeat"><b>{s.beat}</b></span>
+                <span className="rc-chip" style={{ background: T.soft, color: T.color }}><T.Icon size={13} /> {T.label}</span>
+                <span className="rc-bar" style={{ width: 26 + s.dur * 14, background: T.color }} />
+                <span className="rc-tldur">{s.dur}s</span>
+              </div>
+            );
+          })}
+        </div>
+        <aside className="rc-readout">
+          <h4>What the agent noticed</h4>
+          <div className="rc-hooktrans"><span>Transcribed hook</span>“Wait till you see what this actually cost…”</div>
+          <ul>
+            <li><b>Hook-first.</b> A 3-second bold-text claim before anything else.</li>
+            <li><b>Proof in the middle.</b> Three quick cuts carry the evidence.</li>
+            <li><b>Payoff to camera.</b> The reveal lands on a talking head.</li>
+            <li><b>Captions burned in,</b> punchy and lower-third.</li>
+          </ul>
+          <div className="rc-legend">{Object.values(TYPES).map((T) => (
+            <span key={T.label} className="rc-legitem"><i style={{ background: T.color }} />{T.label}</span>))}
+          </div>
+        </aside>
+      </div>
+      <Foot left={<button className="rc-back" onClick={back}><ArrowLeft size={16} /> Reference</button>}
+            right={<button className="rc-cta" onClick={next}>Use this structure <ArrowRight size={16} /></button>} />
+    </div>
+  );
+}
+
+/* ------------------------------- 03 Script ------------------------------ */
+const THREAD = [
+  { who: "agent", text: "Tell me everything about this post — what's the story, what surprised you, and what do you want people to feel by the end?" },
+  { who: "you",   text: "I flew to Foshan and bought marble straight from the factory. Same slabs the showrooms sell, about 60% cheaper. I want people to feel like they've been overpaying." },
+  { who: "agent", text: "Love it — that gap between showroom price and factory price is your whole hook. One thing: what's the single most striking visual from the trip?" },
+  { who: "you",   text: "The warehouse scale. Slabs stacked three storeys high, saws throwing sparks." },
+  { who: "agent", text: "Perfect. I'll open on the claim, use the warehouse for proof, and land the payoff to camera. Drafting it onto your seven beats now." },
+];
+
+function Script({ slots, drafted, setDrafted, generate, back }) {
+  const [step, setStep] = useState(1);
+  const visible = THREAD.slice(0, step);
+  const done = step >= THREAD.length;
+
+  return (
+    <div className="rc-stage">
+      <Head k="03" t="Your story, written into the recipe" s="Share as much as you can about your idea. The agent asks, you answer, it maps everything onto the beats — back and forth until it sounds like you." />
+      <div className="rc-script">
+        <div className="rc-scriptmain">
+          {!drafted ? (
+            <div className="rc-emptyscript">
+              <Sparkles size={20} />
+              <p>Your script appears here as you and the agent shape it.</p>
+              {done && <button className="rc-cta rc-draftbtn" onClick={() => setDrafted(true)}><Pencil size={15} /> Draft the script</button>}
+            </div>
+          ) : (
+            <div className="rc-beats">
+              {slots.map((s) => {
+                const T = TYPES[s.type];
+                return (
+                  <div className="rc-beatcard" key={s.id}>
+                    <div className="rc-beathead">
+                      <span className="rc-chip sm" style={{ background: T.soft, color: T.color }}><T.Icon size={12} /> {s.beat}</span>
+                      <span className="rc-beatkind">{s.type === "text" ? "On-screen text" : "Voiceover"}</span>
+                    </div>
+                    <p className="rc-beatline">{s.text}</p>
+                    <button className="rc-refine"><RefreshCw size={12} /> Refine</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <aside className="rc-chat">
+          <div className="rc-chathead"><Sparkles size={14} /> Co-writing</div>
+          <div className="rc-thread">
+            {visible.map((m, i) => <div key={i} className={"rc-msg " + m.who}>{m.text}</div>)}
+          </div>
+          <div className="rc-chatbar">
+            <input placeholder={done ? "Tweak any line…" : "Reply to the agent…"} />
+            <button onClick={() => setStep((s) => Math.min(THREAD.length, s + 1))}>
+              {done ? <CornerDownLeft size={15} /> : <ArrowRight size={15} />}
+            </button>
+          </div>
+        </aside>
+      </div>
+      <Foot left={<button className="rc-back" onClick={back}><ArrowLeft size={16} /> Recipe</button>}
+            right={<button className="rc-cta" disabled={!drafted} onClick={generate}>Generate base cut <ArrowRight size={16} /></button>}
+            note={drafted ? "On your go-ahead — slots get assigned and the cut is built." : null} />
+    </div>
+  );
+}
+
+/* ----------------------------- 04 Storyboard ---------------------------- */
+const SIZE = { s: 13, m: 16, l: 24 };
+function Storyboard({ slots, setSlots, next, back }) {
+  const [active, setActive] = useState(slots[0]?.id);
+  const [swapFor, setSwapFor] = useState(null);
+  const [ovFor, setOvFor] = useState(null);
+  const [styleFor, setStyleFor] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [prompting, setPrompting] = useState(false);
+
+  const activeSlot = slots.find((s) => s.id === active) || slots[0];
+  const need = slots.filter((s) => TYPES[s.type].actor === "you" && !s.filled);
+
+  const patch = (id, fn) => setSlots((ps) => ps.map((s) => s.id === id ? fn(s) : s));
+  const swap = (id, action) => {
+    patch(id, (s) =>
+      action === "face" ? { ...s, type: "face", filled: true } :
+      action === "broll" ? { ...s, type: "broll", filled: true } :
+      action === "keep" ? { ...s, filled: false } : { ...s, filled: true });
+    setSwapFor(null);
+  };
+  const setStyle = (id, key, val) => patch(id, (s) => ({ ...s, style: { ...s.style, [key]: val } }));
+  const remove = (id) => { setSlots((ps) => ps.filter((s) => s.id !== id)); setOvFor(null); };
+  const duplicate = (slot) => {
+    setSlots((ps) => {
+      const i = ps.findIndex((s) => s.id === slot.id);
+      const copy = { ...slot, id: Date.now() };
+      return [...ps.slice(0, i + 1), copy, ...ps.slice(i + 1)];
+    });
+    setOvFor(null);
+  };
+  const addSlot = (type, text) => {
+    setSlots((ps) => [...ps, {
+      id: Date.now(), beat: "New", type, dur: 3,
+      filled: false, text: text || (type === "text" ? "New text card" : "Describe this shot"),
+      style: { font: type === "text" ? "display" : "clean", size: "m", align: type === "text" ? "center" : "left" },
+    }]);
+    setAdding(false); setPrompting(false);
+  };
+
+  return (
+    <div className="rc-stage">
+      <Head k="04" t="Your base cut — swap, restyle, add" s="Every slot has a stand-in, so it plays end to end now. Replace what's yours, change the type or font, or add new slots — manually or by asking the agent." />
+      <div className="rc-sbgrid">
+        <div className="rc-slots">
+          <div className="rc-checklist">
+            <ListChecks size={15} />
+            {need.length ? <span><b>{need.length} slots</b> need you — film {need.filter(s=>s.type==="talk").length}, pick {need.filter(s=>s.type==="roll").length}</span>
+                         : <span>All yours. Nothing left to swap.</span>}
+          </div>
+
+          {slots.map((s) => {
+            const T = TYPES[s.type];
+            const isYou = TYPES[s.type].actor === "you";
+            return (
+              <div key={s.id} className={"rc-slot" + (active === s.id ? " is-active" : "")}>
+                <button className="rc-slotmain" onClick={() => setActive(s.id)}>
+                  <span className="rc-slotrail" style={{ background: T.color }} />
+                  <span className="rc-slotbody">
+                    <span className="rc-slottop">
+                      <span className="rc-chip sm" style={{ background: T.soft, color: T.color }}><T.Icon size={12} /> {T.label}</span>
+                      <span className="rc-slotdur">{s.dur}s</span>
+                    </span>
+                    <span className="rc-slottext">{s.type === "text" ? `“${s.text}”` : s.text}</span>
+                  </span>
+                </button>
+                <div className="rc-slotside">
+                  {s.filled ? <span className="rc-yours"><CheckCircle2 size={14} /> Yours</span>
+                    : isYou ? <button className="rc-swap" onClick={() => { setSwapFor(swapFor === s.id ? null : s.id); setOvFor(null); setStyleFor(null); }}>{T.hint}</button>
+                    : <span className="rc-auto">{T.hint}</span>}
+                  <button className="rc-iconbtn sm" onClick={() => { setOvFor(ovFor === s.id ? null : s.id); setSwapFor(null); setStyleFor(null); }}><MoreHorizontal size={16} /></button>
+
+                  {swapFor === s.id && (
+                    <div className="rc-menu">
+                      {s.type === "talk" && <>
+                        <button onClick={() => swap(s.id, "film")}><Film size={13} /> Film with teleprompter <em className="rc-rec">best</em></button>
+                        <button onClick={() => swap(s.id, "upload")}><Upload size={13} /> Upload a take</button>
+                        <button onClick={() => swap(s.id, "face")}><UserRound size={13} /> Generate me from a photo</button></>}
+                      {s.type === "roll" && <>
+                        <button onClick={() => swap(s.id, "upload")}><Upload size={13} /> Upload a clip</button>
+                        <button onClick={() => swap(s.id, "broll")}><Sparkles size={13} /> Use generated b-roll</button></>}
+                      <button className="rc-menukeep" onClick={() => swap(s.id, "keep")}>Keep stand-in</button>
+                    </div>
+                  )}
+                  {ovFor === s.id && (
+                    <div className="rc-menu">
+                      <button onClick={() => { setStyleFor(s.id); setOvFor(null); }}><Type size={13} /> Edit text & font</button>
+                      <button onClick={() => duplicate(s)}><Copy size={13} /> Duplicate slot</button>
+                      <button className="rc-del" onClick={() => remove(s.id)}><Trash2 size={13} /> Delete slot</button>
+                    </div>
+                  )}
+                  {styleFor === s.id && (
+                    <div className="rc-stylepop">
+                      <div className="rc-styrow"><span>Font</span>
+                        <div className="rc-seg3">{Object.keys(FONTS).map((f) => (
+                          <button key={f} className={s.style.font === f ? "on" : ""} onClick={() => setStyle(s.id, "font", f)}
+                            style={{ fontFamily: FONTS[f] }}>{f === "display" ? "Display" : f === "clean" ? "Clean" : "Mono"}</button>))}</div>
+                      </div>
+                      <div className="rc-styrow"><span>Size</span>
+                        <div className="rc-seg3">{["s","m","l"].map((z) => (
+                          <button key={z} className={s.style.size === z ? "on" : ""} onClick={() => setStyle(s.id, "size", z)}>{z.toUpperCase()}</button>))}</div>
+                      </div>
+                      <div className="rc-styrow"><span>Align</span>
+                        <div className="rc-seg3">
+                          <button className={s.style.align === "left" ? "on" : ""} onClick={() => setStyle(s.id, "align", "left")}><AlignLeft size={13} /></button>
+                          <button className={s.style.align === "center" ? "on" : ""} onClick={() => setStyle(s.id, "align", "center")}><AlignCenter size={13} /></button>
+                          <button className={s.style.align === "right" ? "on" : ""} onClick={() => setStyle(s.id, "align", "right")}><AlignRight size={13} /></button>
+                        </div>
+                      </div>
+                      <button className="rc-styclose" onClick={() => setStyleFor(null)}><Check size={13} /> Done</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* add slot */}
+          <div className="rc-addwrap">
+            {!adding ? (
+              <button className="rc-add" onClick={() => setAdding(true)}><Plus size={15} /> Add slot</button>
+            ) : prompting ? (
+              <div className="rc-promptbox">
+                <input autoFocus placeholder="Describe the shot — e.g. ‘aerial of the harbour at dusk’"
+                  onKeyDown={(e) => e.key === "Enter" && addSlot("broll", e.target.value)} />
+                <button className="rc-cta sm" onClick={(e) => addSlot("broll", e.currentTarget.previousSibling.value)}>Add</button>
+                <button className="rc-iconbtn sm" onClick={() => { setAdding(false); setPrompting(false); }}><X size={15} /></button>
+              </div>
+            ) : (
+              <div className="rc-addmenu">
+                <span className="rc-addlabel">Add manually</span>
+                {Object.entries(TYPES).map(([k, T]) => (
+                  <button key={k} onClick={() => addSlot(k)} style={{ color: T.color }}><T.Icon size={13} /> {T.label}</button>))}
+                <span className="rc-addlabel">Or</span>
+                <button className="rc-addprompt" onClick={() => setPrompting(true)}><Sparkles size={13} /> Describe it for the agent</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* preview */}
+        <aside className="rc-preview">
+          <div className="rc-phone">
+            <div className="rc-screen" style={{ background: `linear-gradient(150deg, ${TYPES[activeSlot.type].color}, ${shade(TYPES[activeSlot.type].color)})` }}>
+              <div className="rc-screenbadge">{React.createElement(TYPES[activeSlot.type].Icon, { size: 13 })} {TYPES[activeSlot.type].label}</div>
+              {activeSlot.type === "text"
+                ? <div className="rc-screentext" style={{ fontFamily: FONTS[activeSlot.style.font], fontSize: SIZE[activeSlot.style.size] + 4, textAlign: activeSlot.style.align }}>{activeSlot.text}</div>
+                : <>
+                    <div className="rc-screenghost">{activeSlot.filled ? "your footage" : "stand-in"}</div>
+                    <div className="rc-caption" style={{ fontFamily: FONTS[activeSlot.style.font], fontSize: SIZE[activeSlot.style.size], textAlign: activeSlot.style.align }}>{activeSlot.text}</div>
+                  </>}
+            </div>
+            <div className="rc-timeline">
+              {slots.map((s) => (
+                <button key={s.id} title={s.beat}
+                  className={"rc-seg" + (active === s.id ? " is-active" : "")}
+                  style={{ flex: s.dur, background: TYPES[s.type].color, opacity: s.filled ? 1 : 0.45 }}
+                  onClick={() => setActive(s.id)} />))}
+            </div>
+          </div>
+          <div className="rc-previewfoot"><Play size={13} fill="currentColor" strokeWidth={0} /> Plays now · edits apply live</div>
+          <div className="rc-audio">
+            <div className="rc-audiohead"><Volume2 size={14} /> Audio</div>
+            <button className="rc-audiorow"><Mic size={13} /> Voiceover <span>Your voice</span></button>
+            <button className="rc-audiorow"><Music size={13} /> Sound <span>Trending · upbeat</span></button>
+          </div>
+        </aside>
+      </div>
+      <Foot left={<button className="rc-back" onClick={back}><ArrowLeft size={16} /> Script</button>}
+            right={<button className="rc-cta" onClick={next}>Make the cover <ArrowRight size={16} /></button>} />
+    </div>
+  );
+}
+
+/* ------------------------------- 05 Cover ------------------------------- */
+const COVERS = [
+  { id: "claim", label: "Bold claim",     bg: "#17151C", fg: "#FFFFFF", accent: "#FF5C49", big: "60% OFF", small: "MARBLE, DIRECT FROM THE FACTORY" },
+  { id: "face",  label: "Face + caption", bg: "#0FB5A6", fg: "#03251F", accent: "#03251F", big: "I went to\nthe source", small: "FOSHAN SOURCING TRIP" },
+  { id: "split", label: "Before / after", bg: "#F5A524", fg: "#2A1B00", accent: "#2A1B00", big: "$$$ → $", small: "WHAT MIDDLEMEN DON'T TELL YOU" },
+];
+function Cover({ back }) {
+  const [cover, setCover] = useState("claim");
+  const [exported, setExported] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const c = COVERS.find((x) => x.id === cover);
+  const caption = "I stopped paying showroom prices for marble. Flew to Foshan and bought the same slabs straight from the factory — about 60% less. Here's exactly how 👇";
+  const tags = "#renovation #interiordesign #marble #sourcing #factorydirect #homereno #designtips";
+  return (
+    <div className="rc-stage">
+      <Head k="05" t="Pick the cover, write the caption, ship it" s="This is the frame the explore page shows — the whole post lives or dies on it. The agent also drafts your caption and tags straight from the script." />
+      <div className="rc-covergrid">
+        <div className="rc-coverleft">
+          <div className="rc-coveropts">
+            {COVERS.map((x) => (
+              <button key={x.id} className={"rc-coveropt" + (cover === x.id ? " is-active" : "")} onClick={() => setCover(x.id)}>
+                <span className="rc-coverthumb" style={{ background: x.bg }}>
+                  <b style={{ color: x.accent, whiteSpace: "pre-line" }}>{x.big}</b>
+                  <i style={{ color: x.fg }}>{x.small}</i>
+                </span>
+                <span className="rc-coverlabel">{x.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="rc-captionbox">
+            <div className="rc-captionhead"><Type size={14} /> Caption & hashtags
+              <button className="rc-copy" onClick={() => setCopied(true)}>{copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}</button>
+            </div>
+            <p className="rc-captiontext">{caption}</p>
+            <p className="rc-tags">{tags}</p>
+          </div>
+        </div>
+        <aside className="rc-coverpreview">
+          <div className="rc-phone">
+            <div className="rc-screen" style={{ background: c.bg, justifyContent: "center", alignItems: "flex-start" }}>
+              <div className="rc-coverbig" style={{ color: c.accent }}>{c.big}</div>
+              <div className="rc-coversmall" style={{ color: c.fg }}>{c.small}</div>
+            </div>
+          </div>
+          {exported ? <div className="rc-done"><CheckCircle2 size={16} /> Exported — reel, cover & caption ready.</div>
+                    : <button className="rc-cta rc-export" onClick={() => setExported(true)}><Download size={16} /> Export reel + cover</button>}
+        </aside>
+      </div>
+      <Foot left={<button className="rc-back" onClick={back}><ArrowLeft size={16} /> Storyboard</button>} />
+    </div>
+  );
+}
+
+/* ------------------------------- helpers -------------------------------- */
+function Head({ k, t, s }) {
+  return (<div className="rc-head"><span className="rc-kicker">{k}</span><h2>{t}</h2><p>{s}</p></div>);
+}
+function Foot({ left, right, note }) {
+  return (<div className="rc-foot"><div className="rc-footl">{left}{note && <span className="rc-note">{note}</span>}</div><div className="rc-footr">{right}</div></div>);
+}
+function shade(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, (n >> 16) - 46), g = Math.max(0, ((n >> 8) & 255) - 46), b = Math.max(0, (n & 255) - 46);
+  return `rgb(${r},${g},${b})`;
+}
+
+/* --------------------------------- css ---------------------------------- */
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=DM+Sans:opsz,wght@9..40,400..600&family=JetBrains+Mono:wght@500&display=swap');
+
+.rc-root{--paper:#F1F0F4;--paper2:#FBFBFD;--ink:#17151C;--soft:#615C6B;--line:#E4E1EA;--violet:#5B3DF5;
+  --display:'Bricolage Grotesque',sans-serif;--ui:'DM Sans',sans-serif;--mono:'JetBrains Mono',monospace;
+  font-family:var(--ui);color:var(--ink);background:var(--paper);min-height:100vh;display:flex;flex-direction:column;
+  -webkit-font-smoothing:antialiased;font-size:14px;}
+.rc-root *{box-sizing:border-box;margin:0;padding:0;}
+.rc-root button{font-family:var(--ui);cursor:pointer;border:none;background:none;color:inherit;}
+.rc-root input{font-family:var(--ui);}
+.rc-root :focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:6px;}
+
+.rc-top{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--paper2);}
+.rc-brand{display:flex;align-items:center;gap:9px;}
+.rc-exit{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--soft);}
+.rc-exit:hover{background:var(--paper);color:var(--ink);}
+.rc-mark{width:26px;height:26px;border-radius:8px;background:var(--ink);color:#fff;display:grid;place-items:center;}
+.rc-name{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.02em;}
+.rc-proj{color:var(--soft);font-size:13px;}
+.rc-acct{font-family:var(--mono);font-size:12px;color:var(--soft);}
+.rc-meta{display:flex;gap:8px;font-family:var(--mono);font-size:11px;color:var(--soft);}
+.rc-ratio,.rc-dur{border:1px solid var(--line);border-radius:6px;padding:3px 7px;}
+
+/* projects */
+.rc-proj-page{flex:1;display:flex;flex-direction:column;}
+.rc-proj-inner{max-width:1000px;width:100%;margin:0 auto;padding:42px 30px;}
+.rc-proj-head h1{font-family:var(--display);font-weight:700;font-size:34px;letter-spacing:-.03em;}
+.rc-proj-head p{color:var(--soft);font-size:15px;margin-top:6px;max-width:520px;}
+.rc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:20px;margin-top:30px;}
+.rc-newtile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;aspect-ratio:1/1.18;
+  border:1.5px dashed var(--line);border-radius:16px;color:var(--soft);font-weight:600;font-size:14px;background:var(--paper2);transition:border-color .15s,color .15s;}
+.rc-newtile:hover{border-color:var(--violet);color:var(--violet);}
+.rc-newplus{width:48px;height:48px;border-radius:14px;background:var(--ink);color:#fff;display:grid;place-items:center;}
+.rc-newtile:hover .rc-newplus{background:var(--violet);}
+.rc-card{display:flex;flex-direction:column;}
+.rc-cardthumb{position:relative;aspect-ratio:1/0.92;border-radius:16px;border:1px solid var(--line);overflow:hidden;display:block;}
+.rc-cardstage{position:absolute;top:10px;left:10px;font-family:var(--mono);font-size:10px;color:#fff;background:rgba(0,0,0,.32);padding:4px 8px;border-radius:7px;backdrop-filter:blur(3px);}
+.rc-cardplay{position:absolute;inset:0;margin:auto;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;opacity:0;transition:opacity .15s;}
+.rc-cardthumb:hover .rc-cardplay{opacity:1;}
+.rc-cardrow{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;padding:11px 2px 0;}
+.rc-cardinfo{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.rc-cardname{font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rc-cardname:hover{color:var(--violet);}
+.rc-cardedited{font-size:12px;color:var(--soft);}
+.rc-renameinput{border:1px solid var(--violet);border-radius:7px;padding:4px 7px;font-size:14px;font-weight:600;width:100%;}
+.rc-cardmenu{position:relative;}
+.rc-iconbtn{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--soft);}
+.rc-iconbtn:hover{background:var(--paper);color:var(--ink);}
+.rc-iconbtn.sm{width:26px;height:26px;}
+
+/* shared menu */
+.rc-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:20;background:#fff;border:1px solid var(--line);border-radius:11px;
+  box-shadow:0 12px 30px rgba(20,15,30,.14);padding:6px;display:flex;flex-direction:column;gap:2px;width:210px;}
+.rc-menu button{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;font-size:13px;text-align:left;}
+.rc-menu button:hover{background:var(--paper);}
+.rc-menu .rc-del{color:#d63a2f;}
+.rc-menukeep{color:var(--soft);border-top:1px solid var(--line);margin-top:2px;}
+
+.rc-bodywrap{display:flex;flex:1;min-height:0;}
+.rc-rail{width:182px;flex-shrink:0;border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px;background:var(--paper2);}
+.rc-step{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;text-align:left;color:var(--soft);transition:background .15s,color .15s;}
+.rc-step:hover:not(:disabled){background:var(--paper);}
+.rc-step:disabled{opacity:.4;cursor:not-allowed;}
+.rc-num{font-family:var(--mono);font-size:11px;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;border:1px solid var(--line);}
+.rc-steplabel{font-size:13.5px;font-weight:500;}
+.rc-step.is-done{color:var(--ink);}
+.rc-step.is-done .rc-num{background:var(--ink);color:#fff;border-color:var(--ink);}
+.rc-step.is-active{background:var(--ink);color:#fff;}
+.rc-step.is-active .rc-num{background:#fff;color:var(--ink);border-color:#fff;}
+.rc-railfoot{margin-top:auto;font-family:var(--display);font-weight:600;font-size:15px;line-height:1.25;letter-spacing:-.01em;padding:11px;}
+
+.rc-canvas{flex:1;overflow:auto;padding:30px 38px;animation:fade .35s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.rc-stage{max-width:920px;margin:0 auto;display:flex;flex-direction:column;min-height:100%;}
+.rc-head{margin-bottom:26px;}
+.rc-kicker{font-family:var(--mono);font-size:11px;color:var(--violet);letter-spacing:.08em;}
+.rc-head h2{font-family:var(--display);font-weight:700;font-size:29px;letter-spacing:-.025em;line-height:1.1;margin:8px 0 9px;}
+.rc-head p{color:var(--soft);font-size:15px;line-height:1.5;max-width:620px;}
+
+.rc-foot{margin-top:auto;padding-top:26px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.rc-footl{display:flex;align-items:center;gap:14px;}
+.rc-note{color:var(--soft);font-size:12.5px;}
+.rc-cta{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:#fff;font-weight:600;font-size:14px;padding:12px 18px;border-radius:11px;transition:transform .12s,opacity .12s;}
+.rc-cta:hover:not(:disabled){transform:translateY(-1px);}
+.rc-cta:disabled{opacity:.35;cursor:not-allowed;}
+.rc-cta.sm{padding:8px 12px;font-size:13px;}
+.rc-back{display:inline-flex;align-items:center;gap:6px;color:var(--soft);font-weight:500;font-size:14px;}
+.rc-back:hover{color:var(--ink);}
+
+.rc-refgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.rc-refcard{background:var(--paper2);border:1px solid var(--line);border-radius:16px;padding:14px;}
+.rc-refphone{position:relative;aspect-ratio:9/13;border-radius:12px;background:linear-gradient(160deg,#2a2730,#4a4550);overflow:hidden;display:flex;align-items:flex-end;}
+.rc-refplay{position:absolute;inset:0;margin:auto;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.16);display:grid;place-items:center;}
+.rc-reftag{position:absolute;top:11px;left:11px;font-family:var(--mono);font-size:10px;color:#fff;background:rgba(0,0,0,.4);padding:3px 7px;border-radius:6px;}
+.rc-refcap{position:relative;color:#fff;font-size:12.5px;padding:12px;background:linear-gradient(transparent,rgba(0,0,0,.55));width:100%;}
+.rc-refmeta{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;}
+.rc-refstat{font-family:var(--mono);font-size:11px;color:var(--soft);border:1px solid var(--line);border-radius:7px;padding:4px 8px;}
+.rc-drop{border:1.5px dashed var(--line);border-radius:16px;display:grid;place-items:center;background:var(--paper2);}
+.rc-dropinner{text-align:center;color:var(--soft);padding:24px;}
+.rc-dropmain{font-weight:600;color:var(--ink);font-size:15px;margin-top:12px;}
+.rc-dropsub{font-size:12.5px;margin-top:4px;}
+.rc-or{display:flex;align-items:center;gap:10px;margin:16px 30px;}
+.rc-or::before,.rc-or::after{content:"";height:1px;background:var(--line);flex:1;}
+.rc-or span{color:var(--soft);font-size:12px;}
+.rc-ghost{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:9px;padding:8px 13px;font-size:13px;color:var(--ink);background:#fff;}
+.rc-ghost em{font-family:var(--mono);font-style:normal;font-size:9px;color:var(--violet);background:#ECE9FE;padding:2px 5px;border-radius:5px;}
+.rc-linkmode{width:100%;}
+.rc-linkrow{display:flex;gap:8px;width:100%;margin-top:14px;}
+.rc-linkrow input{flex:1;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13px;background:#fff;}
+.rc-err{color:#d63a2f;font-size:12.5px;margin-top:10px;}
+.rc-linkok{display:flex;align-items:center;gap:6px;justify-content:center;color:#0a8f73;font-size:12.5px;margin-top:10px;}
+.rc-uploadinstead{margin-top:14px;}
+.rc-rec{font-family:var(--mono);font-style:normal;font-size:8.5px;color:var(--violet);background:#ECE9FE;padding:2px 5px;border-radius:5px;margin-left:auto;}
+
+.rc-recipe{display:grid;grid-template-columns:1.25fr 1fr;gap:24px;}
+.rc-tl{background:var(--paper2);border:1px solid var(--line);border-radius:16px;padding:8px 16px;}
+.rc-tlrow{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);}
+.rc-tlrow:last-child{border-bottom:none;}
+.rc-tlbeat{width:54px;font-size:13px;}
+.rc-bar{height:8px;border-radius:5px;flex-shrink:0;}
+.rc-tldur{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--soft);}
+.rc-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:5px 9px;border-radius:8px;white-space:nowrap;}
+.rc-chip.sm{font-size:11px;padding:3px 7px;}
+.rc-readout{background:var(--ink);color:#fff;border-radius:16px;padding:20px;}
+.rc-readout h4{font-family:var(--display);font-weight:600;font-size:15px;margin-bottom:12px;}
+.rc-readout ul{list-style:none;display:flex;flex-direction:column;gap:11px;}
+.rc-readout li{font-size:13px;line-height:1.45;color:#d6d2de;}
+.rc-readout li b{color:#fff;}
+.rc-legend{display:flex;flex-wrap:wrap;gap:8px 13px;margin-top:18px;padding-top:16px;border-top:1px solid #322e3c;}
+.rc-legitem{display:flex;align-items:center;gap:6px;font-size:11px;color:#b8b3c2;}
+.rc-legitem i{width:9px;height:9px;border-radius:3px;}
+
+.rc-script{display:grid;grid-template-columns:1.4fr 1fr;gap:22px;}
+.rc-emptyscript{border:1.5px dashed var(--line);border-radius:14px;padding:40px 24px;text-align:center;color:var(--soft);display:flex;flex-direction:column;align-items:center;gap:12px;}
+.rc-emptyscript p{font-size:14px;max-width:240px;}
+.rc-beats{display:flex;flex-direction:column;gap:10px;}
+.rc-beatcard{background:var(--paper2);border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative;animation:fade .3s ease;}
+.rc-beathead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.rc-beatkind{font-family:var(--mono);font-size:10px;color:var(--soft);}
+.rc-beatline{font-size:14.5px;line-height:1.4;}
+.rc-refine{position:absolute;top:11px;right:12px;display:none;align-items:center;gap:4px;font-size:11px;color:var(--violet);}
+.rc-beatcard:hover .rc-refine{display:inline-flex;}
+.rc-chat{background:var(--paper2);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;overflow:hidden;height:fit-content;max-height:600px;}
+.rc-chathead{display:flex;align-items:center;gap:7px;padding:13px 15px;border-bottom:1px solid var(--line);font-weight:600;font-size:13px;}
+.rc-thread{padding:15px;display:flex;flex-direction:column;gap:10px;overflow:auto;}
+.rc-msg{font-size:13px;line-height:1.45;padding:10px 12px;border-radius:12px;max-width:92%;animation:fade .3s ease;}
+.rc-msg.you{background:var(--ink);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
+.rc-msg.agent{background:var(--paper);color:var(--ink);align-self:flex-start;border-bottom-left-radius:4px;}
+.rc-chatbar{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line);}
+.rc-chatbar input{flex:1;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;background:#fff;}
+.rc-chatbar button{width:38px;border-radius:9px;background:var(--ink);color:#fff;display:grid;place-items:center;flex-shrink:0;}
+
+.rc-sbgrid{display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start;}
+.rc-slots{display:flex;flex-direction:column;gap:9px;}
+.rc-checklist{display:flex;align-items:center;gap:9px;background:#ECE9FE;color:#3a25c4;border-radius:11px;padding:11px 14px;font-size:13px;}
+.rc-slot{display:flex;align-items:stretch;background:var(--paper2);border:1px solid var(--line);border-radius:13px;transition:border-color .15s;position:relative;}
+.rc-slot.is-active{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink);}
+.rc-slotmain{flex:1;display:flex;text-align:left;border-radius:13px 0 0 13px;min-width:0;}
+.rc-slotrail{width:4px;flex-shrink:0;border-radius:13px 0 0 13px;}
+.rc-slotbody{padding:12px 14px;display:flex;flex-direction:column;gap:7px;min-width:0;}
+.rc-slottop{display:flex;align-items:center;gap:9px;}
+.rc-slotdur{font-family:var(--mono);font-size:10.5px;color:var(--soft);}
+.rc-slottext{font-size:13.5px;line-height:1.35;}
+.rc-slotside{display:flex;align-items:center;gap:4px;padding:0 11px 0 6px;position:relative;}
+.rc-swap{border:1px solid var(--ink);border-radius:8px;padding:7px 11px;font-size:12px;font-weight:600;white-space:nowrap;background:#fff;}
+.rc-swap:hover{background:var(--ink);color:#fff;}
+.rc-auto{font-size:11px;color:var(--soft);white-space:nowrap;font-family:var(--mono);}
+.rc-yours{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#0a8f73;white-space:nowrap;}
+.rc-stylepop{position:absolute;top:calc(100% + 6px);right:0;z-index:20;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(20,15,30,.14);padding:12px;width:230px;display:flex;flex-direction:column;gap:10px;}
+.rc-styrow{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.rc-styrow>span{font-size:12px;color:var(--soft);}
+.rc-seg3{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+.rc-seg3 button{padding:6px 9px;font-size:11.5px;display:grid;place-items:center;border-right:1px solid var(--line);min-width:32px;}
+.rc-seg3 button:last-child{border-right:none;}
+.rc-seg3 button.on{background:var(--ink);color:#fff;}
+.rc-styclose{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--paper);border-radius:8px;padding:8px;font-size:12.5px;font-weight:600;margin-top:2px;}
+.rc-addwrap{margin-top:2px;position:relative;}
+.rc-add{display:flex;align-items:center;gap:7px;width:100%;justify-content:center;border:1.5px dashed var(--line);border-radius:11px;padding:11px;color:var(--soft);font-weight:500;font-size:13px;}
+.rc-add:hover{border-color:var(--violet);color:var(--violet);}
+.rc-addmenu{border:1px solid var(--line);border-radius:12px;background:#fff;padding:8px;display:flex;flex-direction:column;gap:2px;box-shadow:0 10px 26px rgba(20,15,30,.1);}
+.rc-addlabel{font-family:var(--mono);font-size:10px;color:var(--soft);letter-spacing:.06em;padding:6px 8px 2px;text-transform:uppercase;}
+.rc-addmenu>button{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;font-size:13px;font-weight:500;}
+.rc-addmenu>button:hover{background:var(--paper);}
+.rc-addprompt{color:var(--violet)!important;}
+.rc-promptbox{display:flex;gap:8px;align-items:center;}
+.rc-promptbox input{flex:1;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13px;background:#fff;}
+
+.rc-preview{position:sticky;top:0;}
+.rc-phone{background:#0d0b12;border-radius:22px;padding:8px;box-shadow:0 18px 44px rgba(20,15,30,.22);}
+.rc-screen{aspect-ratio:9/16;border-radius:16px;overflow:hidden;position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:16px;}
+.rc-screenbadge{position:absolute;top:12px;left:12px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#fff;background:rgba(0,0,0,.32);padding:5px 9px;border-radius:8px;}
+.rc-screentext{color:#fff;font-weight:700;line-height:1.12;letter-spacing:-.02em;margin:auto;width:100%;}
+.rc-screenghost{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.1em;}
+.rc-caption{position:relative;color:#fff;font-weight:600;line-height:1.3;text-shadow:0 1px 8px rgba(0,0,0,.5);width:100%;}
+.rc-timeline{display:flex;gap:2px;margin-top:8px;height:10px;}
+.rc-seg{border-radius:3px;transition:opacity .15s;}
+.rc-seg.is-active{outline:2px solid #fff;outline-offset:1px;}
+.rc-previewfoot{display:flex;align-items:center;gap:6px;justify-content:center;margin-top:13px;font-size:11.5px;color:var(--soft);}
+
+.rc-covergrid{display:grid;grid-template-columns:1fr 280px;gap:28px;align-items:start;}
+.rc-coveropts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.rc-coveropt{display:flex;flex-direction:column;gap:9px;}
+.rc-coverthumb{aspect-ratio:9/14;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:16px;border:2px solid transparent;transition:transform .12s;}
+.rc-coveropt:hover .rc-coverthumb{transform:translateY(-2px);}
+.rc-coveropt.is-active .rc-coverthumb{border-color:var(--ink);box-shadow:0 0 0 3px var(--paper),0 0 0 4px var(--ink);}
+.rc-coverthumb b{font-family:var(--display);font-weight:800;font-size:20px;line-height:1.04;letter-spacing:-.02em;}
+.rc-coverthumb i{font-family:var(--mono);font-style:normal;font-size:8.5px;letter-spacing:.08em;}
+.rc-coverlabel{font-size:12.5px;color:var(--soft);text-align:center;}
+.rc-coverpreview{position:sticky;top:0;}
+.rc-coverbig{font-family:var(--display);font-weight:800;font-size:38px;line-height:1.02;letter-spacing:-.03em;white-space:pre-line;margin-bottom:14px;}
+.rc-coversmall{font-family:var(--mono);font-size:11px;letter-spacing:.08em;}
+.rc-export{width:100%;justify-content:center;margin-top:14px;}
+.rc-done{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;color:#0a8f73;font-weight:600;font-size:14px;background:#E1F6F3;border-radius:11px;padding:13px;}
+.rc-analysis{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:16px;font-family:var(--mono);font-size:12px;color:var(--soft);}
+.rc-analysis b{color:var(--ink);}
+.rc-analysis i{width:4px;height:4px;border-radius:50%;background:var(--line);display:inline-block;}
+.rc-tlts{font-family:var(--mono);font-size:10.5px;color:var(--soft);width:30px;flex-shrink:0;}
+.rc-hooktrans{background:rgba(255,255,255,.07);border-radius:10px;padding:11px 12px;margin-bottom:14px;font-size:13px;line-height:1.4;color:#fff;font-style:italic;}
+.rc-hooktrans span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:#b8b3c2;margin-bottom:4px;text-transform:uppercase;font-style:normal;}
+.rc-audio{margin-top:14px;background:var(--paper2);border:1px solid var(--line);border-radius:13px;padding:12px;}
+.rc-audiohead{display:flex;align-items:center;gap:7px;font-weight:600;font-size:12.5px;margin-bottom:9px;}
+.rc-audiorow{display:flex;align-items:center;gap:8px;width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;margin-bottom:7px;background:#fff;text-align:left;}
+.rc-audiorow:last-child{margin-bottom:0;}
+.rc-audiorow:hover{border-color:var(--ink);}
+.rc-audiorow span{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--soft);}
+.rc-coverleft{display:flex;flex-direction:column;gap:18px;}
+.rc-captionbox{background:var(--paper2);border:1px solid var(--line);border-radius:14px;padding:15px;}
+.rc-captionhead{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px;margin-bottom:10px;}
+.rc-copy{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--violet);border:1px solid var(--line);border-radius:7px;padding:5px 9px;}
+.rc-copy:hover{background:var(--paper);}
+.rc-captiontext{font-size:13.5px;line-height:1.5;margin-bottom:9px;}
+.rc-tags{font-size:12.5px;color:var(--violet);line-height:1.5;}
+
+.rc-overlay{position:fixed;inset:0;background:rgba(23,21,28,.5);backdrop-filter:blur(4px);display:grid;place-items:center;z-index:50;animation:fade .25s ease;}
+.rc-gencard{background:var(--paper2);border-radius:18px;padding:34px 40px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.3);}
+.rc-genspin{width:38px;height:38px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--ink);margin:0 auto 16px;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.rc-gencard h3{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.02em;}
+.rc-genstep{color:var(--soft);font-size:13px;margin-top:6px;}
+
+@media (max-width:860px){
+  .rc-rail{width:60px;}.rc-steplabel,.rc-railfoot{display:none;}
+  .rc-refgrid,.rc-recipe,.rc-script,.rc-sbgrid,.rc-covergrid{grid-template-columns:1fr;}
+  .rc-canvas{padding:20px;}
+}
+@media (prefers-reduced-motion:reduce){.rc-root *{animation:none!important;transition:none!important;}}
+`;
+
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
