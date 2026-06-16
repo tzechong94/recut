@@ -1,0 +1,14 @@
+{
+  "name": "Marble sourcing reel (labeled reference)",
+  "duration_s": 23.0,
+  "shot_count": 7,
+  "beats": [
+    { "label": "Hook",   "slot_type": "text"  },
+    { "label": "Setup",  "slot_type": "talk"  },
+    { "label": "Cut 1",  "slot_type": "roll"  },
+    { "label": "Cut 2",  "slot_type": "broll" },
+    { "label": "Cut 3",  "slot_type": "roll"  },
+    { "label": "Payoff", "slot_type": "talk"  },
+    { "label": "CTA",    "slot_type": "text"  }
+  ]
+}

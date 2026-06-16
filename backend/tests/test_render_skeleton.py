@@ -84,6 +84,26 @@ def test_render_is_resumable_via_clip_cache(work_dir):
         assert p.stat().st_mtime_ns == m, f"slot clip {p.name} was rebuilt, not resumed"
 
 
+def test_corrupt_asset_falls_back_to_standin(work_dir):
+    """A bad/unsupported upload must degrade that slot to a stand-in, not 500 the export."""
+    from recut.core.schemas import SlotSource
+    from recut.pipeline.render import AssetMeta
+
+    tl = base_cut_from_recipe(_demo_recipe())
+    # point the first slot at a corrupt 'video' asset
+    slot = tl.slots[0]
+    slot.asset_id = "a_bad"
+    slot.source = SlotSource.user_upload
+    storage = LocalStorage(work_dir + "/store")
+    storage.put("bad/x.mp4", b"not-a-real-video")
+    assets = {"a_bad": AssetMeta(storage_key="bad/x.mp4", mime="video/mp4")}
+
+    out = render_timeline(tl, assets=assets, storage=storage)  # must not raise
+    assert Path(out).exists()
+    probe = _ffprobe(out)
+    assert abs(float(probe["format"]["duration"]) - tl.duration_s) < 0.6
+
+
 def test_empty_timeline_raises(work_dir):
     from recut.core.schemas import Timeline
 
