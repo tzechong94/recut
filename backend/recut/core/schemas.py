@@ -218,6 +218,7 @@ class AudioTrack(BaseModel):
     asset_id: str | None = None
     enabled: bool = False
     gain_db: float = 0.0
+    tokens: int = 0  # generation tokens spent on this track (e.g. CosyVoice voiceover)
 
 
 class TimelineAudio(BaseModel):

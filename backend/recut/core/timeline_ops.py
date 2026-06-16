@@ -86,6 +86,8 @@ def recompute_ledger(tl: Timeline) -> TokenLedger:
                 tokens += s.generation.tokens
         else:
             standin += s.duration_s
+    # timeline-level audio generation (CosyVoice voiceover) tokens count too
+    tokens += tl.audio.voiceover.tokens + tl.audio.bed.tokens
     led = TokenLedger(
         real_footage_s=round(real, 3),
         generated_s=round(gen, 3),
@@ -134,6 +136,34 @@ def mark_generated(tl: Timeline, slot_id: str, asset_id: str, tool: str, tokens:
     s.generation = Generation(tool=tool, tokens=tokens, prompt=(s.generation.prompt if s.generation else ""))
     recompute_ledger(tl)
     return s
+
+
+def add_slot_from_prompt(
+    tl: Timeline, after_slot_id: str | None, prompt: str, slot_type: SlotType = SlotType.broll
+) -> Slot:
+    """Agent path: insert a new auto slot (default generated b-roll) described by a
+    prompt, after a given slot. Mirrors the storyboard's 'describe it for the agent'."""
+    new = Slot(
+        beat_label="New",
+        type=slot_type,
+        duration_s=3.0,
+        source=SlotSource.standin,
+        text=prompt if slot_type != SlotType.text else prompt,
+        text_role=TextRole.on_screen_text if slot_type == SlotType.text else TextRole.voiceover,
+        status=SlotStatus.ready,
+        standin=StandIn(color=STANDIN_COLORS.get(slot_type, "#7B5CFF"), label="stand-in"),
+        kept=slot_type in ACTOR_AUTO,
+        generation=Generation(tool="generate_broll", prompt=prompt) if slot_type == SlotType.broll else None,
+    )
+    if after_slot_id is None:
+        tl.slots.append(new)
+    else:
+        idx = next((i for i, s in enumerate(tl.slots) if s.id == after_slot_id), len(tl.slots) - 1)
+        tl.slots.insert(idx + 1, new)
+    for i, s in enumerate(tl.slots):
+        s.order = i
+    recompute_ledger(tl)
+    return new
 
 
 def _find(tl: Timeline, slot_id: str) -> Slot:
