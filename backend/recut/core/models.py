@@ -165,12 +165,14 @@ class StubTextLLM(TextLLM):
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> tuple[str, int]:
         marker = system.lower()
         tokens = max(120, (len(system) + len(user)) // 4)
-        if "co-write" in marker or "script-on-beats" in marker:
+        if "script-on-beats" in marker:
             payload = _stub_script_on_beats(user)
         elif "caption" in marker or "cover" in marker:
             payload = _stub_caption_cover()
         elif "refine" in marker:
             payload = {"text": "Same slab. Sixty percent less. No middleman."}
+        elif "co-writing chat" in marker or "chat" in marker:
+            payload = {"text": "Love it — that gap between the expected price and what you paid is your whole hook. What's the single most striking visual from the story?"}
         else:
             payload = {"text": "Drafted."}
         return (json.dumps(payload) if json_mode else payload.get("text", json.dumps(payload)), tokens)

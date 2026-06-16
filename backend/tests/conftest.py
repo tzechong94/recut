@@ -27,6 +27,9 @@ from recut.core import db  # noqa: E402
 def _fresh_db():
     get_settings.cache_clear()
     db.reset_engine()
+    # Truly fresh schema each test — drop then create, so rows (esp. queued jobs)
+    # never leak across tests and pollute claim_next ordering.
+    db.Base.metadata.drop_all(db.get_engine())
     db.init_db()
     yield
     db.reset_engine()
