@@ -217,10 +217,20 @@ def render_timeline(
         cached = cache / f"{key}.mp4"
         if not cached.exists():
             tmp = clips_dir / f"{i:03d}_{slot.id}.mp4"
-            _build_slot_clip(
-                slot, src_path=src_path, is_video=is_video, is_image=is_image,
-                out_path=str(tmp), fonts_dir=fonts_dir, settings=s,
-            )
+            try:
+                _build_slot_clip(
+                    slot, src_path=src_path, is_video=is_video, is_image=is_image,
+                    out_path=str(tmp), fonts_dir=fonts_dir, settings=s,
+                )
+            except TranscodeError:
+                # A corrupt/unsupported asset must not kill the whole export — degrade
+                # this one slot to its stand-in (the cut still plays end to end).
+                if src_path is None:
+                    raise  # stand-in build itself failed; that's a real error
+                _build_slot_clip(
+                    slot, src_path=None, is_video=False, is_image=False,
+                    out_path=str(tmp), fonts_dir=fonts_dir, settings=s,
+                )
             shutil.move(str(tmp), str(cached))
         clip_paths.append(str(cached))
         if on_progress:

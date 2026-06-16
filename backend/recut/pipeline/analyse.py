@@ -15,6 +15,8 @@ story in one.
 
 from __future__ import annotations
 
+import re
+
 from recut.core.models import (
     Shot,
     TranscriptResult,
@@ -42,17 +44,22 @@ _TALK_CUES = ("to camera", "talking", "talking head", "person", "face", "present
 _BROLL_CUES = ("wide", "warehouse", "establishing", "aerial", "drone", "scene", "scale", "sparks", "b-roll", "landscape")
 
 
+def _has(text: str, cues) -> bool:
+    """Whole-phrase match so 'face' doesn't match inside 'surface'."""
+    return any(re.search(r"\b" + re.escape(c) + r"\b", text) for c in cues)
+
+
 def classify_slot_type(shot: Shot) -> SlotType:
     desc = (shot.description or "").lower()
     ost = (shot.on_screen_text or "").strip()
-    has_person = any(c in desc for c in ("person", "to camera", "talking", "face", "presenter", "host"))
+    has_person = _has(desc, ("person", "to camera", "talking", "face", "presenter", "host"))
 
     # A text card: on-screen text dominant and nobody on camera.
-    if (ost and not has_person and any(c in desc for c in _TEXT_CUES)) or (ost and "card" in desc):
+    if (ost and not has_person and _has(desc, _TEXT_CUES)) or (ost and _has(desc, ("card",))):
         return SlotType.text
-    if any(c in desc for c in _TALK_CUES):
+    if _has(desc, _TALK_CUES):
         return SlotType.talk
-    if not has_person and (shot.motion == "fast-cut" or any(c in desc for c in _BROLL_CUES)):
+    if not has_person and (shot.motion == "fast-cut" or _has(desc, _BROLL_CUES)):
         return SlotType.broll
     return SlotType.roll
 
