@@ -31,6 +31,7 @@ dev = [
 recut-api = "recut.api.main:run"
 recut-worker = "recut.worker.main:run"
 recut-mcp = "recut.mcp.server:run"
+recut-doctor = "recut.doctor:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # "qwen"  -> real DashScope / Model Studio (set dashscope_api_key)
     model_backend: str = "stub"
     dashscope_api_key: str = ""
+    # DashScope endpoint. Leave blank for the SDK default (China). International accounts
+    # (e.g. Singapore) use https://dashscope-intl.aliyuncs.com/api/v1
+    dashscope_base_url: str = ""
     qwen_vl_model: str = "qwen-vl-max"
     qwen_text_model: str = "qwen-max"
     asr_model: str = "paraformer-v2"
