@@ -216,6 +216,11 @@ def build_qwen_clients(s: Settings) -> ModelClients:
             "RECUT_MODEL_BACKEND=qwen but RECUT_DASHSCOPE_API_KEY is empty. "
             "Set the key or use RECUT_MODEL_BACKEND=stub."
         )
+    # Point the SDK at the right region (intl for Singapore). Set once, globally.
+    if s.dashscope_base_url:
+        import dashscope
+
+        dashscope.base_http_api_url = s.dashscope_base_url
     return ModelClients(
         vision=QwenVision(s),
         transcriber=QwenTranscriber(s),
