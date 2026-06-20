@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # --- token / cost discipline ---
     project_token_cap: int = 200_000  # hard ceiling on generation tokens per project
 
+    # --- reference ingestion ---
+    # Upload is the clean path. Link-fetch is best-effort and grey on platform terms,
+    # so it is OFF by default and isolated behind an adapter. Direct video URLs and your
+    # own hosted files work cleanly; IG/TikTok need yt-dlp and are your responsibility.
+    enable_link_fetch: bool = False
+
     # --- media / render ---
     ffmpeg_bin: str = "ffmpeg"
     ffprobe_bin: str = "ffprobe"
