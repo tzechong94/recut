@@ -35,7 +35,7 @@ def create_app() -> FastAPI:
         app.include_router(mod.router)
 
     # Optional lane routers — mounted when the lane is built.
-    for name in ("analyse", "agent", "generation"):
+    for name in ("analyse", "agent", "generation", "ingest"):
         try:
             mod = __import__(f"recut.api.routers.{name}", fromlist=["router"])
             app.include_router(mod.router)
