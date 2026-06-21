@@ -36,7 +36,8 @@ class Settings(BaseSettings):
     asr_model: str = "paraformer-v2"
     wan_model: str = "wanx2.1-t2v-turbo"
     qwen_image_model: str = "wanx2.1-t2i-turbo"
-    cosyvoice_model: str = "cosyvoice-v1"
+    cosyvoice_model: str = "cosyvoice-v2"
+    cosyvoice_voice: str = "longxiaochun_v2"  # must match the cosyvoice model version
 
     # --- token / cost discipline ---
     project_token_cap: int = 200_000  # hard ceiling on generation tokens per project
