@@ -56,16 +56,28 @@ def test_slots_needing_creator_are_you_standins():
     assert len(slots_needing_creator(tl)) == 1
 
 
-def test_slots_to_generate_only_kept_auto():
-    tl = base_cut_from_recipe(_recipe())
-    gen = slots_to_generate(tl)
-    # text + broll are auto and kept by default
-    assert {s.type for s in gen} == {SlotType.text, SlotType.broll}
-    # drop the broll -> only text remains to generate
+def test_slots_to_generate_gap_fill_only_auto():
+    tl = base_cut_from_recipe(_recipe(), ai_first=False)
+    # gap-fill: only auto slots (text + b-roll) generate; talk/roll are the creator's
+    assert {s.type for s in slots_to_generate(tl, ai_first=False)} == {SlotType.text, SlotType.broll}
     for s in tl.slots:
         if s.type == SlotType.broll:
             s.kept = False
-    assert {s.type for s in slots_to_generate(tl)} == {SlotType.text}
+    assert {s.type for s in slots_to_generate(tl, ai_first=False)} == {SlotType.text}
+
+
+def test_slots_to_generate_ai_first_every_visual_slot():
+    tl = base_cut_from_recipe(_recipe(), ai_first=True)
+    # ai_first (revid): every visual slot auto-generates
+    assert {s.type for s in slots_to_generate(tl, ai_first=True)} == {
+        SlotType.text, SlotType.talk, SlotType.roll, SlotType.broll
+    }
+    # each slot carries a generation prompt
+    assert all(s.generation and s.generation.prompt for s in tl.slots)
+    # replacing a slot with an upload removes it from generation
+    talk = next(s for s in tl.slots if s.type == SlotType.talk)
+    attach_upload(tl, talk.id, "a_up")
+    assert SlotType.talk not in {s.type for s in slots_to_generate(tl, ai_first=True)}
 
 
 def test_mark_generated_accrues_tokens_and_seconds():

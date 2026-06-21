@@ -22,7 +22,7 @@
 ## Experience
 | metric | value |
 |---|---|
-| time-to-first-playable-cut | 0.03 ms |
+| time-to-first-playable-cut | 0.04 ms |
 
 _Generation is gap-fill only: the creator's footage is the spine, AI fills the gaps for
 kept slots only. That's the token discipline — and the whole point._

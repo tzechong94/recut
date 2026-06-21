@@ -34,13 +34,23 @@ class Settings(BaseSettings):
     qwen_vl_model: str = "qwen-vl-max"
     qwen_text_model: str = "qwen-max"
     asr_model: str = "paraformer-v2"
-    wan_model: str = "wanx2.1-t2v-turbo"
+    wan_model: str = "wan2.2-t2v-plus"
+    # Valid wan2.2-t2v-plus sizes: 1080*1920, 1920*1080, 1440*1440, 1632*1248,
+    # 1248*1632, 480*832, 832*480, 624*624. Use 1080*1920 for 9:16 (480*832 = cheaper/faster).
+    wan_size: str = "1080*1920"
     qwen_image_model: str = "wanx2.1-t2i-turbo"
     cosyvoice_model: str = "cosyvoice-v2"
     cosyvoice_voice: str = "longxiaochun_v2"  # must match the cosyvoice model version
 
     # --- token / cost discipline ---
     project_token_cap: int = 200_000  # hard ceiling on generation tokens per project
+
+    # --- generation model ---
+    # ai_first  -> AI generates EVERY visual slot by default; the creator swaps in their
+    #              own uploads per slot (revid.ai style). The default.
+    # gap_fill  -> the brief's model: creator footage is the spine, AI fills only the
+    #              auto slots (text cards + b-roll).
+    generation_mode: str = "ai_first"
 
     # --- reference ingestion ---
     # Upload is the clean path. Link-fetch is best-effort and grey on platform terms,
