@@ -173,12 +173,16 @@ class QwenVideoGen(VideoGen):
         def call() -> GenAsset:
             rsp = dashscope.VideoSynthesis.call(
                 api_key=self.s.dashscope_api_key, model=self.s.wan_model, prompt=prompt,
-                size="720*1280",
+                size=self.s.wan_size,
             )
             if getattr(rsp, "status_code", 200) != 200:
                 raise RuntimeError(f"wan {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
-            url = rsp.output.video_url
-            data = httpx.get(url, timeout=120).content
+            out = rsp.output
+            status = getattr(out, "task_status", "")
+            url = getattr(out, "video_url", "") or ""
+            if status != "SUCCEEDED" or not url:
+                raise RuntimeError(f"wan task {status}: {getattr(out, 'message', '') or 'no video_url'}")
+            data = httpx.get(url, timeout=180).content
             return GenAsset(data=data, mime="video/mp4", duration_s=duration_s, tokens=int(duration_s * 1800))
 
         return _retry(call, attempts=2, base_delay=3.0)

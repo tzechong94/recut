@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from recut.core import repo
 from recut.core.db import Job
-from recut.core.schemas import ACTOR_AUTO, SlotSource, SlotStatus
+from recut.core.schemas import SlotSource, SlotStatus
 from recut.core.timeline_ops import mark_generated, recompute_ledger
 from recut.pipeline.generate import (
     TokenCapExceeded,
@@ -39,9 +39,11 @@ def handle_generate_slot(job: Job, ctx: WorkerContext) -> dict:
     if not slot:
         raise ValueError("slot not found")
 
-    # Gap-fill discipline: only kept auto slots that aren't the creator's own footage.
-    if slot.type not in ACTOR_AUTO or not slot.kept or slot.source == SlotSource.user_upload:
-        return {"skipped": True, "reason": "not a kept auto slot"}
+    # Generate kept slots that the creator hasn't replaced with their own upload.
+    # (ai_first generates every visual slot; gap_fill marks only auto slots kept, so
+    # this single guard is correct for both modes.)
+    if not slot.kept or slot.source == SlotSource.user_upload:
+        return {"skipped": True, "reason": "slot replaced by upload or not kept"}
 
     slot.status = SlotStatus.generating
     repo.save_timeline(tl)

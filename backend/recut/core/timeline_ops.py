@@ -6,6 +6,7 @@ Everything here is unit-tested because the whole product reads the timeline.
 
 from __future__ import annotations
 
+from recut.core.config import get_settings
 from recut.core.schemas import (
     ACTOR_AUTO,
     Generation,
@@ -19,6 +20,21 @@ from recut.core.schemas import (
     Timeline,
     TokenLedger,
 )
+
+# Visual slot types that can be AI-generated (all v1 types are visual).
+VISUAL_TYPES = frozenset({SlotType.text, SlotType.talk, SlotType.roll, SlotType.broll})
+
+
+def _ai_first(ai_first: bool | None) -> bool:
+    return get_settings().generation_mode == "ai_first" if ai_first is None else ai_first
+
+
+def _visual_prompt(beat_text: str, pattern: str, slot_type: SlotType) -> str:
+    """Build a Wan/image prompt for a slot from its line + structural pattern."""
+    base = (beat_text or pattern or "b-roll").strip()
+    if slot_type == SlotType.text:
+        return f"clean minimal background for a text card: {base}"
+    return f"{base}. Cinematic vertical 9:16 b-roll, natural lighting, no on-screen text."
 
 # Stand-in tint per slot type (mirrors the prototype's TYPES colors).
 STANDIN_COLORS: dict[SlotType, str] = {
@@ -41,9 +57,17 @@ NAIVE_TOKENS_PER_S: dict[SlotType, int] = {
 }
 
 
-def base_cut_from_recipe(recipe: Recipe, project_id: str | None = None) -> Timeline:
+def base_cut_from_recipe(
+    recipe: Recipe, project_id: str | None = None, ai_first: bool | None = None
+) -> Timeline:
     """Turn a recipe into a base cut: every beat becomes a stand-in slot so the cut
-    plays end to end immediately. Nothing is generated yet."""
+    plays end to end immediately.
+
+    ai_first (revid style, default): EVERY visual slot is marked kept => the whole reel
+    auto-generates; the creator swaps in their own uploads per slot.
+    gap_fill (the brief): only auto slots (text/b-roll) are kept; talk/roll are the
+    creator's footage."""
+    ai = _ai_first(ai_first)
     slots: list[Slot] = []
     for b in recipe.beats:
         text_role = b.text_role
@@ -51,18 +75,29 @@ def base_cut_from_recipe(recipe: Recipe, project_id: str | None = None) -> Timel
             text_role = (
                 TextRole.on_screen_text if b.slot_type == SlotType.text else TextRole.voiceover
             )
+        text = b.on_screen_text or b.transcript_excerpt or ""
+        kept = True if ai else (b.slot_type in ACTOR_AUTO)
+        gen = (
+            Generation(
+                tool="generate_text_card" if b.slot_type == SlotType.text else "generate_broll",
+                prompt=_visual_prompt(text, b.pattern, b.slot_type),
+            )
+            if (ai or b.slot_type in ACTOR_AUTO)
+            else None
+        )
         slots.append(
             Slot(
                 beat_label=b.label,
                 type=b.slot_type,
                 duration_s=b.duration_s,
                 source=SlotSource.standin,
-                text=b.on_screen_text or b.transcript_excerpt or "",
+                text=text,
                 text_role=text_role,
                 style=b.style_hint,
                 status=SlotStatus.ready,
                 standin=StandIn(color=STANDIN_COLORS.get(b.slot_type, "#7B5CFF"), label="stand-in"),
-                kept=b.slot_type in ACTOR_AUTO,  # auto slots default to kept (=> generate later)
+                kept=kept,
+                generation=gen,
             )
         )
     tl = Timeline(project_id=project_id or recipe.project_id, slots=slots)
@@ -104,13 +139,15 @@ def slots_needing_creator(tl: Timeline) -> list[Slot]:
     return [s for s in tl.slots if s.is_you and s.source == SlotSource.standin]
 
 
-def slots_to_generate(tl: Timeline) -> list[Slot]:
-    """Auto slots the creator kept and that aren't resolved yet. Generation is
-    gap-fill only: deferred, async, and ONLY for kept slots."""
+def slots_to_generate(tl: Timeline, ai_first: bool | None = None) -> list[Slot]:
+    """Slots the creator kept that aren't resolved yet. ai_first => every visual slot
+    not replaced by an upload; gap_fill => only auto slots (text/b-roll). Generation is
+    deferred, async, and only for kept slots."""
+    eligible = VISUAL_TYPES if _ai_first(ai_first) else ACTOR_AUTO
     return [
         s
         for s in tl.slots
-        if s.type in ACTOR_AUTO
+        if s.type in eligible
         and s.kept
         and s.source != SlotSource.user_upload
         and s.status in (SlotStatus.ready, SlotStatus.pending_generation, SlotStatus.failed)

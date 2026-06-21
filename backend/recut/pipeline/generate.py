@@ -46,14 +46,8 @@ def generate_for_slot(
     Enforces the token cap BEFORE spending: estimate, check, then generate."""
     prompt = (slot.generation.prompt if slot.generation else "") or slot.text or slot.beat_label
 
-    if slot.type == SlotType.broll:
-        est = int(slot.duration_s * 1800)
-        _check_cap(tokens_already_spent, est, token_cap)
-        asset = models.video.generate(prompt, duration_s=slot.duration_s)
-        ext = "mp4" if asset.mime.startswith("video/") else "png"
-        key = _store(storage, project_id, "broll", asset.data, ext, asset.mime)
-        return GeneratedAsset(key, asset.mime, slot.duration_s, 1080, 1920, asset.tokens)
-
+    # Text cards -> generated image background. Every other visual slot (b-roll, and in
+    # ai_first mode also talk/roll) -> generated video.
     if slot.type == SlotType.text:
         est = 250
         _check_cap(tokens_already_spent, est, token_cap)
@@ -61,7 +55,12 @@ def generate_for_slot(
         key = _store(storage, project_id, "textcard", asset.data, "png", asset.mime)
         return GeneratedAsset(key, asset.mime, slot.duration_s, 1080, 1920, asset.tokens)
 
-    raise ValueError(f"slot type {slot.type} is not auto-generated")
+    est = int(slot.duration_s * 1800)
+    _check_cap(tokens_already_spent, est, token_cap)
+    asset = models.video.generate(prompt, duration_s=slot.duration_s)
+    ext = "mp4" if asset.mime.startswith("video/") else "png"
+    key = _store(storage, project_id, "broll", asset.data, ext, asset.mime)
+    return GeneratedAsset(key, asset.mime, slot.duration_s, 1080, 1920, asset.tokens)
 
 
 def generate_voiceover_track(
