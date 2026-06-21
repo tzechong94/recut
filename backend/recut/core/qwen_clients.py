@@ -12,6 +12,7 @@ the stub path needs nothing.
 from __future__ import annotations
 
 import json
+import os
 import time
 from typing import Callable, TypeVar
 
@@ -63,6 +64,8 @@ class QwenVision(VisionAnalyzer):
         self.s = s
 
     def analyze(self, video_path: str, *, hint: str = "") -> VisionResult:
+        import os
+
         import dashscope
 
         prompt = (
@@ -72,15 +75,21 @@ class QwenVision(VisionAnalyzer):
             "Describe STRUCTURE only (shot boundaries, motion, on-screen text), never identifying content. "
             + hint
         )
+        # Local files must be passed as file:// URIs; remote URLs pass through.
+        video_uri = video_path if "://" in video_path else "file://" + os.path.abspath(video_path)
 
         def call() -> VisionResult:
             resp = dashscope.MultiModalConversation.call(
                 api_key=self.s.dashscope_api_key,
                 model=self.s.qwen_vl_model,
-                messages=[{"role": "user", "content": [{"video": video_path}, {"text": prompt}]}],
+                messages=[{"role": "user", "content": [{"video": video_uri}, {"text": prompt}]}],
             )
+            if getattr(resp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-vl {getattr(resp, 'code', '?')}: {getattr(resp, 'message', resp)}")
             content = resp["output"]["choices"][0]["message"]["content"]
-            text = content if isinstance(content, str) else content[0].get("text", "")
+            text = content if isinstance(content, str) else " ".join(
+                part.get("text", "") for part in content if isinstance(part, dict)
+            )
             data = _extract_json(text)
             shots = [
                 Shot(
@@ -166,7 +175,9 @@ class QwenVideoGen(VideoGen):
                 api_key=self.s.dashscope_api_key, model=self.s.wan_model, prompt=prompt,
                 size="720*1280",
             )
-            url = rsp["output"]["video_url"]
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"wan {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
+            url = rsp.output.video_url
             data = httpx.get(url, timeout=120).content
             return GenAsset(data=data, mime="video/mp4", duration_s=duration_s, tokens=int(duration_s * 1800))
 
@@ -186,6 +197,8 @@ class QwenImageGen(ImageGen):
                 api_key=self.s.dashscope_api_key, model=self.s.qwen_image_model, prompt=prompt,
                 n=1, size=f"{width}*{height}",
             )
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"image {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
             url = rsp.output.results[0].url
             data = httpx.get(url, timeout=60).content
             return GenAsset(data=data, mime="image/png", tokens=250)
@@ -200,9 +213,11 @@ class QwenVoiceGen(VoiceGen):
     def synthesize(self, text: str, *, voice: str = "default") -> GenAsset:
         import dashscope
 
+        chosen = self.s.cosyvoice_voice if voice in ("", "default", None) else voice
+
         def call() -> GenAsset:
             synth = dashscope.audio.tts_v2.SpeechSynthesizer(
-                model=self.s.cosyvoice_model, voice=voice or "longxiaochun"
+                model=self.s.cosyvoice_model, voice=chosen
             )
             audio = synth.call(text)
             return GenAsset(data=audio, mime="audio/mp3", duration_s=max(1.0, len(text) * 0.06), tokens=len(text))
@@ -216,11 +231,29 @@ def build_qwen_clients(s: Settings) -> ModelClients:
             "RECUT_MODEL_BACKEND=qwen but RECUT_DASHSCOPE_API_KEY is empty. "
             "Set the key or use RECUT_MODEL_BACKEND=stub."
         )
-    # Point the SDK at the right region (intl for Singapore). Set once, globally.
-    if s.dashscope_base_url:
-        import dashscope
+    # macOS / python.org Python often lacks a CA bundle, which breaks the CosyVoice
+    # websocket (wss) with CERTIFICATE_VERIFY_FAILED. Point OpenSSL at certifi.
+    try:
+        import certifi
 
+        os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
+    except Exception:
+        pass
+
+    # Configure the SDK globally: some sub-APIs (tts_v2, image/video synthesis) read the
+    # module-level api_key/base_url rather than per-call kwargs.
+    import dashscope
+
+    dashscope.api_key = s.dashscope_api_key
+    if s.dashscope_base_url:
         dashscope.base_http_api_url = s.dashscope_base_url
+        # CosyVoice (tts_v2) uses a websocket on a DIFFERENT endpoint; without this it
+        # hits the China host and an intl key 401s. Derive the wss endpoint from the base.
+        dashscope.base_websocket_api_url = (
+            s.dashscope_base_url.replace("https://", "wss://").replace("http://", "ws://")
+            .replace("/api/v1", "/api-ws/v1/inference")
+        )
     return ModelClients(
         vision=QwenVision(s),
         transcriber=QwenTranscriber(s),

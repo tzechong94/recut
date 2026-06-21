@@ -22,12 +22,16 @@ from recut.core.config import get_settings
 
 
 def _tiny_video() -> str | None:
+    # Prefer a real sample reel — vision models reject tiny synthetic clips as "invalid".
+    samples = Path(__file__).resolve().parents[2] / "assets" / "samples"
+    for cand in sorted(samples.glob("*.mp4")):
+        return str(cand)
     if not shutil.which("ffmpeg"):
         return None
     out = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
     try:
         subprocess.run(
-            ["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=teal:s=320x568:d=1:r=12",
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=teal:s=720x1280:d=3:r=24",
              "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast", out],
             capture_output=True, check=True,
         )
