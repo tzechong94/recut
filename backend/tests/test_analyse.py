@@ -44,10 +44,13 @@ def test_recipe_fallback_on_vision_failure():
 def test_classify_slot_type_heuristics():
     from recut.core.models import Shot
 
-    assert classify_slot_type(Shot(0, 3, "Bold on-screen claim card", "Wait till you see", "static")) == SlotType.text
-    assert classify_slot_type(Shot(0, 3, "Person talking to camera, mid-shot", "", "static")) == SlotType.talk
-    assert classify_slot_type(Shot(0, 3, "Wide warehouse establishing shot, sparks", "", "fast-cut")) == SlotType.broll
-    assert classify_slot_type(Shot(0, 3, "Close-up, hand across the slab", "", "slow")) == SlotType.roll
+    # classify on the visual description; on-screen captions don't make a text card
+    assert classify_slot_type(Shot(0, 3, "Title card with text on a plain background", "Wait", "static")) == SlotType.text
+    assert classify_slot_type(Shot(0, 3, "A person talking to camera, mid-shot", "", "static")) == SlotType.talk
+    assert classify_slot_type(Shot(0, 3, "Wide establishing shot of a warehouse", "", "fast-cut")) == SlotType.broll
+    assert classify_slot_type(Shot(0, 3, "A quiet detail shot of a marble slab", "", "slow")) == SlotType.roll
+    # footage WITH burned captions is NOT a text card
+    assert classify_slot_type(Shot(0, 3, "A person speaking to camera", "some caption text here", "static")) == SlotType.talk
 
 
 def test_detect_beats_maps_transcript_to_beats():
