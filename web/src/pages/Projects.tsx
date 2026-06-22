@@ -134,7 +134,6 @@ export function Projects({ open, openLibrary }: ProjectsProps) {
           </span>
           <span className="rc-name">Recut</span>
         </div>
-        <span className="rc-acct">jellyfuur</span>
       </header>
 
       <div className="rc-proj-inner">
