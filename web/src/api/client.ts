@@ -154,11 +154,27 @@ export const api = {
       method: "POST",
     }),
   getJob: (id: string) => request<Job>(`/jobs/${id}`),
-  generate: (timelineId: string, slotId?: string) =>
-    request<{ job_id: string }>(`/timelines/${timelineId}/generate`, {
-      method: "POST",
-      body: slotId ? { slot_id: slotId } : {},
-    }),
+  /**
+   * Queue AI generation. Omit slotId to generate a clip for every
+   * not-yet-replaced visual slot; pass slotId to regenerate just that one.
+   * Returns the queued job ids to poll via getJob.
+   */
+  generate: (
+    timelineId: string,
+    opts?: { slotId?: string; voiceover?: boolean },
+  ) =>
+    request<{ job_ids: string[]; queued: number }>(
+      `/timelines/${timelineId}/generate`,
+      {
+        method: "POST",
+        body: {
+          ...(opts?.slotId ? { slot_id: opts.slotId } : {}),
+          ...(opts?.voiceover !== undefined
+            ? { voiceover: opts.voiceover }
+            : {}),
+        },
+      },
+    ),
 
   /* --------------------------- Agent / chat --------------------------- */
   cowrite: (projectId: string, message: string, recipeId: string) =>

@@ -64,49 +64,62 @@ class QwenVision(VisionAnalyzer):
         self.s = s
 
     def analyze(self, video_path: str, *, hint: str = "") -> VisionResult:
+        """Robust reference analysis: ffmpeg detects real shot boundaries, then Qwen-VL
+        describes one keyframe per shot. Far more reliable than asking the model to
+        self-report shot times (it tends to call a whole reel 'one shot')."""
         import os
+        import tempfile
 
         import dashscope
 
-        prompt = (
-            "You are a short-video format analyst. Watch this clip and return STRICT JSON: "
-            '{"duration_s": float, "aspect_ratio": "9:16", "shots":[{"start_s":float,'
-            '"end_s":float,"description":str,"on_screen_text":str,"motion":"static|slow|fast-cut"}]}. '
-            "Describe STRUCTURE only (shot boundaries, motion, on-screen text), never identifying content. "
-            + hint
-        )
-        # Local files must be passed as file:// URIs; remote URLs pass through.
-        video_uri = video_path if "://" in video_path else "file://" + os.path.abspath(video_path)
+        from recut.pipeline.shots import extract_keyframe, probe_duration, shot_boundaries
+
+        dur = probe_duration(video_path) or 0.0
+        shots = shot_boundaries(video_path, dur)
+        frame_dir = tempfile.mkdtemp(prefix="recut-vl-")
+        frames: list[tuple[tuple[float, float], str | None]] = [
+            ((s, e), extract_keyframe(video_path, (s + e) / 2, frame_dir)) for (s, e) in shots
+        ]
+        usable = [(span, fp) for span, fp in frames if fp]
+        if not usable:
+            raise RuntimeError("could not extract keyframes for analysis")
+
+        content = [{"image": "file://" + os.path.abspath(fp)} for _, fp in usable]
+        n = len(usable)
+        content.append({"text": (
+            f"These {n} keyframes are sampled one per shot, IN ORDER, from a {dur:.0f}s vertical "
+            f"short-form video (reel). For EACH image, in order, return one entry. Return STRICT JSON: "
+            '{"shots":[{"description":str,"on_screen_text":str,"motion":"static|slow|fast-cut"}]}. '
+            "description = what is visually happening in that shot; on_screen_text = any text visible "
+            f"in the frame (empty if none). Return exactly {n} entries. " + hint
+        )})
 
         def call() -> VisionResult:
             resp = dashscope.MultiModalConversation.call(
                 api_key=self.s.dashscope_api_key,
                 model=self.s.qwen_vl_model,
-                messages=[{"role": "user", "content": [{"video": video_uri}, {"text": prompt}]}],
+                messages=[{"role": "user", "content": content}],
             )
             if getattr(resp, "status_code", 200) != 200:
                 raise RuntimeError(f"qwen-vl {getattr(resp, 'code', '?')}: {getattr(resp, 'message', resp)}")
-            content = resp["output"]["choices"][0]["message"]["content"]
-            text = content if isinstance(content, str) else " ".join(
-                part.get("text", "") for part in content if isinstance(part, dict)
+            raw = resp["output"]["choices"][0]["message"]["content"]
+            text = raw if isinstance(raw, str) else " ".join(
+                p.get("text", "") for p in raw if isinstance(p, dict)
             )
-            data = _extract_json(text)
-            shots = [
-                Shot(
-                    start_s=float(sh.get("start_s", 0)),
-                    end_s=float(sh.get("end_s", 0)),
-                    description=sh.get("description", ""),
-                    on_screen_text=sh.get("on_screen_text", ""),
-                    motion=sh.get("motion", "static"),
-                )
-                for sh in data.get("shots", [])
-            ]
+            descs = _extract_json(text).get("shots", [])
+            out_shots = []
+            for i, ((s, e), _) in enumerate(usable):
+                d = descs[i] if i < len(descs) else {}
+                out_shots.append(Shot(
+                    start_s=s, end_s=e,
+                    description=d.get("description", ""),
+                    on_screen_text=d.get("on_screen_text", ""),
+                    motion=d.get("motion", "static"),
+                ))
             return VisionResult(
-                duration_s=float(data.get("duration_s", shots[-1].end_s if shots else 0)),
-                shots=shots,
-                aspect_ratio=data.get("aspect_ratio", "9:16"),
-                tokens=int(resp.get("usage", {}).get("total_tokens", 0) or 0),
-                confidence=0.8,
+                duration_s=dur or (out_shots[-1].end_s if out_shots else 0),
+                shots=out_shots, aspect_ratio="9:16",
+                tokens=int(resp.get("usage", {}).get("total_tokens", 0) or 0), confidence=0.8,
             )
 
         return _retry(call)

@@ -115,6 +115,7 @@ class Beat(BaseModel):
     start_s: float = 0.0
     duration_s: float = Field(gt=0)
     pattern: str = ""  # the noticed structural pattern, prose
+    description: str = ""  # what's visually happening (drives the regeneration prompt)
     text_role: TextRole = TextRole.none
     transcript_excerpt: str = ""
     on_screen_text: str = ""

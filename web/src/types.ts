@@ -87,6 +87,12 @@ export interface SlotStandin {
 export interface SlotGeneration {
   status?: string;
   job_id?: string | null;
+  /** The visual prompt the AI uses to generate this slot's clip. */
+  prompt?: string;
+  /** Which generation tool/model produced (or will produce) the clip. */
+  tool?: string;
+  /** Tokens this slot's generation cost. */
+  tokens?: number;
   [key: string]: unknown;
 }
 
@@ -145,11 +151,20 @@ export interface Timeline {
 }
 
 /* ------------------------------- Jobs ------------------------------- */
+export interface JobResult {
+  asset_id?: string;
+  url?: string;
+  tokens?: number;
+  /** A slot may be skipped (e.g. already a user upload). */
+  skipped?: boolean;
+  reason?: string;
+}
+
 export interface Job {
   id: string;
-  status: "queued" | "running" | "done" | "error" | string;
+  status: "queued" | "running" | "done" | "failed" | "error" | string;
   progress: number;
-  result: { asset_id?: string; url?: string } | null;
+  result: JobResult | null;
   error: string | null;
 }
 

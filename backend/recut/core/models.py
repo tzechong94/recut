@@ -135,13 +135,13 @@ class StubVision(VisionAnalyzer):
 
     def analyze(self, video_path: str, *, hint: str = "") -> VisionResult:
         shots = [
-            Shot(0, 3, "Bold on-screen claim, no footage yet", "Wait till you see what this cost", "static"),
-            Shot(3, 7, "Person to camera, mid-shot", "", "static"),
-            Shot(7, 10, "Walking shot entering a large space", "", "slow"),
-            Shot(10, 13, "Wide warehouse / production floor, sparks", "", "fast-cut"),
-            Shot(13, 15, "Close-up detail, hand across surface", "", "slow"),
-            Shot(15, 20, "Person to camera, payoff line", "", "static"),
-            Shot(20, 23, "End card with call to action", "Follow for more", "static"),
+            Shot(0, 3, "Title card with bold text on a plain background", "Wait till you see what this cost", "static"),
+            Shot(3, 7, "A person talking to camera, mid-shot", "", "static"),
+            Shot(7, 10, "Handheld shot walking into a large space", "", "slow"),
+            Shot(10, 13, "Wide establishing shot of the warehouse, sparks", "", "fast-cut"),
+            Shot(13, 15, "A detail shot of a polished marble slab", "", "slow"),
+            Shot(15, 20, "A person to camera delivering the payoff", "", "static"),
+            Shot(20, 23, "Title card with a call to action on a plain background", "Follow for more", "static"),
         ]
         return VisionResult(duration_s=23.0, shots=shots, tokens=1400, confidence=0.86)
 

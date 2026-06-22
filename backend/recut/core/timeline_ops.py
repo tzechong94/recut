@@ -77,10 +77,12 @@ def base_cut_from_recipe(
             )
         text = b.on_screen_text or b.transcript_excerpt or ""
         kept = True if ai else (b.slot_type in ACTOR_AUTO)
+        # Regenerate the VISUAL from the shot description; for a text card, from the caption.
+        visual_src = text if b.slot_type == SlotType.text else (b.description or b.pattern or text)
         gen = (
             Generation(
                 tool="generate_text_card" if b.slot_type == SlotType.text else "generate_broll",
-                prompt=_visual_prompt(text, b.pattern, b.slot_type),
+                prompt=_visual_prompt(visual_src, b.pattern, b.slot_type),
             )
             if (ai or b.slot_type in ACTOR_AUTO)
             else None

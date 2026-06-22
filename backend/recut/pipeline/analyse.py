@@ -39,9 +39,16 @@ from recut.core.schemas import (
 # Keyword cues for classifying a shot into a v1 slot type. Order matters: text card
 # first (on-screen claim with no person), then talking head, then generated b-roll
 # (wide/establishing/no person), else the creator's own camera-roll clip.
-_TEXT_CUES = ("claim", "card", "end card", "title", "text", "cta", "follow")
-_TALK_CUES = ("to camera", "talking", "talking head", "person", "face", "presenter", "host", "payoff")
-_BROLL_CUES = ("wide", "warehouse", "establishing", "aerial", "drone", "scene", "scale", "sparks", "b-roll", "landscape")
+# A real text-slate (title card, no footage) — NOT footage that merely has burned-in
+# captions (most reels have captions over real video; those are not text cards).
+_TEXTSLATE_CUES = ("text on a plain", "text on plain", "plain background", "solid background",
+                   "title card", "title screen", "text slate", "black screen", "white screen",
+                   "list of text", "slide with text", "just text", "text-only")
+_PERSON_CUES = ("person", "man", "woman", "guy", "girl", "people", "to camera", "talking", "speaking",
+                "presenter", "host", "selfie", "vlog", "interview", "hand")
+_BROLL_CUES = ("wide", "establishing", "aerial", "drone", "landscape", "cityscape", "screen recording",
+               "diagram", "graphic", "animation", "product", "close-up", "macro", "b-roll", "gameplay",
+               "chip", "hardware", "device", "computer", "footage")
 
 
 def _has(text: str, cues) -> bool:
@@ -50,16 +57,14 @@ def _has(text: str, cues) -> bool:
 
 
 def classify_slot_type(shot: Shot) -> SlotType:
+    """Classify on the VISUAL description. On-screen text is a caption overlay, not a
+    text card by itself."""
     desc = (shot.description or "").lower()
-    ost = (shot.on_screen_text or "").strip()
-    has_person = _has(desc, ("person", "to camera", "talking", "face", "presenter", "host"))
-
-    # A text card: on-screen text dominant and nobody on camera.
-    if (ost and not has_person and _has(desc, _TEXT_CUES)) or (ost and _has(desc, ("card",))):
+    if _has(desc, _TEXTSLATE_CUES):
         return SlotType.text
-    if _has(desc, _TALK_CUES):
+    if _has(desc, _PERSON_CUES):
         return SlotType.talk
-    if not has_person and (shot.motion == "fast-cut" or _has(desc, _BROLL_CUES)):
+    if shot.motion == "fast-cut" or _has(desc, _BROLL_CUES):
         return SlotType.broll
     return SlotType.roll
 
@@ -100,8 +105,12 @@ def detect_beats(vision: VisionResult, transcript: TranscriptResult) -> list[Bea
         st = classify_slot_type(shot)
         dur = max(1.0, round(shot.end_s - shot.start_s, 2))
         is_first, is_last = i == 0, i == len(vision.shots) - 1
-        text_role = TextRole.on_screen_text if st == SlotType.text else TextRole.voiceover
+        ost = (shot.on_screen_text or "").strip()
         excerpt = _transcript_for(transcript.segments, shot.start_s, shot.end_s)
+        # The caption is the on-screen text if present, else the spoken line.
+        caption = ost or excerpt
+        # On-screen text is a burned caption on footage; only a true text slate is a card.
+        text_role = TextRole.on_screen_text if (st == SlotType.text or ost) else TextRole.voiceover
         beats.append(
             Beat(
                 index=i,
@@ -109,9 +118,10 @@ def detect_beats(vision: VisionResult, transcript: TranscriptResult) -> list[Bea
                 slot_type=st,
                 duration_s=dur,
                 pattern="",
+                description=shot.description or "",
                 text_role=text_role,
                 transcript_excerpt=excerpt,
-                on_screen_text=shot.on_screen_text or "",
+                on_screen_text=caption,
                 style_hint=_style_for(st, is_first, is_last),
             )
         )
@@ -121,17 +131,20 @@ def detect_beats(vision: VisionResult, transcript: TranscriptResult) -> list[Bea
 
 
 def _annotate_patterns(beats: list[Beat]) -> None:
-    for b in beats:
+    n = len(beats)
+    for i, b in enumerate(beats):
+        # Prefer a content-grounded pattern from the actual shot description.
+        d = (b.description or "").strip()
         if b.label == "Hook":
-            b.pattern = "A bold claim in the first 3 seconds, before any footage."
+            b.pattern = f"Opens on: {d}" if d else "A bold opening in the first seconds."
         elif b.label == "CTA":
-            b.pattern = "Ends on a call to action as burned-in text."
-        elif b.label == "Payoff":
-            b.pattern = "The reveal lands on a talking head, to camera."
+            b.pattern = f"Closes on: {d}" if d else "Ends on a call to action."
+        elif d:
+            b.pattern = d if len(d) < 90 else d[:87] + "…"
+        elif b.slot_type == SlotType.talk:
+            b.pattern = "Talking head carries the narration."
         elif b.slot_type == SlotType.broll:
-            b.pattern = "A quick wide cut carries the proof."
-        elif b.slot_type == SlotType.roll:
-            b.pattern = "A close, handheld detail keeps it authentic."
+            b.pattern = "A quick cut carries the proof."
         else:
             b.pattern = "Supports the story beat."
 
