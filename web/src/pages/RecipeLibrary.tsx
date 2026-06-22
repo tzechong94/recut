@@ -42,7 +42,6 @@ export function RecipeLibrary({ exit, startFromRecipe }: RecipeLibraryProps) {
           <span className="rc-name">Recut</span>
           <span className="rc-proj">/ Recipe library</span>
         </div>
-        <span className="rc-acct">jellyfuur</span>
       </header>
 
       <div className="rc-lib-inner">
