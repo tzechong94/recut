@@ -114,3 +114,5 @@ produce a real film end-to-end on your key (~$2-5) to confirm sprints 1-10 hold 
 - Music bed (needs a royalty-free asset to drop in).
 - Real DashScope billing units in the scoreboard (currently duration*1800 estimate).
 - Lip-sync / talking avatars (stretch).
+
+## Sprint 11 (offline value): eval report artifact (eval/run_showrunner.py). 128 tests.
