@@ -35,6 +35,12 @@ def build_server():
     mcp.tool(name="generate_voiceover", description="Queue async voiceover for the timeline.")(tools.generate_voiceover)
     mcp.tool(name="render_export", description="Queue the final 9:16 MP4 export render.")(tools.render_export)
     mcp.tool(name="job_status", description="Check an async job's status, progress, and result.")(tools.job_status)
+    # AI Showrunner (Track 2)
+    mcp.tool(name="showrunner_develop", description="Writers' room: premise -> treatment (title, logline, cast, locations, scene beats) via a writer+critic loop.")(tools.showrunner_develop)
+    mcp.tool(name="showrunner_storyboard", description="Break the treatment's scene beats into concrete shots.")(tools.showrunner_storyboard)
+    mcp.tool(name="showrunner_cast", description="Generate + lock a character/location reference still (consistency anchor for i2v).")(tools.showrunner_cast)
+    mcp.tool(name="showrunner_produce", description="Autonomously generate every shot (image-to-video + consistency critic) + voiceover + render the final film.")(tools.showrunner_produce)
+    mcp.tool(name="showrunner_scoreboard", description="Quality-per-token scoreboard for a production.")(tools.showrunner_scoreboard)
     return mcp
 
 

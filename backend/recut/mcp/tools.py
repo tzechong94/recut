@@ -126,6 +126,61 @@ def job_status(job_id: str) -> dict:
     return {"id": job.id, "status": job.status, "progress": job.progress, "result": job.result, "error": job.error}
 
 
+# --------------------------------------------------------------------------- #
+#  AI Showrunner tools (the Track 2 autonomous pipeline)                       #
+# --------------------------------------------------------------------------- #
+def showrunner_develop(premise: str, target_seconds: int = 60, style: str = "cinematic") -> dict:
+    """Writers' room: turn a premise into a treatment (title, logline, cast, locations,
+    scene beats) via a writer+critic loop."""
+    from recut.showrunner.pipeline.writers_room import develop_treatment
+
+    project = repo.create_project(name=premise[:60])
+    prod = develop_treatment(get_models().text, premise, target_seconds=target_seconds, style_name=style, project_id=project["id"])
+    repo.save_production(prod)
+    return prod.model_dump(mode="json")
+
+
+def showrunner_storyboard(production_id: str) -> dict:
+    """Break the treatment's scene beats into concrete shots."""
+    from recut.showrunner.pipeline.storyboard import build_storyboard
+
+    prod = repo.get_production(production_id)
+    if not prod:
+        raise ValueError("production not found")
+    prod = build_storyboard(get_models().text, prod)
+    repo.save_production(prod)
+    return prod.model_dump(mode="json")
+
+
+def showrunner_cast(production_id: str, target_id: str, target: str = "character") -> dict:
+    """Generate + lock a character/location reference still (consistency anchor)."""
+    if not repo.get_production(production_id):
+        raise ValueError("production not found")
+    job_id = queue.enqueue("cast_reference", {"production_id": production_id, "target": target, "target_id": target_id})
+    return {"job_id": job_id, "status": "queued"}
+
+
+def showrunner_produce(production_id: str) -> dict:
+    """Autonomously generate every shot (i2v + consistency critic) + voice + render."""
+    prod = repo.get_production(production_id)
+    if not prod:
+        raise ValueError("production not found")
+    job_id = queue.enqueue("produce_film", {"production_id": production_id}, project_id=prod.project_id)
+    return {"job_id": job_id, "status": "queued"}
+
+
+def showrunner_scoreboard(production_id: str) -> dict:
+    """Quality-per-token scoreboard for the production."""
+    prod = repo.get_production(production_id)
+    if not prod:
+        raise ValueError("production not found")
+    led = prod.token_ledger
+    n = len(prod.shots) or 1
+    naive = led.naive_baseline(n, prod.duration_s / n if n else 4.0)
+    return {"tokens_total": led.total, "video_tokens": led.video_tokens, "rerolls": led.rerolls,
+            "naive_baseline": naive, "tokens_saved": max(0, naive - led.total), "shots": n, "stage": prod.stage.value}
+
+
 # The toolset the MCP server exposes. (name -> callable)
 TOOLS = {
     "analyse_reference": analyse_reference,
@@ -138,4 +193,10 @@ TOOLS = {
     "generate_voiceover": generate_voiceover,
     "render_export": render_export,
     "job_status": job_status,
+    # AI Showrunner
+    "showrunner_develop": showrunner_develop,
+    "showrunner_storyboard": showrunner_storyboard,
+    "showrunner_cast": showrunner_cast,
+    "showrunner_produce": showrunner_produce,
+    "showrunner_scoreboard": showrunner_scoreboard,
 }
