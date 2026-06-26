@@ -1,716 +1,367 @@
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  Copy,
+  ArrowDown,
+  ArrowUp,
+  Camera,
+  Clapperboard,
   Loader2,
-  MoreHorizontal,
-  Mic,
-  Music,
   Plus,
-  RefreshCw,
-  Sparkles,
   Trash2,
-  Type,
-  Upload,
-  Volume2,
-  X,
+  Users,
 } from "lucide-react";
-import { Head, Foot } from "../components/Frame";
-import { FONTS, TYPES } from "../components/types-map";
-import { PreviewPlayer } from "../preview/PreviewPlayer";
-import { ProvenancePanel } from "../components/ProvenancePanel";
 import { api } from "../api/client";
-import { STANDIN_COLOR, localId, recomputeLedger } from "../lib/demo";
-import { runGeneration } from "../lib/generate";
-import type { GenerateProgress } from "../lib/generate";
-import type { Slot, SlotType, Timeline } from "../types";
+import type { UseProduction } from "../lib/useProduction";
+import type { Production, Scene, Shot } from "../types";
+import { Editable } from "../components/Editable";
 
-export interface StoryboardProps {
-  projectId: string;
-  timeline: Timeline;
-  setTimeline: (updater: (t: Timeline) => Timeline) => void;
-  next: () => void;
-  back: () => void;
+interface StageProps {
+  ctl: UseProduction;
+  onAdvance: () => void;
 }
 
-/** A visual slot is anything that can carry a generated/uploaded clip. */
-function isVisual(s: Slot): boolean {
-  return s.type !== "text";
-}
+const SHOT_TYPES = ["wide", "medium", "close_up", "insert", "two_shot"];
+const CAMERAS = ["static", "pan", "push_in", "pull_out", "handheld", "aerial"];
 
-/** Short, single-line description of a slot's visual prompt. */
-function promptOf(s: Slot): string {
-  const p = s.generation?.prompt;
-  if (typeof p === "string" && p.trim()) return p.trim();
-  return s.text;
-}
+export function StoryboardStage({ ctl, onAdvance }: StageProps) {
+  const p = ctl.production!;
+  const [building, setBuilding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hasShots = p.scenes.some((s) => s.shots.length > 0);
 
-export function Storyboard({
-  timeline,
-  setTimeline,
-  next,
-  back,
-}: StoryboardProps) {
-  const slots = [...timeline.slots].sort((a, b) => a.order - b.order);
-  const [active, setActive] = useState<string>(slots[0]?.id ?? "");
-  const [ovFor, setOvFor] = useState<string | null>(null);
-  const [styleFor, setStyleFor] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [prompting, setPrompting] = useState(false);
-  const [promptText, setPromptText] = useState("");
-  const uploadSlotRef = useRef<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!hasShots && !building) void build();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // --- generation state ---
-  // overall "generate all" run
-  const [genRunning, setGenRunning] = useState(false);
-  const [genProgress, setGenProgress] = useState<GenerateProgress | null>(null);
-  const [genNote, setGenNote] = useState<string | null>(null);
-  // per-slot regenerate (slot id currently regenerating)
-  const [regenSlot, setRegenSlot] = useState<string | null>(null);
-
-  const visualSlots = slots.filter(isVisual);
-  const pending = visualSlots.filter(
-    (s) => s.source === "standin" || s.status === "pending_generation",
-  );
-  const generatedCount = visualSlots.filter(
-    (s) => s.source === "generated",
-  ).length;
-  const uploadCount = visualSlots.filter(
-    (s) => s.source === "user_upload",
-  ).length;
-
-  const patch = (id: string, fn: (s: Slot) => Slot) => {
-    setTimeline((t) => {
-      const newSlots = t.slots.map((s) => (s.id === id ? fn(s) : s));
-      return { ...t, slots: newSlots, token_ledger: recomputeLedger(newSlots) };
-    });
-  };
-
-  const setStyle = (id: string, key: keyof Slot["style"], val: string) =>
-    patch(id, (s) => ({ ...s, style: { ...s.style, [key]: val } }));
-
-  const setText = (id: string, text: string) =>
-    patch(id, (s) => ({ ...s, text }));
-
-  // Edit a slot's visual prompt. The Editor's debounced useAutosave PUTs the
-  // full timeline on change, so this persists automatically (no manual PUT).
-  const setPrompt = (id: string, prompt: string) =>
-    patch(id, (s) => ({
-      ...s,
-      generation: { ...(s.generation ?? {}), prompt },
-    }));
-
-  /* ----------------------- AI generation actions ----------------------- */
-
-  const generateAll = async () => {
-    if (genRunning) return;
-    setGenRunning(true);
-    setGenNote(null);
-    setGenProgress({ jobs: [], done: 0, total: pending.length });
-    const outcome = await runGeneration({
-      timelineId: timeline.timeline_id,
-      onProgress: (p) => setGenProgress(p),
-    });
-    setGenNote(noteForOutcome(outcome.kind));
-    if (
-      (outcome.kind === "settled" || outcome.kind === "timeout") &&
-      outcome.timeline
-    ) {
-      setTimeline(() => outcome.timeline as Timeline);
-    } else if (outcome.kind === "unsupported") {
-      // backend can't generate (stub/offline): mark pending slots as generated
-      // locally so the reel still fills and stays demoable.
-      simulateGenerateAll();
-    }
-    setGenRunning(false);
-  };
-
-  const noteForOutcome = (kind: string): string | null => {
-    if (kind === "unsupported")
-      return "Live generation is offline — filled the reel with placeholders.";
-    if (kind === "empty")
-      return "Nothing to generate — every slot is already your upload.";
-    if (kind === "timeout")
-      return "Some clips are still rendering — check back in a moment.";
-    return null;
-  };
-
-  const simulateGenerateAll = () => {
-    setTimeline((t) => {
-      const newSlots = t.slots.map((s) =>
-        isVisual(s) && s.source === "standin"
-          ? { ...s, source: "generated" as const, status: "ready" }
-          : s,
-      );
-      return { ...t, slots: newSlots, token_ledger: recomputeLedger(newSlots) };
-    });
-  };
-
-  const regenerate = async (id: string) => {
-    if (regenSlot) return;
-    setRegenSlot(id);
-    setOvFor(null);
-    patch(id, (s) => ({ ...s, status: "generating" }));
-    const outcome = await runGeneration({
-      timelineId: timeline.timeline_id,
-      slotId: id,
-    });
-    if (
-      (outcome.kind === "settled" || outcome.kind === "timeout") &&
-      outcome.timeline
-    ) {
-      setTimeline(() => outcome.timeline as Timeline);
-    } else {
-      // offline/stub: mark this slot generated locally
-      patch(id, (s) => ({
-        ...s,
-        source: "generated",
-        status: "ready",
-      }));
-    }
-    setRegenSlot(null);
-  };
-
-  /* --------------------------- Replace / upload --------------------------- */
-
-  const triggerUpload = (id: string) => {
-    uploadSlotRef.current = id;
-    fileRef.current?.click();
-    setOvFor(null);
-  };
-
-  const onFile = async (file: File) => {
-    const id = uploadSlotRef.current;
-    if (!id) return;
+  async function build() {
+    setBuilding(true);
+    setError(null);
     try {
-      const asset = await api.uploadAsset(timeline.project_id, file, "upload");
-      try {
-        const updated = await api.uploadToSlot(
-          timeline.timeline_id,
-          id,
-          asset.id,
-        );
-        setTimeline(() => updated);
-      } catch {
-        // slot-upload endpoint offline: attach locally
-        patch(id, (s) => ({
-          ...s,
-          asset_id: asset.id,
-          source: "user_upload",
-          status: "ready",
-        }));
-      }
-    } catch {
-      // whole upload offline: simulate "yours" so the flow is demoable
-      patch(id, (s) => ({ ...s, source: "user_upload", status: "ready" }));
+      const next = await api.storyboard(p.id);
+      ctl.set(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't build the storyboard");
     } finally {
-      uploadSlotRef.current = null;
+      setBuilding(false);
     }
-  };
+  }
 
-  /* ------------------------------ Slot ops ------------------------------ */
+  const setScenes = (scenes: Scene[]) => ctl.update({ ...p, scenes });
 
-  const remove = (id: string) => {
-    setTimeline((t) => {
-      const newSlots = t.slots
-        .filter((s) => s.id !== id)
-        .map((s, i) => ({ ...s, order: i }));
-      return { ...t, slots: newSlots, token_ledger: recomputeLedger(newSlots) };
-    });
-    setOvFor(null);
-  };
+  const setShot = (sceneId: string, shotId: string, next: Partial<Shot>) =>
+    setScenes(
+      p.scenes.map((sc) =>
+        sc.id === sceneId
+          ? {
+              ...sc,
+              shots: sc.shots.map((sh) =>
+                sh.id === shotId ? { ...sh, ...next } : sh,
+              ),
+            }
+          : sc,
+      ),
+    );
 
-  const duplicate = (slot: Slot) => {
-    setTimeline((t) => {
-      const sorted = [...t.slots].sort((a, b) => a.order - b.order);
-      const i = sorted.findIndex((s) => s.id === slot.id);
-      const copy: Slot = { ...slot, id: localId("slot") };
-      const newSlots = [
-        ...sorted.slice(0, i + 1),
-        copy,
-        ...sorted.slice(i + 1),
-      ].map((s, idx) => ({ ...s, order: idx }));
-      return { ...t, slots: newSlots, token_ledger: recomputeLedger(newSlots) };
-    });
-    setOvFor(null);
-  };
+  const moveShot = (sceneId: string, idx: number, dir: -1 | 1) =>
+    setScenes(
+      p.scenes.map((sc) => {
+        if (sc.id !== sceneId) return sc;
+        const shots = [...sc.shots];
+        const j = idx + dir;
+        if (j < 0 || j >= shots.length) return sc;
+        [shots[idx], shots[j]] = [shots[j], shots[idx]];
+        return { ...sc, shots: shots.map((s, i) => ({ ...s, index: i })) };
+      }),
+    );
 
-  const addManual = (type: SlotType) => {
-    setTimeline((t) => {
-      const newSlot: Slot = {
-        id: localId("slot"),
-        beat_label: "New",
-        type,
-        order: t.slots.length,
-        duration_s: 3,
-        source: "standin",
-        asset_id: null,
-        standin: {
-          kind: type,
-          color: STANDIN_COLOR[type],
-          label: TYPES[type].label.toLowerCase(),
-        },
-        text: type === "text" ? "New text card" : "Describe this shot",
-        text_role: type === "text" ? "on_screen_text" : "voiceover",
-        style: {
-          font: type === "text" ? "display" : "clean",
-          size: "m",
-          align: type === "text" ? "center" : "left",
-        },
-        status: type === "text" ? "ready" : "pending_generation",
-        generation:
-          type === "text"
-            ? null
-            : { prompt: "", status: "pending_generation" },
-        kept: false,
-      };
-      const newSlots = [...t.slots, newSlot];
-      return { ...t, slots: newSlots, token_ledger: recomputeLedger(newSlots) };
-    });
-    setAdding(false);
-    setPrompting(false);
-  };
+  const removeShot = (sceneId: string, shotId: string) =>
+    setScenes(
+      p.scenes.map((sc) =>
+        sc.id === sceneId
+          ? {
+              ...sc,
+              shots: sc.shots
+                .filter((s) => s.id !== shotId)
+                .map((s, i) => ({ ...s, index: i })),
+            }
+          : sc,
+      ),
+    );
 
-  const addByPrompt = async () => {
-    const prompt = promptText.trim();
-    if (!prompt) return;
-    const afterId = slots[slots.length - 1]?.id ?? "";
-    try {
-      const updated = await api.addSlot(timeline.timeline_id, afterId, prompt);
-      setTimeline(() => updated);
-    } catch {
-      // offline: add a pending AI b-roll slot with the prompt
-      setTimeline((t) => {
-        const newSlot: Slot = {
-          id: localId("slot"),
-          beat_label: "New",
-          type: "broll",
-          order: t.slots.length,
-          duration_s: 3,
-          source: "standin",
-          asset_id: null,
-          standin: {
-            kind: "broll",
-            color: STANDIN_COLOR.broll,
-            label: "AI b-roll",
-          },
-          text: prompt,
-          text_role: "voiceover",
-          style: { font: "clean", size: "m", align: "left" },
-          status: "pending_generation",
-          generation: { prompt, status: "pending_generation" },
-          kept: false,
-        };
-        const newSlots = [...t.slots, newSlot];
-        return {
-          ...t,
-          slots: newSlots,
-          token_ledger: recomputeLedger(newSlots),
-        };
-      });
-    }
-    setPromptText("");
-    setAdding(false);
-    setPrompting(false);
-  };
+  const addShot = (sceneId: string) =>
+    setScenes(
+      p.scenes.map((sc) =>
+        sc.id === sceneId ? { ...sc, shots: [...sc.shots, newShot(sc)] } : sc,
+      ),
+    );
 
-  const toggleAudio = (which: "voiceover" | "bed") => {
-    setTimeline((t) => ({
-      ...t,
-      audio: {
-        ...t.audio,
-        [which]: { ...t.audio[which], enabled: !t.audio[which].enabled },
-      },
-    }));
-  };
+  if (building && !hasShots) {
+    return (
+      <div className="rc-stage">
+        <div className="rc-head">
+          <div className="rc-kicker">STAGE 3 · THE BOARD</div>
+          <h2>Boarding every shot…</h2>
+        </div>
+        <div className="rc-loading">
+          <Loader2 size={26} className="rc-spin" />
+          <span>The director is breaking scenes into shots.</span>
+        </div>
+      </div>
+    );
+  }
+
+  const totalShots = p.scenes.reduce((a, s) => a + s.shots.length, 0);
+  const totalDur = p.scenes
+    .flatMap((s) => s.shots)
+    .reduce((a, s) => a + s.duration_s, 0);
 
   return (
     <div className="rc-stage">
-      <input
-        ref={fileRef}
-        type="file"
-        accept="video/*,image/*"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void onFile(f);
-          e.target.value = "";
-        }}
-      />
-      <Head
-        k="04"
-        t="Your reel — AI fills every shot, you keep what's yours"
-        s="By default the AI generates a clip for every visual slot. Hit Generate to fill the reel, then regenerate any shot or replace it with your own upload."
-      />
-      <div className="rc-sbgrid">
-        <div className="rc-slots">
-          {/* Generate-all banner */}
-          <div className="rc-genbar" data-testid="genbar">
-            <div className="rc-genbarmain">
-              <button
-                className="rc-cta"
-                data-testid="generate-all"
-                disabled={genRunning || pending.length === 0}
-                onClick={() => void generateAll()}
-              >
-                {genRunning ? (
-                  <>
-                    <Loader2 size={16} className="rc-spin" />{" "}
-                    {genProgress
-                      ? `Generating… ${genProgress.done}/${genProgress.total} clips done`
-                      : "Generating…"}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={16} /> Generate all AI clips
-                  </>
-                )}
-              </button>
-              <span className="rc-gencost">
-                {pending.length > 0
-                  ? `Generates a clip per slot — about ~90s and a few cents each on live models.`
-                  : `All ${visualSlots.length} visual slots are filled.`}
-              </span>
-            </div>
-            {genNote && (
-              <div className="rc-gennote" data-testid="gen-note">
-                {genNote}
-              </div>
-            )}
+      <div className="rc-head">
+        <div className="rc-kicker">STAGE 3 · THE BOARD</div>
+        <h2>Storyboard</h2>
+        <p>
+          Every shot the agent will generate. Tune the visual action, framing,
+          and dialogue. Reorder, add, or cut shots — then call action.
+        </p>
+      </div>
+
+      {error && <div className="rc-err">{error}</div>}
+
+      {p.scenes.map((sc) => (
+        <section className="sr-board-scene" key={sc.id}>
+          <div className="sr-board-heading">
+            <Clapperboard size={14} />
+            <span>{sc.heading || `Scene ${sc.index + 1}`}</span>
+            <span className="sr-board-summary">{sc.summary}</span>
           </div>
-
-          {slots.map((s) => {
-            const T = TYPES[s.type];
-            const visual = isVisual(s);
-            const upload = s.source === "user_upload";
-            const generated = s.source === "generated";
-            const generating =
-              s.status === "generating" || regenSlot === s.id;
-            const standin = !upload && !generated && !generating;
-            return (
-              <div
-                key={s.id}
-                className={"rc-slot" + (active === s.id ? " is-active" : "")}
-              >
-                <button className="rc-slotmain" onClick={() => setActive(s.id)}>
-                  <span
-                    className="rc-slotrail"
-                    style={{ background: T.color }}
-                  />
-                  <span className="rc-slotbody">
-                    <span className="rc-slottop">
-                      <span
-                        className="rc-chip sm"
-                        style={{ background: T.soft, color: T.color }}
-                      >
-                        <T.Icon size={12} /> {T.label}
-                      </span>
-                      <span className="rc-slotdur">{s.duration_s}s</span>
-                    </span>
-                    <span className="rc-slottext">
-                      {s.type === "text" ? `“${s.text}”` : promptOf(s)}
-                    </span>
-                  </span>
-                </button>
-                <div className="rc-slotside">
-                  {!visual ? (
-                    <span className="rc-auto">Text card</span>
-                  ) : upload ? (
-                    <span className="rc-yours">
-                      <CheckCircle2 size={14} /> Your upload
-                    </span>
-                  ) : generating ? (
-                    <span className="rc-gen" data-testid={`generating-${s.id}`}>
-                      <Loader2 size={13} className="rc-spin" /> Generating…
-                    </span>
-                  ) : generated ? (
-                    <span className="rc-gen">
-                      <Sparkles size={13} /> AI generated
-                    </span>
-                  ) : (
-                    <span
-                      className="rc-standin"
-                      data-testid={`standin-${s.id}`}
-                    >
-                      AI clip not generated yet
-                    </span>
-                  )}
-
-                  {visual && (
-                    <button
-                      className="rc-iconbtn sm"
-                      aria-label="Slot options"
-                      disabled={generating}
-                      onClick={() => {
-                        setOvFor(ovFor === s.id ? null : s.id);
-                        setStyleFor(null);
-                      }}
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
-                  )}
-                  {!visual && (
-                    <button
-                      className="rc-iconbtn sm"
-                      aria-label="Slot options"
-                      onClick={() => {
-                        setOvFor(ovFor === s.id ? null : s.id);
-                        setStyleFor(null);
-                      }}
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
-                  )}
-
-                  {ovFor === s.id && (
-                    <div className="rc-menu">
-                      {visual && (
-                        <button
-                          data-testid={`regen-${s.id}`}
-                          disabled={!!regenSlot || genRunning}
-                          onClick={() => void regenerate(s.id)}
-                        >
-                          <RefreshCw size={13} />{" "}
-                          {standin ? "Generate this clip" : "Regenerate"}
-                        </button>
-                      )}
-                      {visual && (
-                        <button
-                          data-testid={`replace-${s.id}`}
-                          onClick={() => triggerUpload(s.id)}
-                        >
-                          <Upload size={13} /> Replace with my upload
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setStyleFor(s.id);
-                          setOvFor(null);
-                        }}
-                      >
-                        <Type size={13} /> Edit{" "}
-                        {visual ? "prompt & captions" : "text & font"}
-                      </button>
-                      <button onClick={() => duplicate(s)}>
-                        <Copy size={13} /> Duplicate slot
-                      </button>
-                      <button className="rc-del" onClick={() => remove(s.id)}>
-                        <Trash2 size={13} /> Delete slot
-                      </button>
-                    </div>
-                  )}
-                  {styleFor === s.id && (
-                    <div className="rc-stylepop">
-                      {visual && (
-                        <label className="rc-promptlabel">
-                          <span className="rc-promptcap">
-                            <Sparkles size={12} /> Visual prompt
-                          </span>
-                          <textarea
-                            value={s.generation?.prompt ?? ""}
-                            aria-label="Edit visual prompt"
-                            placeholder="Describe the shot the AI should generate…"
-                            onChange={(e) => setPrompt(s.id, e.target.value)}
-                          />
-                        </label>
-                      )}
-                      <label className="rc-promptlabel">
-                        <span className="rc-promptcap">
-                          {visual ? "Caption" : "Text"}
-                        </span>
-                        <textarea
-                          value={s.text}
-                          aria-label="Edit slot text"
-                          onChange={(e) => setText(s.id, e.target.value)}
-                        />
-                      </label>
-                      <div className="rc-styrow">
-                        <span>Font</span>
-                        <div className="rc-seg3">
-                          {(Object.keys(FONTS) as Array<keyof typeof FONTS>).map(
-                            (f) => (
-                              <button
-                                key={f}
-                                className={s.style.font === f ? "on" : ""}
-                                onClick={() => setStyle(s.id, "font", f)}
-                                style={{ fontFamily: FONTS[f] }}
-                              >
-                                {f === "display"
-                                  ? "Display"
-                                  : f === "clean"
-                                    ? "Clean"
-                                    : "Mono"}
-                              </button>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                      <div className="rc-styrow">
-                        <span>Size</span>
-                        <div className="rc-seg3">
-                          {(["s", "m", "l"] as const).map((z) => (
-                            <button
-                              key={z}
-                              className={s.style.size === z ? "on" : ""}
-                              onClick={() => setStyle(s.id, "size", z)}
-                            >
-                              {z.toUpperCase()}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="rc-styrow">
-                        <span>Align</span>
-                        <div className="rc-seg3">
-                          <button
-                            className={s.style.align === "left" ? "on" : ""}
-                            onClick={() => setStyle(s.id, "align", "left")}
-                          >
-                            <AlignLeft size={13} />
-                          </button>
-                          <button
-                            className={s.style.align === "center" ? "on" : ""}
-                            onClick={() => setStyle(s.id, "align", "center")}
-                          >
-                            <AlignCenter size={13} />
-                          </button>
-                          <button
-                            className={s.style.align === "right" ? "on" : ""}
-                            onClick={() => setStyle(s.id, "align", "right")}
-                          >
-                            <AlignRight size={13} />
-                          </button>
-                        </div>
-                      </div>
-                      <button
-                        className="rc-styclose"
-                        onClick={() => setStyleFor(null)}
-                      >
-                        Done
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          <div className="rc-addwrap">
-            {!adding ? (
-              <button className="rc-add" onClick={() => setAdding(true)}>
-                <Plus size={15} /> Add slot
-              </button>
-            ) : prompting ? (
-              <div className="rc-promptbox">
-                <input
-                  autoFocus
-                  value={promptText}
-                  placeholder="Describe the shot — e.g. ‘aerial of the harbour at dusk’"
-                  onChange={(e) => setPromptText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addByPrompt()}
-                />
-                <button className="rc-cta sm" onClick={addByPrompt}>
-                  Add
-                </button>
-                <button
-                  className="rc-iconbtn sm"
-                  aria-label="Cancel"
-                  onClick={() => {
-                    setAdding(false);
-                    setPrompting(false);
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            ) : (
-              <div className="rc-addmenu">
-                <span className="rc-addlabel">Add manually</span>
-                {(
-                  Object.entries(TYPES) as Array<
-                    [SlotType, (typeof TYPES)[SlotType]]
-                  >
-                ).map(([k, T]) => (
-                  <button
-                    key={k}
-                    onClick={() => addManual(k)}
-                    style={{ color: T.color }}
-                  >
-                    <T.Icon size={13} /> {T.label}
-                  </button>
-                ))}
-                <span className="rc-addlabel">Or</span>
-                <button
-                  className="rc-addprompt"
-                  onClick={() => setPrompting(true)}
-                >
-                  <Sparkles size={13} /> Describe it for the AI
-                </button>
-              </div>
-            )}
+          <div className="sr-shots">
+            {sc.shots.map((sh, i) => (
+              <ShotCard
+                key={sh.id}
+                shot={sh}
+                index={i}
+                production={p}
+                first={i === 0}
+                last={i === sc.shots.length - 1}
+                onChange={(n) => setShot(sc.id, sh.id, n)}
+                onUp={() => moveShot(sc.id, i, -1)}
+                onDown={() => moveShot(sc.id, i, 1)}
+                onRemove={() => removeShot(sc.id, sh.id)}
+              />
+            ))}
+            <button className="rc-add" onClick={() => addShot(sc.id)}>
+              <Plus size={15} /> Add shot
+            </button>
           </div>
+        </section>
+      ))}
+
+      <div className="rc-foot">
+        <div className="rc-footl">
+          <span className="rc-note">
+            {totalShots} shots · ~{Math.round(totalDur)}s · video tokens spend
+            after you call action
+          </span>
+        </div>
+        <button
+          className="rc-cta sr-action"
+          onClick={onAdvance}
+          disabled={totalShots === 0}
+        >
+          <Clapperboard size={16} /> Approve &amp; Produce
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function newShot(scene: Scene): Shot {
+  return {
+    id: "shot_new_" + Math.random().toString(36).slice(2, 10),
+    index: scene.shots.length,
+    shot_type: "medium",
+    camera: "static",
+    action: "",
+    dialogue: [],
+    narration: "",
+    character_ids: [],
+    location_id: scene.shots[0]?.location_id ?? null,
+    duration_s: 4,
+    source: "standin",
+    asset_id: null,
+    status: "planned",
+    reroll_count: 0,
+    critic_score: null,
+  };
+}
+
+interface ShotCardProps {
+  shot: Shot;
+  index: number;
+  production: Production;
+  first: boolean;
+  last: boolean;
+  onChange: (next: Partial<Shot>) => void;
+  onUp: () => void;
+  onDown: () => void;
+  onRemove: () => void;
+}
+
+function ShotCard({
+  shot,
+  index,
+  production,
+  first,
+  last,
+  onChange,
+  onUp,
+  onDown,
+  onRemove,
+}: ShotCardProps) {
+  const charNames = shot.character_ids
+    .map((id) => production.characters.find((c) => c.id === id)?.name)
+    .filter(Boolean) as string[];
+
+  return (
+    <div className="sr-shot">
+      <div className="sr-shot-num">{index + 1}</div>
+      <div className="sr-shot-body">
+        <div className="sr-shot-meta">
+          <Select
+            value={shot.shot_type}
+            options={SHOT_TYPES}
+            onChange={(v) => onChange({ shot_type: v as Shot["shot_type"] })}
+            label="Shot type"
+          />
+          <Select
+            value={shot.camera}
+            options={CAMERAS}
+            onChange={(v) => onChange({ camera: v as Shot["camera"] })}
+            label="Camera"
+            icon={<Camera size={11} />}
+          />
+          <input
+            className="sr-dur-edit"
+            type="number"
+            min={1}
+            max={12}
+            step={0.5}
+            value={shot.duration_s}
+            aria-label="Duration seconds"
+            onChange={(e) =>
+              onChange({ duration_s: Number(e.target.value) || 1 })
+            }
+          />
+          <span className="sr-dur-unit">s</span>
+          {charNames.length > 0 && (
+            <span className="sr-shot-chars">
+              <Users size={11} /> {charNames.join(", ")}
+            </span>
+          )}
         </div>
 
-        <aside style={{ position: "sticky", top: 0 }}>
-          <PreviewPlayer
-            timeline={timeline}
-            activeSlotId={active}
-            onActiveSlotChange={setActive}
-          />
-          <div style={{ marginTop: 14 }}>
-            <ProvenancePanel ledger={timeline.token_ledger} aiFirst />
+        <Editable
+          value={shot.action}
+          onCommit={(v) => onChange({ action: v })}
+          multiline
+          placeholder="The visual: what the camera sees…"
+          aria-label="Shot action"
+        />
+
+        {shot.dialogue.length > 0 && (
+          <div className="sr-shot-dialogue">
+            {shot.dialogue.map((d, di) => (
+              <div className="sr-dialogue-line" key={di}>
+                <span className="sr-dialogue-name">
+                  {d.character_name || "—"}
+                </span>
+                <Editable
+                  value={d.line}
+                  onCommit={(v) =>
+                    onChange({
+                      dialogue: shot.dialogue.map((x, xi) =>
+                        xi === di ? { ...x, line: v } : x,
+                      ),
+                    })
+                  }
+                  placeholder="line…"
+                  aria-label="Dialogue line"
+                />
+              </div>
+            ))}
           </div>
-          <div className="rc-mixline" data-testid="mix-summary">
-            <Sparkles size={13} /> {generatedCount} AI · {uploadCount} yours ·{" "}
-            {pending.length} not generated
+        )}
+
+        {(shot.narration || shot.dialogue.length === 0) && (
+          <div className="sr-shot-narration">
+            <span className="sr-narr-tag">narration</span>
+            <Editable
+              value={shot.narration}
+              onCommit={(v) => onChange({ narration: v })}
+              placeholder="Voiceover over this shot…"
+              aria-label="Narration"
+            />
           </div>
-          <div className="rc-audio" style={{ marginTop: 14 }}>
-            <div className="rc-audiohead">
-              <Volume2 size={14} /> Audio
-            </div>
-            <button
-              className={
-                "rc-audiorow" + (timeline.audio.voiceover.enabled ? " on" : "")
-              }
-              onClick={() => toggleAudio("voiceover")}
-            >
-              <Mic size={13} /> Voiceover{" "}
-              <span>
-                {timeline.audio.voiceover.enabled ? "On · your voice" : "Off"}
-              </span>
-            </button>
-            <button
-              className={
-                "rc-audiorow" + (timeline.audio.bed.enabled ? " on" : "")
-              }
-              onClick={() => toggleAudio("bed")}
-            >
-              <Music size={13} /> Sound{" "}
-              <span>
-                {timeline.audio.bed.enabled ? "On · upbeat" : "Add post-export"}
-              </span>
-            </button>
-          </div>
-        </aside>
+        )}
       </div>
-      <Foot
-        left={
-          <button className="rc-back" onClick={back}>
-            <ArrowLeft size={16} /> Script
-          </button>
-        }
-        right={
-          <button className="rc-cta" onClick={next}>
-            Make the cover <ArrowRight size={16} />
-          </button>
-        }
-      />
+
+      <div className="sr-shot-side">
+        <button
+          className="rc-iconbtn sm"
+          disabled={first}
+          aria-label="Move shot up"
+          onClick={onUp}
+        >
+          <ArrowUp size={14} />
+        </button>
+        <button
+          className="rc-iconbtn sm"
+          disabled={last}
+          aria-label="Move shot down"
+          onClick={onDown}
+        >
+          <ArrowDown size={14} />
+        </button>
+        <button
+          className="rc-iconbtn sm sr-del"
+          aria-label="Remove shot"
+          onClick={onRemove}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
     </div>
+  );
+}
+
+function Select({
+  value,
+  options,
+  onChange,
+  label,
+  icon,
+}: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  label: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <label className="sr-select">
+      {icon}
+      <select
+        value={value}
+        aria-label={label}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o.replace("_", " ")}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

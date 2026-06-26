@@ -68,7 +68,33 @@ def _keyframe(video_path: str, mime: str) -> str | None:
         return video_path  # stub "video" is already a still
     from recut.pipeline.shots import extract_keyframe
 
-    return extract_keyframe(video_path, 0.5)
+    # Score identity on the FIRST frame — sharpest for a character, and not biased by
+    # being the i2v seed frame (i2v's first frame ~ the reference; mid/late frames drift).
+    return extract_keyframe(video_path, 0.3)
+
+
+_MIN_SHOT_S, _MAX_SHOT_S = 2.0, 12.0
+
+
+def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
+    """Synthesize each shot's voiceover FIRST and set the shot duration to fit the spoken
+    line (clamped), so dialogue is never truncated mid-word. Returns shot_id -> vo path."""
+    from recut.pipeline.shots import probe_duration
+
+    vo_paths: dict[str, str] = {}
+    for shot in prod.shots:
+        va = synth_shot_voice(ctx.models, prod, shot)
+        if not va:
+            shot.duration_s = max(_MIN_SHOT_S, min(_MAX_SHOT_S, shot.duration_s))
+            continue
+        ext = "wav" if va.mime.endswith("wav") else "mp3"
+        sp = Path(src_dir) / f"vo_{shot.id}.{ext}"
+        sp.write_bytes(va.data)
+        vo_paths[shot.id] = str(sp)
+        prod.token_ledger.voice_tokens += va.tokens
+        dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
+        shot.duration_s = round(max(_MIN_SHOT_S, min(_MAX_SHOT_S, dur + 0.4)), 2)  # small tail pad
+    return vo_paths
 
 
 def _project_cap(prod, ctx) -> int:
@@ -77,6 +103,42 @@ def _project_cap(prod, ctx) -> int:
         if p:
             return p["token_cap"]
     return ctx.settings.project_token_cap
+
+
+MAX_ATTEMPTS = 3  # 1 initial + up to 2 re-rolls (bounded so the critic can't blow the budget)
+
+
+def _generate_shot_best_of(prod, shot, ctx, src_dir) -> tuple[bytes, str, str, int, float | None, int]:
+    """Generate a shot, scoring each attempt against its reference and re-rolling drift
+    with a NEW seed + the critic's corrective note. Returns the BEST attempt
+    (bytes, mime, tool, tokens, best_score, rerolls)."""
+    import hashlib
+
+    best = None  # (score, bytes, mime, tool, tokens)
+    corrective = ""
+    rerolls = 0
+    for attempt in range(MAX_ATTEMPTS):
+        seed = int(hashlib.sha256(f"{shot.id}:{attempt}".encode()).hexdigest()[:7], 16)
+        render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective)
+        data, mime = render.asset.data, render.asset.mime
+        score = None
+        if render.reference_url:
+            tmp = src_dir / f"{shot.id}_a{attempt}.{'png' if mime.startswith('image') else 'mp4'}"
+            tmp.write_bytes(data)
+            kf = _keyframe(str(tmp), mime)
+            if kf:
+                verdict = ctx.models.vision.score_consistency(render.reference_url, kf)
+                score = verdict.score
+                corrective = verdict.reason or corrective
+        # keep the best-scoring attempt (None score sorts low so a scored attempt wins)
+        rank = score if score is not None else -1.0
+        if best is None or rank > best[0]:
+            best = (rank, data, mime, render.tool, render.asset.tokens)
+        if score is None or score >= CONSISTENCY_THRESHOLD:
+            break  # good enough (or critic unavailable -> don't burn budget re-rolling)
+        rerolls += 1
+    score_val = best[0] if best[0] >= 0 else None
+    return best[1], best[2], best[3], best[4], score_val, rerolls
 
 
 @register("produce_film")
@@ -90,57 +152,39 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     src_dir = Path(ctx.settings.work_dir) / f"prod_{prod.id}" / "src"
     src_dir.mkdir(parents=True, exist_ok=True)
 
+    # PASS 1 — audio-fit: synth each line, set shot duration to fit it (no truncation)
+    vo_paths = _fit_durations_to_voice(prod, ctx, src_dir)
+    repo.save_production(prod)
+
+    # PASS 2 — generate each shot (best-of-N with consistency critic + re-roll)
     for i, shot in enumerate(shots):
         if shot.source in (AssetSource.generated, AssetSource.uploaded) and shot.asset_id:
-            continue  # resumable: already done
+            continue  # resumable
         if prod.token_ledger.video_tokens >= cap:
-            shot.status = ShotStatus.failed  # cap reached -> stays a stand-in in the render
+            shot.status = ShotStatus.failed
             continue
-
         shot.status = ShotStatus.generating
         repo.save_production(prod)
 
-        render = generate_shot(ctx.models, prod, shot)
-        asset_bytes, mime = render.asset.data, render.asset.mime
-        # consistency critic (+ bounded re-roll)
-        if render.reference_url:
-            tmp = src_dir / f"{shot.id}.{'png' if mime.startswith('image') else 'mp4'}"
-            tmp.write_bytes(asset_bytes)
-            kf = _keyframe(str(tmp), mime)
-            if kf:
-                score = ctx.models.vision.score_consistency(render.reference_url, kf)
-                shot.critic_score = round(score, 3)
-                if should_reroll(score, threshold=CONSISTENCY_THRESHOLD, rerolls_done=shot.reroll_count):
-                    shot.reroll_count += 1
-                    prod.token_ledger.rerolls += 1
-                    render = generate_shot(ctx.models, prod, shot)
-                    asset_bytes, mime = render.asset.data, render.asset.mime
-
+        data, mime, tool, tokens, score, rerolls = _generate_shot_best_of(prod, shot, ctx, src_dir)
         ext = "png" if mime.startswith("image") else "mp4"
-        key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(asset_bytes)}.{ext}"
-        _store_bytes(ctx, key, asset_bytes, mime)
+        key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(data)}.{ext}"
+        _store_bytes(ctx, key, data, mime)
         asset = repo.create_asset(kind="generated", storage_key=key, project_id=prod.project_id, mime=mime, duration_s=shot.duration_s, width=1080, height=1920)
         shot.asset_id = asset["id"]
         shot.source = AssetSource.generated
         shot.status = ShotStatus.ready
-        shot.gen_tool = render.tool
-        shot.tokens = render.asset.tokens
-        prod.token_ledger.video_tokens += render.asset.tokens
+        shot.gen_tool = tool
+        shot.tokens = tokens
+        shot.critic_score = round(score, 3) if score is not None else None
+        shot.reroll_count = rerolls
+        prod.token_ledger.video_tokens += tokens
+        prod.token_ledger.rerolls += rerolls
         repo.save_production(prod)
         queue.update_progress(job.id, (i + 1) / total * 0.8)
 
-    # voiceover: synth per shot, concat into one aligned track
-    vo_segments: list[tuple[str, float]] = []
-    for shot in shots:
-        va = synth_shot_voice(ctx.models, prod, shot)
-        seg_path = ""
-        if va:
-            sp = src_dir / f"vo_{shot.id}.{'wav' if va.mime.endswith('wav') else 'mp3'}"
-            sp.write_bytes(va.data)
-            seg_path = str(sp)
-            prod.token_ledger.voice_tokens += va.tokens
-        vo_segments.append((seg_path, shot.duration_s))
-
+    # PASS 3 — assemble: per-shot VO concat (already synthesized in pass 1), then render
+    vo_segments = [(vo_paths.get(shot.id, ""), shot.duration_s) for shot in shots]
     timeline = compile_to_timeline(prod)
     assets = {a_id: AssetMeta(storage_key=r["storage_key"], mime=r["mime"], duration_s=r["duration_s"], width=r["width"], height=r["height"])
               for a_id, r in repo.assets_by_ids([s.asset_id for s in shots if s.asset_id]).items()}

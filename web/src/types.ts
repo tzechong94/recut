@@ -1,30 +1,15 @@
 /**
- * TypeScript mirrors of the backend pydantic schemas (recut.core.schemas).
- * Keep these in sync with the frozen API contract. The Timeline is the single
- * source of truth read by both the live preview and the export.
+ * TypeScript mirrors of the backend pydantic schemas.
+ *
+ * Two domains live here:
+ *  - The Showrunner drama domain (recut.showrunner.schemas): Production / Scene /
+ *    Shot / Character / Location — the creative model the UI edits.
+ *  - The render Timeline (recut.core.schemas): the execution format the
+ *    PreviewPlayer + ffmpeg export read. A Production compiles down to it, so the
+ *    preview is the SAME timeline the export renders.
  */
 
-export type Stage = number; // 0..4 index into STAGES
-
-export type Tone = string; // hex color
-
-/* ----------------------------- Projects ----------------------------- */
-export interface Project {
-  id: string;
-  name: string;
-  stage: number;
-  tone: Tone;
-  token_cap: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface NewProject {
-  name: string;
-  tone: Tone;
-}
-
-/* ------------------------------ Assets ------------------------------ */
+/* ============================ Projects / Assets ============================ */
 export interface Asset {
   id: string;
   mime: string;
@@ -36,37 +21,182 @@ export interface Asset {
   [key: string]: unknown;
 }
 
-/* ------------------------------ Recipe ------------------------------ */
+/* ================================ Jobs ==================================== */
+export interface JobResult {
+  asset_id?: string;
+  export_asset_id?: string;
+  url?: string;
+  tokens?: number;
+  [key: string]: unknown;
+}
+
+export interface Job {
+  id: string;
+  status: "queued" | "running" | "done" | "failed" | "error" | string;
+  progress: number;
+  result: JobResult | null;
+  error: string | null;
+}
+
+/* ============================ Showrunner domain =========================== */
+export type Stage =
+  | "premise"
+  | "script"
+  | "cast_style"
+  | "storyboard"
+  | "production"
+  | "export";
+
+export type AssetSource = "none" | "generated" | "uploaded" | "standin";
+
+export type ShotStatus =
+  | "planned"
+  | "standin"
+  | "generating"
+  | "ready"
+  | "failed";
+
+export type ShotType = "wide" | "medium" | "close_up" | "insert" | "two_shot";
+
+export type CameraMove =
+  | "static"
+  | "pan"
+  | "push_in"
+  | "pull_out"
+  | "handheld"
+  | "aerial";
+
+export interface StyleSummary {
+  name: string;
+  descriptors: string;
+  palette: string;
+}
+
+export interface StyleLock extends StyleSummary {
+  locked: boolean;
+}
+
+export interface Character {
+  id: string;
+  name: string;
+  description: string;
+  role: string;
+  reference_asset_id?: string | null;
+  reference_url?: string | null;
+  source: AssetSource;
+  locked: boolean;
+  voice: string;
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  description: string;
+  reference_asset_id?: string | null;
+  reference_url?: string | null;
+  source: AssetSource;
+  locked: boolean;
+}
+
+export interface DialogueLine {
+  character_id?: string | null;
+  character_name: string;
+  line: string;
+}
+
+export interface Shot {
+  id: string;
+  index: number;
+  shot_type: ShotType;
+  camera: CameraMove;
+  action: string;
+  dialogue: DialogueLine[];
+  narration: string;
+  character_ids: string[];
+  location_id?: string | null;
+  duration_s: number;
+  source: AssetSource;
+  asset_id?: string | null;
+  status: ShotStatus;
+  gen_prompt?: string;
+  gen_tool?: string;
+  tokens?: number;
+  critic_score?: number | null;
+  reroll_count: number;
+}
+
+export interface Scene {
+  id: string;
+  index: number;
+  heading: string;
+  summary: string;
+  shots: Shot[];
+}
+
+export interface ProductionTokenLedger {
+  text_tokens: number;
+  image_tokens: number;
+  video_tokens: number;
+  voice_tokens: number;
+  rerolls: number;
+}
+
+export interface WritersRoomEntry {
+  role: string;
+  text: string;
+  score?: number | null;
+}
+
+export interface Production {
+  id: string;
+  project_id: string | null;
+  premise: string;
+  logline: string;
+  title: string;
+  target_seconds: number;
+  stage: Stage;
+  style: StyleLock;
+  characters: Character[];
+  locations: Location[];
+  scenes: Scene[];
+  token_ledger: ProductionTokenLedger;
+  writers_room: WritersRoomEntry[];
+  version: number;
+  created_at?: number;
+}
+
+/** Compact production summary returned by GET /productions. */
+export interface ProductionSummary {
+  id: string;
+  title: string;
+  stage: Stage;
+  updated_at?: string | number;
+  [key: string]: unknown;
+}
+
+export interface Scoreboard {
+  tokens: {
+    text: number;
+    image: number;
+    video: number;
+    voice: number;
+    total: number;
+  };
+  rerolls: number;
+  naive_baseline_tokens: number;
+  tokens_saved: number;
+  savings_pct: number;
+  shots_ready: number;
+  shots_total: number;
+  avg_consistency: number | null;
+  duration_s: number;
+}
+
+/* ============================== Render Timeline =========================== */
+/* Read by the PreviewPlayer (and the ffmpeg export). A Production compiles to
+ * this via the backend's /timeline endpoint. */
 export type SlotType = "text" | "talk" | "roll" | "broll";
 export type TextRole = "on_screen_text" | "voiceover" | "none";
-
-export interface RecipeBeat {
-  index: number;
-  label: string;
-  slot_type: SlotType;
-  start_s: number;
-  duration_s: number;
-  pattern: string;
-  text_role: TextRole;
-  transcript_excerpt: string;
-  on_screen_text: string;
-  style_hint: string;
-}
-
-export interface Recipe {
-  recipe_id: string;
-  name: string;
-  duration_s: number;
-  shot_count: number;
-  aspect_ratio: string;
-  beats: RecipeBeat[];
-  observations: string[];
-  hook_transcript: string;
-  analysis_meta: Record<string, unknown>;
-  saved?: boolean;
-}
-
-/* ----------------------------- Timeline ----------------------------- */
 export type SlotFont = "display" | "clean" | "mono";
 export type SlotSize = "s" | "m" | "l";
 export type SlotAlign = "left" | "center" | "right";
@@ -84,41 +214,21 @@ export interface SlotStandin {
   label: string;
 }
 
-export interface SlotGeneration {
-  status?: string;
-  job_id?: string | null;
-  /** The visual prompt the AI uses to generate this slot's clip. */
-  prompt?: string;
-  /** Which generation tool/model produced (or will produce) the clip. */
-  tool?: string;
-  /** Tokens this slot's generation cost. */
-  tokens?: number;
-  [key: string]: unknown;
-}
-
 export interface Slot {
   id: string;
   beat_label: string;
   type: SlotType;
-  order: number;
+  order?: number;
   duration_s: number;
   source: SlotSource;
   asset_id: string | null;
-  standin: SlotStandin;
+  standin?: SlotStandin;
   text: string;
   text_role: TextRole;
   style: SlotStyle;
   status: string;
-  generation: SlotGeneration | null;
-  kept: boolean;
-}
-
-export interface TokenLedger {
-  real_footage_s: number;
-  generated_s: number;
-  standin_s: number;
-  tokens_spent: number;
-  naive_baseline_tokens: number;
+  kept?: boolean;
+  [key: string]: unknown;
 }
 
 export interface AudioTrack {
@@ -140,60 +250,12 @@ export interface MusicSync {
 
 export interface Timeline {
   timeline_id: string;
-  project_id: string;
+  project_id: string | null;
   version: number;
   aspect_ratio: "9:16";
   fps: number;
   audio: TimelineAudio;
   slots: Slot[];
-  token_ledger: TokenLedger;
+  token_ledger?: unknown;
   music_sync: MusicSync | null;
-}
-
-/* ------------------------------- Jobs ------------------------------- */
-export interface JobResult {
-  asset_id?: string;
-  url?: string;
-  tokens?: number;
-  /** A slot may be skipped (e.g. already a user upload). */
-  skipped?: boolean;
-  reason?: string;
-}
-
-export interface Job {
-  id: string;
-  status: "queued" | "running" | "done" | "failed" | "error" | string;
-  progress: number;
-  result: JobResult | null;
-  error: string | null;
-}
-
-/* --------------------------- Agent / chat --------------------------- */
-export interface CowriteReply {
-  reply: string;
-  beats?: { index: number; text: string }[];
-}
-
-export interface DraftScriptResult {
-  beats: { index: number; text: string }[];
-}
-
-export interface RefineResult {
-  text: string;
-}
-
-export interface CaptionCoverResult {
-  caption: string;
-  hashtags: string;
-  covers: CoverOption[];
-}
-
-export interface CoverOption {
-  id: string;
-  label: string;
-  big: string;
-  small: string;
-  bg?: string;
-  fg?: string;
-  accent?: string;
 }

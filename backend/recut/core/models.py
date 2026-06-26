@@ -65,6 +65,15 @@ class GenAsset:
     url: str = ""  # provider URL when available (lets a generated still feed i2v directly)
 
 
+@dataclass
+class ConsistencyVerdict:
+    """The consistency critic's read of a generated shot vs its locked reference.
+    score=None means the critic was unavailable (skip — never silently pass drift)."""
+
+    score: float | None
+    reason: str = ""
+
+
 # --------------------------------------------------------------------------- #
 #  Interfaces                                                                  #
 # --------------------------------------------------------------------------- #
@@ -72,10 +81,10 @@ class VisionAnalyzer(ABC):
     @abstractmethod
     def analyze(self, video_path: str, *, hint: str = "") -> VisionResult: ...
 
-    def score_consistency(self, reference: str, candidate: str) -> float:
-        """0..1 — does `candidate` (a generated shot keyframe) match `reference` (the
-        locked character/location still)? Default no-op (1.0); overridden where it counts."""
-        return 1.0
+    def score_consistency(self, reference: str, candidate: str) -> "ConsistencyVerdict":
+        """Does `candidate` (a generated shot keyframe) match `reference` (the locked
+        character/location still)? Default = unavailable (skip); overridden where it counts."""
+        return ConsistencyVerdict(score=None, reason="critic not available")
 
 
 class Transcriber(ABC):
@@ -157,10 +166,12 @@ class StubVision(VisionAnalyzer):
         ]
         return VisionResult(duration_s=23.0, shots=shots, tokens=1400, confidence=0.86)
 
-    def score_consistency(self, reference: str, candidate: str) -> float:
-        # Deterministic but reference-tied so the consistency-critic path is exercised
-        # offline: same reference -> stable high score.
-        return 0.86
+    def score_consistency(self, reference: str, candidate: str) -> ConsistencyVerdict:
+        # Deterministic offline critic. The first candidate for a reference scores a bit
+        # low (so the re-roll path is exercised in the demo/tests); re-rolls (different
+        # candidate keyframe) score high — proving re-roll actually improves the shot.
+        base = 0.55 if "_a0" in candidate or candidate.endswith("0.png") else 0.85
+        return ConsistencyVerdict(score=base, reason="stub: minor wardrobe drift" if base < 0.6 else "stub: consistent")
 
 
 class StubTranscriber(Transcriber):
@@ -185,7 +196,7 @@ class StubTextLLM(TextLLM):
         if "showrunner:treatment" in marker:
             payload = _stub_treatment(user)
         elif "showrunner:critic" in marker:
-            payload = _stub_writers_critic()
+            payload = _stub_writers_critic(user)
         elif "showrunner:storyboard" in marker:
             payload = _stub_storyboard(user)
         elif "script-on-beats" in marker:
@@ -256,9 +267,11 @@ def _stub_treatment(user: str) -> dict:
     return {
         "title": "Last Call",
         "logline": "A weary detective realizes the partner she trusts is the killer she's hunted all night.",
+        "dramatic_question": "Will Mara turn in the one person who ever had her back?",
+        "theme": "Trust is the most expensive thing a person can spend.",
         "characters": [
-            {"name": "Mara", "description": "late-30s detective, sharp eyes, rumpled grey coat, exhausted", "role": "protagonist", "voice": "longxiaochun_v2"},
-            {"name": "Vince", "description": "40s detective, easy smile that never reaches his eyes, dark suit", "role": "antagonist", "voice": "longshu_v2"},
+            {"name": "Mara", "description": "late-30s detective, sharp eyes, rumpled grey coat, exhausted", "role": "protagonist", "want": "to close the case and finally rest", "flaw": "loyalty that blinds her", "voice": "longxiaochun_v2"},
+            {"name": "Vince", "description": "40s detective, easy smile that never reaches his eyes, dark suit", "role": "antagonist", "want": "to bury the evidence and walk free", "flaw": "believes he's owed it", "voice": "longshu_v2"},
         ],
         "locations": [
             {"name": "Precinct office", "description": "cramped night-shift detective's office, venetian-blind shadows, one desk lamp"},
@@ -272,11 +285,18 @@ def _stub_treatment(user: str) -> dict:
     }
 
 
-def _stub_writers_critic() -> dict:
-    return {
-        "notes": "Strong hook, but raise the stakes in scene 2 — give Mara something to lose if Vince realizes she knows. Tighten the reveal so the betrayal is earned, not stated.",
-        "score": 0.74,
-    }
+def _stub_writers_critic(user: str = "") -> dict:
+    # Score climbs across rounds so the demo shows the writers' room actually improving.
+    import re
+
+    m = re.search(r"ROUND (\d+)", user)
+    rnd = int(m.group(1)) if m else 1
+    score = min(0.9, 0.6 + 0.12 * rnd)
+    notes = {
+        1: "Strong hook, but Mara has no clear arc and the midpoint turn is missing. Give her something to lose if Vince realizes she knows.",
+        2: "Better. Now sharpen the climax — the betrayal should be shown through action, not stated. Tighten Vince's want.",
+    }.get(rnd, "Solid structure and arc; the dramatic question lands. Ship it.")
+    return {"notes": notes, "score": round(score, 2)}
 
 
 def _stub_storyboard(user: str) -> dict:
