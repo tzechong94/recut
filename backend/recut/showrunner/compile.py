@@ -74,14 +74,22 @@ def _card_slot(slot_id: str, text: str, *, size: Size, dur: float = 2.6) -> Slot
 def compile_to_timeline(prod: Production, *, with_cards: bool = True) -> Timeline:
     """Build the render Timeline from the production's ordered shots, framed by a title
     card and an end card so the export plays as a finished short film."""
-    slots = [shot_to_slot(sh, style_name=prod.style.name) for sh in prod.shots]
+    slots: list[Slot] = []
+    for scene in prod.scenes:
+        for i, sh in enumerate(scene.shots):
+            slot = shot_to_slot(sh, style_name=prod.style.name)
+            slot.fade_in = i == 0  # dip-from-black as each scene opens
+            slot.fade_out = i == len(scene.shots) - 1  # dip-to-black as it closes
+            slots.append(slot)
+    if not slots:  # productions without scenes (e.g. tests) still compile
+        slots = [shot_to_slot(sh, style_name=prod.style.name) for sh in prod.shots]
     if with_cards and slots:
         title = prod.title or "Untitled"
         end_text = (prod.title or "An AI Showrunner film")  # reprise the title, not the theme label
-        slots = (
-            [_card_slot(f"title_{prod.id}", title, size=Size.l)]
-            + slots
-            + [_card_slot(f"end_{prod.id}", end_text, size=Size.m)]
-        )
+        title_card = _card_slot(f"title_{prod.id}", title, size=Size.l)
+        title_card.fade_in = True
+        end_card = _card_slot(f"end_{prod.id}", end_text, size=Size.m)
+        end_card.fade_out = True
+        slots = [title_card] + slots + [end_card]
     tl = Timeline(timeline_id=f"tl_{prod.id}", project_id=prod.project_id, version=prod.version, slots=slots)
     return tl
