@@ -34,6 +34,11 @@ def create_app() -> FastAPI:
     for mod in (projects, assets, recipes, timelines, jobs):
         app.include_router(mod.router)
 
+    # Showrunner (the Track 2 product)
+    from recut.api.routers import productions
+
+    app.include_router(productions.router)
+
     # Optional lane routers — mounted when the lane is built.
     for name in ("analyse", "agent", "generation", "ingest"):
         try:
