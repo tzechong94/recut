@@ -169,6 +169,25 @@ def production_timeline(pid: str) -> dict:
     return compile_to_timeline(prod).model_dump(mode="json")
 
 
+@router.get("/productions/{pid}/eval")
+def production_eval(pid: str) -> dict:
+    """The demo's closing PROOF: an independent narrative rubric + honest token facts.
+    (Consistency separation is measured in the offline eval harness; here we surface the
+    avg per-shot critic score from the actual run.)"""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    from recut.showrunner.eval import as_dict, narrative_rubric, token_efficiency
+
+    rubric = narrative_rubric(models().text, prod)
+    scored = [s.critic_score for s in prod.shots if s.critic_score is not None]
+    return {
+        "narrative": as_dict(rubric),
+        "tokens": token_efficiency(prod),
+        "avg_consistency": round(sum(scored) / len(scored), 3) if scored else None,
+    }
+
+
 @router.get("/productions/{pid}/scoreboard")
 def scoreboard(pid: str) -> dict:
     prod = repo.get_production(pid)
