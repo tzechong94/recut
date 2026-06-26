@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ArrowRight,
   Clapperboard,
   Film,
   Loader2,
@@ -190,34 +191,50 @@ export function Premise({ open }: PremiseProps) {
         </div>
 
         {productions.length > 0 && (
-          <section className="sr-productions">
+          <section className="sr-productions" data-testid="productions">
             <h2>Your productions</h2>
             <div className="sr-prod-grid">
               {productions.map((p) => (
-                <div className="sr-prod-card" key={p.id}>
-                  <button
-                    className="sr-prod-open"
-                    onClick={() => open(p.id)}
-                    type="button"
-                  >
-                    <div className="sr-prod-thumb">
-                      <Film size={20} />
+                <div className="sr-prod-card" key={p.id} data-testid="prod-card">
+                  <div className="sr-prod-thumb">
+                    <Film size={18} />
+                  </div>
+                  <div className="sr-prod-meta">
+                    <div className="sr-prod-title" title={p.title || "Untitled"}>
+                      {p.title || "Untitled"}
                     </div>
-                    <div className="sr-prod-meta">
-                      <div className="sr-prod-title">
-                        {p.title || "Untitled"}
-                      </div>
-                      <div className="sr-prod-stage">{stageLabel(p.stage)}</div>
+                    <div className="sr-prod-sub">
+                      <span
+                        className={"sr-stage-chip stage-" + p.stage}
+                        data-testid="stage-chip"
+                      >
+                        {stageLabel(p.stage)}
+                      </span>
+                      {relativeTime(p.updated_at) && (
+                        <span className="sr-prod-time">
+                          {relativeTime(p.updated_at)}
+                        </span>
+                      )}
                     </div>
-                  </button>
-                  <button
-                    className="rc-iconbtn sm sr-prod-del"
-                    aria-label="Delete production"
-                    onClick={() => remove(p.id)}
-                    type="button"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  </div>
+                  <div className="sr-prod-actions">
+                    <button
+                      className="sr-prod-resume"
+                      onClick={() => open(p.id)}
+                      type="button"
+                    >
+                      Resume <ArrowRight size={13} />
+                    </button>
+                    <button
+                      className="rc-iconbtn sm sr-prod-del"
+                      aria-label="Delete production"
+                      title="Delete production"
+                      onClick={() => remove(p.id)}
+                      type="button"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -231,11 +248,40 @@ export function Premise({ open }: PremiseProps) {
 function stageLabel(stage: string): string {
   const map: Record<string, string> = {
     premise: "Premise",
-    script: "In the writers' room",
-    cast_style: "Casting",
-    storyboard: "Storyboarding",
+    script: "Script",
+    cast_style: "Cast & style",
+    storyboard: "Storyboard",
     production: "In production",
     export: "Final film",
   };
   return map[stage] ?? stage;
+}
+
+/** Compact "2h ago" / "3d ago" relative label. Accepts ISO strings or epoch
+ *  seconds/ms; returns "" when the timestamp is missing or unparseable. */
+function relativeTime(value: string | number | undefined): string {
+  if (value === undefined || value === null) return "";
+  let ms: number;
+  if (typeof value === "number") {
+    // Heuristic: treat 10-digit values as epoch seconds.
+    ms = value < 1e12 ? value * 1000 : value;
+  } else {
+    ms = Date.parse(value);
+  }
+  if (!Number.isFinite(ms)) return "";
+  const diff = Date.now() - ms;
+  if (diff < 0) return "just now";
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  const wk = Math.floor(day / 7);
+  if (wk < 5) return `${wk}w ago`;
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(day / 365)}y ago`;
 }

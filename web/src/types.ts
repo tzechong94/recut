@@ -178,6 +178,8 @@ export interface Production {
   director_log?: DirectorLogEntry[];
   /** Non-fatal heads-up issues (dropped scene, dialogue pass hiccup, …). */
   warnings?: string[];
+  /** The exported MP4 asset id, once production has rendered the final film. */
+  export_asset_id?: string | null;
   version: number;
   created_at?: number;
 }
