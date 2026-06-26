@@ -116,3 +116,4 @@ produce a real film end-to-end on your key (~$2-5) to confirm sprints 1-10 hold 
 - Lip-sync / talking avatars (stretch).
 
 ## Sprint 11 (offline value): eval report artifact (eval/run_showrunner.py). 128 tests.
+## Sprint 12 (offline value): robustness/edge-case tests (terse premise, single scene, all-narration film, casting-skipped t2v, edited-line vo re-synth). 136 tests.
