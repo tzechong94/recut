@@ -157,6 +157,10 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
 
     # PASS 1 — audio-fit: synth each line, set shot duration to fit it (no truncation)
     vo_paths = _fit_durations_to_voice(prod, ctx, src_dir)
+    # PASS 1.5 — editor: pace the silent shots and LOG the cut decisions (the "edit" stage)
+    from recut.showrunner.pipeline.editor import edit_pass
+
+    edit_pass(prod)
     repo.save_production(prod)
 
     # PASS 2 — generate each shot (best-of-N + critic re-roll), chaining the previous
