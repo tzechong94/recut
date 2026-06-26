@@ -121,6 +121,18 @@ export function makeProduction(over: Partial<Production> = {}): Production {
         index: 0,
         heading: "EXT. ALLEY - NIGHT",
         summary: "Vance finds the clue.",
+        script: [
+          {
+            character_id: "char_1",
+            character_name: "Detective Vance",
+            line: "Some cases don't want to be solved.",
+          },
+          {
+            character_id: "char_1",
+            character_name: "Detective Vance",
+            line: "But this one's personal.",
+          },
+        ],
         shots: [
           {
             id: "shot_1",
@@ -156,6 +168,27 @@ export function makeProduction(over: Partial<Production> = {}): Production {
       { role: "writer", text: "Revised per notes: sharper midpoint turn." },
       { role: "critic", text: "Stronger. Tighten the ending beat.", score: 0.86 },
       { role: "writer", text: "Final pass: the rain becomes the reckoning." },
+      {
+        role: "dialogue",
+        text: "Some cases don't want to be solved. But this one's personal.",
+        score: 0.82,
+      },
+    ],
+    director_log: [
+      {
+        shot: "Shot 1",
+        decision: "image-to-video from locked reference",
+        reason: "consistency 0.94; clean on first pass",
+      },
+      {
+        shot: "Shot 2",
+        decision: "re-rolled image-to-video",
+        reason: "consistency 0.71 → 0.88; fixed wardrobe drift",
+      },
+    ],
+    warnings: [
+      "Scene 4 dropped to hit the 60s target.",
+      "Dialogue pass retried once after a parse hiccup.",
     ],
     version: 1,
     ...over,

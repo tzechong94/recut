@@ -6,8 +6,15 @@ import {
   Users,
 } from "lucide-react";
 import type { UseProduction } from "../lib/useProduction";
-import type { Character, Location, Production, Scene } from "../types";
+import type {
+  Character,
+  DialogueLine,
+  Location,
+  Production,
+  Scene,
+} from "../types";
 import { Editable } from "../components/Editable";
+import { WarningsBanner } from "../components/WarningsBanner";
 
 interface StageProps {
   ctl: UseProduction;
@@ -33,6 +40,19 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
     patch({
       scenes: p.scenes.map((s) => (s.id === id ? { ...s, ...next } : s)),
     });
+  const setLine = (sceneId: string, lineIdx: number, line: string) =>
+    patch({
+      scenes: p.scenes.map((s) =>
+        s.id === sceneId
+          ? {
+              ...s,
+              script: (s.script ?? []).map((d, i) =>
+                i === lineIdx ? { ...d, line } : d,
+              ),
+            }
+          : s,
+      ),
+    });
 
   return (
     <div className="rc-stage">
@@ -45,6 +65,8 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
           autosaves.
         </p>
       </div>
+
+      <WarningsBanner warnings={p.warnings} />
 
       <div className="sr-script-grid">
         <div className="sr-treatment">
@@ -164,6 +186,10 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
                     placeholder="What happens — and why it matters…"
                     aria-label="Scene summary"
                   />
+                  <ScriptBlock
+                    scene={s}
+                    onEditLine={(idx, line) => setLine(s.id, idx, line)}
+                  />
                 </div>
               </div>
             ))}
@@ -185,9 +211,44 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
   );
 }
 
-function roomKind(role: string): "critic" | "system" | "writer" {
+/**
+ * The written, critiqued dialogue for a scene, laid out as a screenplay block
+ * (CHARACTER over their line). These are the ACTUAL lines that get spoken and
+ * burned to screen — kept inline-editable, autosaving like every other field.
+ */
+function ScriptBlock({
+  scene,
+  onEditLine,
+}: {
+  scene: Scene;
+  onEditLine: (idx: number, line: string) => void;
+}) {
+  const lines: DialogueLine[] = scene.script ?? [];
+  if (lines.length === 0) return null;
+
+  return (
+    <div className="sr-screenplay" data-testid="script-block">
+      <div className="sr-screenplay-tag">The lines · spoken &amp; burned</div>
+      {lines.map((d, i) => (
+        <div className="sr-sp-line" key={i}>
+          <div className="sr-sp-char">{d.character_name}</div>
+          <Editable
+            className="sr-sp-dialogue"
+            value={d.line}
+            onCommit={(v) => onEditLine(i, v)}
+            multiline
+            aria-label={`Line ${i + 1} for ${d.character_name}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function roomKind(role: string): "critic" | "system" | "writer" | "dialogue" {
   const r = (role || "writer").toLowerCase();
   if (r.includes("critic")) return "critic";
+  if (r.includes("dialogue")) return "dialogue";
   if (r.includes("system")) return "system";
   return "writer";
 }
@@ -228,7 +289,13 @@ function WritersRoom({ production }: { production: Production }) {
             round = criticSeen;
           }
           const label =
-            kind === "critic" ? "Critic" : kind === "system" ? "System" : "Writer";
+            kind === "critic"
+              ? "Critic"
+              : kind === "system"
+                ? "System"
+                : kind === "dialogue"
+                  ? "Dialogue"
+                  : "Writer";
           return (
             <div key={i} className={"sr-room-msg " + kind}>
               <div className="sr-room-role">
