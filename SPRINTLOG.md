@@ -40,3 +40,20 @@ director." Top gaps being fixed this sprint:
    FIX: synth line first, set shot duration to fit the line (clamped); never truncate.
 5. **Scoreboard is circular** — fake ×3 baseline. FIX: honest headline ("0 video
    tokens until human approval; critic re-rolled N of M"), report real spent tokens.
+
+### Sprint 1 result: all 5 crit fixes landed. 110 backend tests.
+
+## Sprint 2 — continuity + frontend (done)
+- shot/reverse-shot dialogue (single consistent face per shot) + last-frame→first-frame
+  continuity chaining within scenes (t2v fallback if a frame isn't hostable).
+- New Showrunner frontend replacing the reel editor: Premise → Script (writers' room) →
+  Cast & Style (show bible) → Storyboard → Produce (live status + scoreboard) → Film.
+  40 web tests + build green. export_asset_id persisted for revisits.
+
+### Still open (next sprints / deferred)
+- Live validation of Sprint 1/2 on real Qwen (seed re-roll, i2v continuity) — costs $.
+- Multi-reference compositing for true two-character single frames (currently solved via
+  shot/reverse-shot, which is cinematically correct). 
+- Music bed (needs a royalty-free asset to drop in).
+- Real DashScope billing units in the scoreboard (currently duration*1800 estimate).
+- Lip-sync / talking avatars (stretch).
