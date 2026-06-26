@@ -7,7 +7,7 @@ is trivially scopeable by a future tenant_id.
 
 from __future__ import annotations
 
-from recut.core.db import Asset, Job, Project, RecipeRow, TimelineRow, session_scope
+from recut.core.db import Asset, Job, ProductionRow, Project, RecipeRow, TimelineRow, session_scope
 from recut.core.schemas import Recipe, Timeline
 
 
@@ -164,6 +164,52 @@ def get_timeline(timeline_id: str) -> Timeline | None:
     with session_scope() as s:
         r = s.get(TimelineRow, timeline_id)
         return Timeline.model_validate(r.doc) if r else None
+
+
+# --------------------------------------------------------------------------- #
+#  Productions (the AI Showrunner film document)                               #
+# --------------------------------------------------------------------------- #
+def save_production(production) -> object:
+    """Persist a Production (recut.showrunner.schemas.Production) as a JSON document."""
+    from recut.showrunner.schemas import Production
+
+    assert isinstance(production, Production)
+    with session_scope() as s:
+        existing = s.get(ProductionRow, production.id)
+        doc = production.model_dump(mode="json")
+        if existing:
+            existing.doc = doc
+            existing.title = production.title
+            existing.stage = production.stage.value
+        else:
+            s.add(ProductionRow(
+                id=production.id, project_id=production.project_id, title=production.title,
+                stage=production.stage.value, doc=doc,
+            ))
+        return production
+
+
+def get_production(production_id: str):
+    from recut.showrunner.schemas import Production
+
+    with session_scope() as s:
+        r = s.get(ProductionRow, production_id)
+        return Production.model_validate(r.doc) if r else None
+
+
+def list_productions() -> list[dict]:
+    with session_scope() as s:
+        rows = s.query(ProductionRow).order_by(ProductionRow.updated_at.desc()).all()
+        return [{"id": r.id, "title": r.title, "stage": r.stage, "updated_at": r.updated_at} for r in rows]
+
+
+def delete_production(production_id: str) -> bool:
+    with session_scope() as s:
+        r = s.get(ProductionRow, production_id)
+        if not r:
+            return False
+        s.delete(r)
+        return True
 
 
 def latest_timeline_for_project(project_id: str) -> Timeline | None:

@@ -72,6 +72,11 @@ class VisionAnalyzer(ABC):
     @abstractmethod
     def analyze(self, video_path: str, *, hint: str = "") -> VisionResult: ...
 
+    def score_consistency(self, reference: str, candidate: str) -> float:
+        """0..1 — does `candidate` (a generated shot keyframe) match `reference` (the
+        locked character/location still)? Default no-op (1.0); overridden where it counts."""
+        return 1.0
+
 
 class Transcriber(ABC):
     @abstractmethod
@@ -152,6 +157,11 @@ class StubVision(VisionAnalyzer):
         ]
         return VisionResult(duration_s=23.0, shots=shots, tokens=1400, confidence=0.86)
 
+    def score_consistency(self, reference: str, candidate: str) -> float:
+        # Deterministic but reference-tied so the consistency-critic path is exercised
+        # offline: same reference -> stable high score.
+        return 0.86
+
 
 class StubTranscriber(Transcriber):
     def transcribe(self, media_path: str) -> TranscriptResult:
@@ -172,7 +182,13 @@ class StubTextLLM(TextLLM):
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> tuple[str, int]:
         marker = system.lower()
         tokens = max(120, (len(system) + len(user)) // 4)
-        if "script-on-beats" in marker:
+        if "showrunner:treatment" in marker:
+            payload = _stub_treatment(user)
+        elif "showrunner:critic" in marker:
+            payload = _stub_writers_critic()
+        elif "showrunner:storyboard" in marker:
+            payload = _stub_storyboard(user)
+        elif "script-on-beats" in marker:
             payload = _stub_script_on_beats(user)
         elif "caption" in marker or "cover" in marker:
             payload = _stub_caption_cover()
@@ -233,6 +249,44 @@ def _stub_script_on_beats(user: str) -> dict:
         "Follow for the supplier list →",
     ]
     return {"beats": [{"index": i, "text": t} for i, t in enumerate(lines)]}
+
+
+def _stub_treatment(user: str) -> dict:
+    """A coherent canned micro-drama so the whole Showrunner flow demos offline."""
+    return {
+        "title": "Last Call",
+        "logline": "A weary detective realizes the partner she trusts is the killer she's hunted all night.",
+        "characters": [
+            {"name": "Mara", "description": "late-30s detective, sharp eyes, rumpled grey coat, exhausted", "role": "protagonist", "voice": "longxiaochun_v2"},
+            {"name": "Vince", "description": "40s detective, easy smile that never reaches his eyes, dark suit", "role": "antagonist", "voice": "longshu_v2"},
+        ],
+        "locations": [
+            {"name": "Precinct office", "description": "cramped night-shift detective's office, venetian-blind shadows, one desk lamp"},
+            {"name": "Rain-slick alley", "description": "narrow alley behind the precinct, neon reflections in puddles, midnight"},
+        ],
+        "scenes": [
+            {"heading": "INT. PRECINCT OFFICE - NIGHT", "summary": "Mara connects the last clue and understands who did it."},
+            {"heading": "INT. PRECINCT OFFICE - NIGHT", "summary": "Vince enters; the air shifts as Mara hides what she knows."},
+            {"heading": "EXT. RAIN-SLICK ALLEY - NIGHT", "summary": "The confrontation: Mara accuses Vince, the truth lands."},
+        ],
+    }
+
+
+def _stub_writers_critic() -> dict:
+    return {
+        "notes": "Strong hook, but raise the stakes in scene 2 — give Mara something to lose if Vince realizes she knows. Tighten the reveal so the betrayal is earned, not stated.",
+        "score": 0.74,
+    }
+
+
+def _stub_storyboard(user: str) -> dict:
+    return {
+        "shots": [
+            {"action": "Mara hunched over a desk, pinning a photo to the evidence board, lamp light on her face", "shot_type": "medium", "camera": "push_in", "duration_s": 4, "character_names": ["Mara"], "location_name": "Precinct office", "dialogue": [], "narration": "Every case leaves a thread. This one led home."},
+            {"action": "Insert: the photo — two detectives shaking hands, one face circled in red", "shot_type": "insert", "camera": "static", "duration_s": 3, "character_names": [], "location_name": "Precinct office", "dialogue": [], "narration": "It was someone she trusted."},
+            {"action": "Mara turns sharply as a shadow falls across the doorway", "shot_type": "close_up", "camera": "handheld", "duration_s": 3, "character_names": ["Mara"], "location_name": "Precinct office", "dialogue": [{"character": "Mara", "line": "You're working late."}], "narration": ""},
+        ]
+    }
 
 
 def _stub_caption_cover() -> dict:
