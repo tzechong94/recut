@@ -49,6 +49,12 @@ def storyboard_scene(llm: TextLLM, prod: Production, scene: Scene) -> tuple[list
 
 
 def build_storyboard(llm: TextLLM, prod: Production) -> Production:
+    # First WRITE + CRITIQUE the actual dialogue, then place those approved lines into
+    # shots (storyboard no longer invents unreviewed dialogue).
+    from recut.showrunner.pipeline.dialogue import write_dialogue
+
+    prod = write_dialogue(llm, prod)
+
     total = 0
     for scene in prod.scenes:
         try:
@@ -56,12 +62,36 @@ def build_storyboard(llm: TextLLM, prod: Production) -> Production:
             total += t
             if shots:
                 scene.shots = shots
-        except Exception:  # noqa: BLE001 — a scene that fails keeps no shots; never crash the board
+            else:
+                prod.warnings.append(f"storyboard returned no shots for scene '{scene.heading}'")
+        except Exception as exc:  # noqa: BLE001 — surface the dropped scene, don't silently skip
+            prod.warnings.append(f"storyboard failed for scene '{scene.heading}': {type(exc).__name__}")
             continue
+        _place_dialogue(scene)
     prod.token_ledger.text_tokens += total
     prod.stage = Stage.storyboard
-    # re-run validators (reindex shots/scenes) by reconstructing
     return Production.model_validate(prod.model_dump())
+
+
+def _place_dialogue(scene) -> None:
+    """Distribute the scene's written, critiqued dialogue onto its shots (shot/reverse-
+    shot), replacing any LLM-invented shot dialogue. A line goes to a shot featuring its
+    speaker; if none, round-robin across the scene's shots."""
+    if not scene.script or not scene.shots:
+        return
+    for sh in scene.shots:
+        sh.dialogue = []
+    rr = 0
+    for line in scene.script:
+        target = next((s for s in scene.shots if line.character_id and line.character_id in s.character_ids and not s.dialogue), None)
+        if not target:
+            target = next((s for s in scene.shots if line.character_id and line.character_id in s.character_ids), None)
+        if not target:
+            target = scene.shots[rr % len(scene.shots)]
+            rr += 1
+            if line.character_id and line.character_id not in target.character_ids:
+                target.character_ids.append(line.character_id)
+        target.dialogue.append(line)
 
 
 def _to_shot(sd: dict, prod: Production) -> Shot:
