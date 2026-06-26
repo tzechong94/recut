@@ -7,6 +7,7 @@ import type {
   Asset,
   Job,
   Production,
+  ProductionEval,
   ProductionSummary,
   Scoreboard,
   StyleSummary,
@@ -138,6 +139,9 @@ export const api = {
     request<Timeline>(`/productions/${id}/timeline`),
   getScoreboard: (id: string) =>
     request<Scoreboard>(`/productions/${id}/scoreboard`),
+  /** Closing proof: narrative rubric + honest token facts + avg consistency. */
+  getEval: (id: string) =>
+    request<ProductionEval>(`/productions/${id}/eval`),
 
   /* ------------------------------- Jobs --------------------------------- */
   getJob: (id: string) => request<Job>(`/jobs/${id}`),

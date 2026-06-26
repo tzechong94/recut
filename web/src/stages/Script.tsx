@@ -1,4 +1,10 @@
-import { ArrowRight, MapPin, MessagesSquare, Users } from "lucide-react";
+import {
+  ArrowRight,
+  MapPin,
+  MessagesSquare,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import type { UseProduction } from "../lib/useProduction";
 import type { Character, Location, Production, Scene } from "../types";
 import { Editable } from "../components/Editable";
@@ -58,6 +64,24 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
             placeholder="One sentence that sells the film…"
             aria-label="Logline"
           />
+
+          {p.dramatic_question && (
+            <div className="sr-question" data-testid="dramatic-question">
+              <span className="sr-question-tag">The question</span>
+              <Editable
+                className="sr-question-text"
+                value={p.dramatic_question}
+                onCommit={(v) => patch({ dramatic_question: v })}
+                multiline
+                aria-label="Dramatic question"
+              />
+              {p.theme && (
+                <div className="sr-question-theme">
+                  Theme · <b>{p.theme}</b>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="sr-section-head">
             <Users size={14} /> Characters
@@ -161,30 +185,73 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
   );
 }
 
+function roomKind(role: string): "critic" | "system" | "writer" {
+  const r = (role || "writer").toLowerCase();
+  if (r.includes("critic")) return "critic";
+  if (r.includes("system")) return "system";
+  return "writer";
+}
+
 function WritersRoom({ production }: { production: Production }) {
   const room = production.writers_room;
+  // Track the critic's score as it climbs across rounds so each critic turn can
+  // show its delta vs. the previous critic pass — the "narrative" showpiece.
+  const scores = room
+    .filter((m) => roomKind(m.role) === "critic" && typeof m.score === "number")
+    .map((m) => m.score as number);
+  const finalScore = scores.length ? scores[scores.length - 1] : null;
+  let criticSeen = 0;
+
   return (
     <aside className="sr-room">
       <div className="sr-room-head">
         <MessagesSquare size={15} /> Writers' room
+        {finalScore !== null && (
+          <span className="sr-room-final" data-testid="room-final-score">
+            <TrendingUp size={12} /> {finalScore.toFixed(2)}
+          </span>
+        )}
       </div>
-      <div className="sr-room-thread">
+      <div className="sr-room-thread" data-testid="writers-room">
         {room.length === 0 && (
           <p className="sr-empty-note">The transcript will appear here.</p>
         )}
         {room.map((m, i) => {
-          const role = (m.role || "writer").toLowerCase();
-          const isCritic = role.includes("critic");
+          const kind = roomKind(m.role);
+          const hasScore = typeof m.score === "number";
+          let delta: number | null = null;
+          let round = 0;
+          if (kind === "critic" && hasScore) {
+            const prev = criticSeen > 0 ? scores[criticSeen - 1] : null;
+            delta = prev === null ? null : (m.score as number) - prev;
+            criticSeen += 1;
+            round = criticSeen;
+          }
+          const label =
+            kind === "critic" ? "Critic" : kind === "system" ? "System" : "Writer";
           return (
-            <div
-              key={i}
-              className={"sr-room-msg " + (isCritic ? "critic" : "writer")}
-            >
+            <div key={i} className={"sr-room-msg " + kind}>
               <div className="sr-room-role">
-                {isCritic ? "Critic" : "Writer"}
-                {typeof m.score === "number" && (
-                  <span className="sr-room-score">
-                    score {m.score.toFixed(2)}
+                {kind === "critic" && round > 0 && (
+                  <span className="sr-room-round">round {round}</span>
+                )}
+                {label}
+                {hasScore && (
+                  <span
+                    className="sr-room-score"
+                    title="Critic's narrative score (0–1)"
+                  >
+                    {(m.score as number).toFixed(2)}
+                    {delta !== null && delta > 0 && (
+                      <i className="sr-room-delta up">
+                        ▲ {delta.toFixed(2)}
+                      </i>
+                    )}
+                    {delta !== null && delta < 0 && (
+                      <i className="sr-room-delta down">
+                        ▼ {Math.abs(delta).toFixed(2)}
+                      </i>
+                    )}
                   </span>
                 )}
               </div>

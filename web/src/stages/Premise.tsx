@@ -27,6 +27,9 @@ const STYLE_SWATCH: Record<string, string> = {
   pixar: "linear-gradient(150deg,#4dc3ff,#9b6bff)",
 };
 
+/** A premise needs at least a sentence's worth to give the writers' room something. */
+const MIN_PREMISE_CHARS = 12;
+
 interface PremiseProps {
   open: (productionId: string) => void;
 }
@@ -55,13 +58,16 @@ export function Premise({ open }: PremiseProps) {
       .catch(() => {});
   }
 
+  const trimmed = premise.trim();
+  const tooShort = trimmed.length < MIN_PREMISE_CHARS;
+
   async function start() {
-    if (!premise.trim() || starting) return;
+    if (tooShort || starting) return;
     setStarting(true);
     setError(null);
     try {
       const prod = await api.createProduction({
-        premise: premise.trim(),
+        premise: trimmed,
         target_seconds: seconds,
         style,
       });
@@ -158,10 +164,16 @@ export function Premise({ open }: PremiseProps) {
 
           {error && <div className="rc-err">{error}</div>}
 
+          {tooShort && (
+            <div className="sr-premise-hint" data-testid="premise-hint">
+              Give me a sentence to work with — who, and what goes wrong?
+            </div>
+          )}
+
           <button
             className="sr-start"
             onClick={start}
-            disabled={!premise.trim() || starting}
+            disabled={tooShort || starting}
             type="button"
           >
             {starting ? (

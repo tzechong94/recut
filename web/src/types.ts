@@ -153,6 +153,10 @@ export interface Production {
   premise: string;
   logline: string;
   title: string;
+  /** The narrative spine: the question the film keeps the audience asking. */
+  dramatic_question?: string;
+  /** The film's underlying theme / what it's really about. */
+  theme?: string;
   target_seconds: number;
   stage: Stage;
   style: StyleLock;
@@ -190,6 +194,30 @@ export interface Scoreboard {
   shots_total: number;
   avg_consistency: number | null;
   duration_s: number;
+}
+
+/** Narrative rubric returned by GET /productions/{id}/eval. */
+export interface EvalNarrative {
+  overall: number;
+  scores: Record<string, number>;
+  notes: string;
+}
+
+/** Honest token accounting returned by GET /productions/{id}/eval. */
+export interface EvalTokens {
+  total: number;
+  video_tokens: number;
+  video_tokens_pre_approval: number;
+  rerolls: number;
+  baseline_estimate: number;
+  estimated_saved: number;
+}
+
+/** The closing "proof" payload: GET /productions/{id}/eval. */
+export interface ProductionEval {
+  narrative: EvalNarrative;
+  tokens: EvalTokens;
+  avg_consistency: number | null;
 }
 
 /* ============================== Render Timeline =========================== */

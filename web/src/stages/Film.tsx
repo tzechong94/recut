@@ -3,9 +3,10 @@ import { Download, Film, Loader2, RotateCw } from "lucide-react";
 import { api, assetRawUrl } from "../api/client";
 import { pollJob } from "../lib/jobs";
 import type { UseProduction } from "../lib/useProduction";
-import type { Scoreboard, Shot, Timeline } from "../types";
+import type { ProductionEval, Scoreboard, Shot, Timeline } from "../types";
 import { PreviewPlayer } from "../preview/PreviewPlayer";
 import { ScoreboardPanel } from "../components/Scoreboard";
+import { ProofPanel } from "../components/ProofPanel";
 
 interface FilmStageProps {
   ctl: UseProduction;
@@ -16,11 +17,13 @@ export function FilmStage({ ctl, exportAssetId }: FilmStageProps) {
   const p = ctl.production!;
   const [scoreboard, setScoreboard] = useState<Scoreboard | null>(null);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
+  const [evalData, setEvalData] = useState<ProductionEval | null>(null);
   const [rerolling, setRerolling] = useState<string | null>(null);
 
   useEffect(() => {
     api.getScoreboard(p.id).then(setScoreboard).catch(() => {});
     api.getTimeline(p.id).then(setTimeline).catch(() => {});
+    api.getEval(p.id).then(setEvalData).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -30,12 +33,14 @@ export function FilmStage({ ctl, exportAssetId }: FilmStageProps) {
       const { job_id } = await api.regenerateShot(p.id, shot.id);
       await pollJob(job_id, { timeoutMs: 10 * 60 * 1000 });
       await ctl.refetch();
-      const [sb, tl] = await Promise.all([
+      const [sb, tl, ev] = await Promise.all([
         api.getScoreboard(p.id).catch(() => null),
         api.getTimeline(p.id).catch(() => null),
+        api.getEval(p.id).catch(() => null),
       ]);
       if (sb) setScoreboard(sb);
       if (tl) setTimeline(tl);
+      if (ev) setEvalData(ev);
     } catch {
       /* surfaced via no state change; user can retry */
     } finally {
@@ -109,9 +114,17 @@ export function FilmStage({ ctl, exportAssetId }: FilmStageProps) {
         </div>
 
         <div className="sr-film-side">
+          <ProofPanel ev={evalData} />
           <ScoreboardPanel scoreboard={scoreboard} />
         </div>
       </div>
+
+      {p.dramatic_question && (
+        <div className="sr-closing" data-testid="film-closing">
+          <span className="sr-closing-tag">The question</span>
+          <p className="sr-closing-q">{p.dramatic_question}</p>
+        </div>
+      )}
     </div>
   );
 }

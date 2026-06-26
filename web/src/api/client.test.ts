@@ -105,6 +105,30 @@ describe("showrunner api client", () => {
     );
   });
 
+  it("GET /eval returns the proof payload from the eval endpoint", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({
+        narrative: { overall: 0.88, scores: { stakes: 0.83 }, notes: "ok" },
+        tokens: {
+          total: 133000,
+          video_tokens: 120000,
+          video_tokens_pre_approval: 0,
+          rerolls: 2,
+          baseline_estimate: 400000,
+          estimated_saved: 267000,
+        },
+        avg_consistency: 0.91,
+      }),
+    );
+    const ev = await api.getEval("prod_1");
+    expect(ev.narrative.overall).toBe(0.88);
+    expect(ev.tokens.video_tokens_pre_approval).toBe(0);
+    expect(ev.avg_consistency).toBe(0.91);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/eval`);
+    expect(opts.method).toBe("GET");
+  });
+
   it("upload sends multipart FormData (no JSON content-type) with kind query", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({ id: "a1" }));
     const file = new File(["data"], "ref.png", { type: "image/png" });

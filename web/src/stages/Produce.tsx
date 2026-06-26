@@ -20,6 +20,7 @@ import type {
 } from "../types";
 import { PreviewPlayer } from "../preview/PreviewPlayer";
 import { ScoreboardPanel } from "../components/Scoreboard";
+import { ShotBadges } from "../components/ShotBadges";
 
 interface StageProps {
   ctl: UseProduction;
@@ -251,10 +252,8 @@ function ShotStatusRow({
         <div className="sr-shotrow-meta">
           {shot.shot_type.replace("_", " ")} · {shot.camera.replace("_", " ")}
           {loc && ` · ${loc.name}`}
-          {typeof shot.critic_score === "number" &&
-            ` · consistency ${shot.critic_score.toFixed(2)}`}
-          {shot.reroll_count > 0 && ` · ${shot.reroll_count} reroll`}
         </div>
+        <ShotBadges shot={shot} />
       </div>
       <div className={"sr-shotrow-status " + meta.cls}>
         {status === "generating" && (
