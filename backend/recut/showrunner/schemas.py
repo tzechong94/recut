@@ -164,9 +164,16 @@ class Shot(BaseModel):
 
     @property
     def caption(self) -> str:
-        """What burns on screen: the spoken dialogue, else narration."""
+        """What burns on screen: speaker-attributed dialogue ('NAME: line' per line), else
+        narration. Attribution is the drama — the viewer must know who's speaking."""
         if self.dialogue:
-            return " ".join(d.line for d in self.dialogue if d.line).strip()
+            lines = []
+            for d in self.dialogue:
+                if not d.line:
+                    continue
+                lines.append(f"{d.character_name}: {d.line}" if d.character_name else d.line)
+            if lines:
+                return "\n".join(lines)
         return self.narration.strip()
 
 

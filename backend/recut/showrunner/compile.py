@@ -21,6 +21,7 @@ from recut.core.schemas import (
     SlotStatus,
     SlotStyle,
     SlotType,
+    StandIn,
     TextRole,
     Timeline,
 )
@@ -58,8 +59,29 @@ def shot_to_slot(shot: Shot, *, style_name: str = "") -> Slot:
     )
 
 
-def compile_to_timeline(prod: Production) -> Timeline:
-    """Build the render Timeline from the production's ordered shots."""
+def _card_slot(slot_id: str, text: str, *, size: Size, dur: float = 2.6) -> Slot:
+    """A text card (title/end) — a stand-in text slot the render burns over a solid frame.
+    Costs zero video tokens but makes the export read as a film, not a clip reel."""
+    return Slot(
+        id=slot_id, beat_label="Card", type=SlotType.text, duration_s=dur,
+        source=SlotSource.standin, text=text, text_role=TextRole.on_screen_text,
+        style=SlotStyle(font=Font.display, size=size, align=Align.center),
+        status=SlotStatus.ready, kept=True,
+        standin=StandIn(color="#000000", label=""),
+    )
+
+
+def compile_to_timeline(prod: Production, *, with_cards: bool = True) -> Timeline:
+    """Build the render Timeline from the production's ordered shots, framed by a title
+    card and an end card so the export plays as a finished short film."""
     slots = [shot_to_slot(sh, style_name=prod.style.name) for sh in prod.shots]
+    if with_cards and slots:
+        title = prod.title or "Untitled"
+        end_text = prod.theme or "An AI Showrunner film"
+        slots = (
+            [_card_slot(f"title_{prod.id}", title, size=Size.l)]
+            + slots
+            + [_card_slot(f"end_{prod.id}", end_text, size=Size.m)]
+        )
     tl = Timeline(timeline_id=f"tl_{prod.id}", project_id=prod.project_id, version=prod.version, slots=slots)
     return tl

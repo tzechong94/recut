@@ -197,6 +197,8 @@ class StubTextLLM(TextLLM):
             payload = _stub_treatment(user)
         elif "showrunner:critic" in marker:
             payload = _stub_writers_critic(user)
+        elif "showrunner:rubric" in marker:
+            payload = _stub_rubric()
         elif "showrunner:storyboard" in marker:
             payload = _stub_storyboard(user)
         elif "script-on-beats" in marker:
@@ -306,6 +308,14 @@ def _stub_storyboard(user: str) -> dict:
             {"action": "Insert: the photo — two detectives shaking hands, one face circled in red", "shot_type": "insert", "camera": "static", "duration_s": 3, "character_names": [], "location_name": "Precinct office", "dialogue": [], "narration": "It was someone she trusted."},
             {"action": "Mara turns sharply as a shadow falls across the doorway", "shot_type": "close_up", "camera": "handheld", "duration_s": 3, "character_names": ["Mara"], "location_name": "Precinct office", "dialogue": [{"character": "Mara", "line": "You're working late."}], "narration": ""},
         ]
+    }
+
+
+def _stub_rubric() -> dict:
+    return {
+        "scores": {"dramatic_question_payoff": 0.85, "character_arc": 0.8, "subtext": 0.75, "ending_earned": 0.82},
+        "overall": 0.81,
+        "notes": "Clear dramatic question with a real reversal; arcs land; ending earned.",
     }
 
 
