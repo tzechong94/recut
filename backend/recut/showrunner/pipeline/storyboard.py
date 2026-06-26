@@ -27,7 +27,11 @@ _SYS = (
     "\"shot_type\":\"wide|medium|close_up|insert|two_shot\",\"camera\":\"static|pan|push_in|pull_out|handheld|aerial\","
     "\"duration_s\":number,\"character_names\":[str],\"location_name\":str,"
     "\"dialogue\":[{\"character\":str,\"line\":str}],\"narration\":str}]}. "
-    "Keep total scene length tight. Action lines must be vivid and filmable."
+    "Keep total scene length tight. Action lines must be vivid and filmable. "
+    "IMPORTANT for visual consistency: for dialogue, use SHOT/REVERSE-SHOT — each speaking "
+    "shot features exactly ONE character in frame (single-character close-ups that alternate), "
+    "never two named characters in the same shot. Open scenes with an establishing shot of the "
+    "location (no characters)."
 )
 
 

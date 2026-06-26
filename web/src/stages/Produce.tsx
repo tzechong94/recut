@@ -243,7 +243,10 @@ function ShotStatusRow({
       <div className="sr-shotrow-num">{index + 1}</div>
       <div className="sr-shotrow-body">
         <div className="sr-shotrow-action">
-          {shot.action || shot.caption || "Shot " + (index + 1)}
+          {shot.action ||
+            shot.dialogue.map((d) => d.line).join(" ") ||
+            shot.narration ||
+            "Shot " + (index + 1)}
         </div>
         <div className="sr-shotrow-meta">
           {shot.shot_type.replace("_", " ")} · {shot.camera.replace("_", " ")}

@@ -108,7 +108,7 @@ def _project_cap(prod, ctx) -> int:
 MAX_ATTEMPTS = 3  # 1 initial + up to 2 re-rolls (bounded so the critic can't blow the budget)
 
 
-def _generate_shot_best_of(prod, shot, ctx, src_dir) -> tuple[bytes, str, str, int, float | None, int]:
+def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None) -> tuple[bytes, str, str, int, float | None, int]:
     """Generate a shot, scoring each attempt against its reference and re-rolling drift
     with a NEW seed + the critic's corrective note. Returns the BEST attempt
     (bytes, mime, tool, tokens, best_score, rerolls)."""
@@ -119,7 +119,10 @@ def _generate_shot_best_of(prod, shot, ctx, src_dir) -> tuple[bytes, str, str, i
     rerolls = 0
     for attempt in range(MAX_ATTEMPTS):
         seed = int(hashlib.sha256(f"{shot.id}:{attempt}".encode()).hexdigest()[:7], 16)
-        render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective)
+        try:
+            render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective, prev_frame_url=prev_frame_url)
+        except Exception:  # noqa: BLE001 — continuity i2v can fail (unhosted frame); fall back to t2v
+            render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective)
         data, mime = render.asset.data, render.asset.mime
         score = None
         if render.reference_url:
@@ -156,8 +159,16 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     vo_paths = _fit_durations_to_voice(prod, ctx, src_dir)
     repo.save_production(prod)
 
-    # PASS 2 — generate each shot (best-of-N with consistency critic + re-roll)
-    for i, shot in enumerate(shots):
+    # PASS 2 — generate each shot (best-of-N + critic re-roll), chaining the previous
+    # shot's last frame within a scene for lighting/world continuity.
+    from recut.pipeline.shots import extract_last_frame
+
+    shot_scene = {sh.id: sc.index for sc in prod.scenes for sh in sc.shots}
+    prev_frame_url, prev_scene, done = None, None, 0
+    for shot in shots:
+        if shot_scene.get(shot.id) != prev_scene:
+            prev_frame_url, prev_scene = None, shot_scene.get(shot.id)  # reset at scene cut
+        done += 1
         if shot.source in (AssetSource.generated, AssetSource.uploaded) and shot.asset_id:
             continue  # resumable
         if prod.token_ledger.video_tokens >= cap:
@@ -166,7 +177,7 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         shot.status = ShotStatus.generating
         repo.save_production(prod)
 
-        data, mime, tool, tokens, score, rerolls = _generate_shot_best_of(prod, shot, ctx, src_dir)
+        data, mime, tool, tokens, score, rerolls = _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url)
         ext = "png" if mime.startswith("image") else "mp4"
         key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(data)}.{ext}"
         _store_bytes(ctx, key, data, mime)
@@ -181,7 +192,19 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         prod.token_ledger.video_tokens += tokens
         prod.token_ledger.rerolls += rerolls
         repo.save_production(prod)
-        queue.update_progress(job.id, (i + 1) / total * 0.8)
+        queue.update_progress(job.id, done / total * 0.8)
+
+        # chain continuity: this shot's last frame seeds the next shot in the scene
+        if mime.startswith("image"):
+            prev_frame_url = ctx.storage.url(key)
+        else:
+            tmp = src_dir / f"{shot.id}_full.mp4"
+            tmp.write_bytes(data)
+            lf = extract_last_frame(str(tmp), str(src_dir))
+            if lf:
+                lf_key = f"productions/{prod.id}/frames/{shot.id}_last.jpg"
+                ctx.storage.put_file(lf_key, lf, content_type="image/jpeg")
+                prev_frame_url = ctx.storage.url(lf_key)
 
     # PASS 3 — assemble: per-shot VO concat (already synthesized in pass 1), then render
     vo_segments = [(vo_paths.get(shot.id, ""), shot.duration_s) for shot in shots]
@@ -203,5 +226,6 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     ctx.storage.put_file(export_key, out_path, content_type="video/mp4")
     export_asset = repo.create_asset(kind="export", storage_key=export_key, project_id=prod.project_id, mime="video/mp4", duration_s=timeline.duration_s, width=1080, height=1920)
     prod.stage = Stage.export
+    prod.export_asset_id = export_asset["id"]
     repo.save_production(prod)
     return {"export_asset_id": export_asset["id"], "url": ctx.storage.url(export_key), "duration_s": timeline.duration_s, "tokens": prod.token_ledger.total}

@@ -75,6 +75,20 @@ def shot_boundaries(
     return [(round(s, 2), round(e, 2)) for s, e in shots]
 
 
+def extract_last_frame(path: str, dest_dir: str | None = None) -> str | None:
+    """Extract the final frame — used to chain continuity into the next shot."""
+    s = get_settings()
+    out = str(Path(dest_dir or tempfile.mkdtemp(prefix="recut-frames-")) / "last.jpg")
+    try:
+        subprocess.run(
+            [s.ffmpeg_bin, "-y", "-sseof", "-0.2", "-i", path, "-frames:v", "1", "-q:v", "3", out],
+            capture_output=True, check=True, timeout=30,
+        )
+        return out if Path(out).exists() else None
+    except Exception:
+        return None
+
+
 def extract_keyframe(path: str, t: float, dest_dir: str | None = None) -> str | None:
     """Extract a single JPEG frame at time t. Returns the file path (or None)."""
     s = get_settings()

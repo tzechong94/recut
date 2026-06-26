@@ -225,6 +225,7 @@ class Production(BaseModel):
     scenes: list[Scene] = Field(default_factory=list)
     token_ledger: TokenLedger = Field(default_factory=TokenLedger)
     writers_room: list[dict] = Field(default_factory=list)  # transcript [{role, text}]
+    export_asset_id: str | None = None  # the finished film (set on produce; for revisits)
     version: int = 1
     created_at: float = Field(default_factory=_now)
 
