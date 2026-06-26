@@ -61,13 +61,20 @@ def reference_for_shot(prod: Production, shot: Shot) -> str | None:
     return None
 
 
-def generate_shot(models: ModelClients, prod: Production, shot: Shot) -> ShotRender:
+def generate_shot(
+    models: ModelClients, prod: Production, shot: Shot, *, seed: int = 0, corrective: str = ""
+) -> ShotRender:
+    """Generate one shot. `seed` varies per attempt so a re-roll is a real redraw, not a
+    coin-flip repeat; `corrective` is the critic's specific drift note fed back in to
+    actually fix the problem (e.g. 'jacket must be navy, not red')."""
     prompt = build_shot_prompt(prod, shot)
+    if corrective:
+        prompt += f". IMPORTANT continuity correction: {corrective}"
     ref_url = reference_for_shot(prod, shot)
     if ref_url:
-        asset = models.video.generate_from_image(ref_url, prompt, duration_s=shot.duration_s)
+        asset = models.video.generate_from_image(ref_url, prompt, duration_s=shot.duration_s, seed=seed)
         return ShotRender(asset=asset, tool="generate_shot_i2v", reference_url=ref_url)
-    asset = models.video.generate(prompt, duration_s=shot.duration_s)
+    asset = models.video.generate(prompt, duration_s=shot.duration_s, seed=seed)
     return ShotRender(asset=asset, tool="generate_shot_t2v", reference_url=None)
 
 

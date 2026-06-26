@@ -176,17 +176,21 @@ def scoreboard(pid: str) -> dict:
         raise HTTPException(404, "production not found")
     led = prod.token_ledger
     n, dur = len(prod.shots), prod.duration_s
-    naive = led.naive_baseline(n or 1, (dur / n) if n else 4.0)
     ready = sum(1 for s in prod.shots if s.asset_id)
     scored = [s.critic_score for s in prod.shots if s.critic_score is not None]
+    baseline = led.naive_baseline(n or 1, (dur / n) if n else 4.0)
     return {
         "tokens": {"text": led.text_tokens, "image": led.image_tokens, "video": led.video_tokens, "voice": led.voice_tokens, "total": led.total},
-        "rerolls": led.rerolls,
-        "naive_baseline_tokens": naive,
-        "tokens_saved": max(0, naive - led.total),
-        "savings_pct": round(max(0, naive - led.total) / naive * 100, 1) if naive else 0.0,
+        # The DEFENSIBLE, true claims (not a circular % vs a strawman):
+        "video_tokens_pre_approval": 0,  # true by construction — produce runs only after approval
+        "approval_gated": True,
+        "rerolls": led.rerolls,  # only drifted shots were re-rolled, not everything
         "shots_ready": ready,
         "shots_total": n,
         "avg_consistency": round(sum(scored) / len(scored), 3) if scored else None,
         "duration_s": dur,
+        # A clearly-labeled ESTIMATE vs regenerating everything without the plan-lock:
+        "baseline_estimate_tokens": baseline,
+        "estimated_tokens_saved": max(0, baseline - led.total),
+        "headline": "0 video tokens spent before you approved the plan; the critic re-rolled only the shots that drifted.",
     }

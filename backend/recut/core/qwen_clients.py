@@ -18,6 +18,7 @@ from typing import Callable, TypeVar
 
 from recut.core.config import Settings
 from recut.core.models import (
+    ConsistencyVerdict,
     GenAsset,
     ImageGen,
     ModelClients,
@@ -140,9 +141,10 @@ class QwenVision(VisionAnalyzer):
 
         return _retry(call)
 
-    def score_consistency(self, reference: str, candidate: str) -> float:
+    def score_consistency(self, reference: str, candidate: str) -> ConsistencyVerdict:
         """Qwen-VL compares the locked reference still to a generated shot's keyframe and
-        scores character/location consistency 0..1. Drives the auto re-roll."""
+        scores character/location consistency 0..1 with a reason. The reason feeds the
+        re-roll's corrective prompt. On failure: skip (None), never silently pass."""
         import os
 
         import dashscope
@@ -154,10 +156,12 @@ class QwenVision(VisionAnalyzer):
             "Image 1 is a locked character/location reference. Image 2 is a frame from a "
             "generated shot meant to depict the SAME subject. Return STRICT JSON "
             '{"score": float 0..1, "reason": str} where score is how consistent the subject '
-            "identity, wardrobe, and art style are (1=identical subject, 0=totally different)."
+            "identity, wardrobe, and art style are (1=identical, 0=totally different). The "
+            "reason must name the SPECIFIC drift (e.g. 'jacket changed from navy to red') so "
+            "it can be corrected."
         )
 
-        def call() -> float:
+        def call() -> ConsistencyVerdict:
             resp = dashscope.MultiModalConversation.call(
                 api_key=self.s.dashscope_api_key, model=self.s.qwen_vl_model,
                 messages=[{"role": "user", "content": [{"image": uri(reference)}, {"image": uri(candidate)}, {"text": prompt}]}],
@@ -166,12 +170,13 @@ class QwenVision(VisionAnalyzer):
                 raise RuntimeError(f"qwen-vl consistency {getattr(resp,'code','?')}: {getattr(resp,'message',resp)}")
             raw = resp["output"]["choices"][0]["message"]["content"]
             text = raw if isinstance(raw, str) else " ".join(p.get("text", "") for p in raw if isinstance(p, dict))
-            return float(_extract_json(text).get("score", 0.0))
+            data = _extract_json(text)
+            return ConsistencyVerdict(score=float(data.get("score", 0.0)), reason=str(data.get("reason", "")))
 
         try:
             return _retry(call, attempts=2)
-        except Exception:  # noqa: BLE001 — critic is advisory; on failure don't block the shot
-            return 1.0
+        except Exception:  # noqa: BLE001 — critic unavailable -> skip, do NOT fake-pass
+            return ConsistencyVerdict(score=None, reason="critic unavailable")
 
 
 class QwenTranscriber(Transcriber):
@@ -232,10 +237,12 @@ class QwenVideoGen(VideoGen):
         import dashscope
         import httpx
 
+        kwargs = {"seed": seed} if seed else {}
+
         def call() -> GenAsset:
             rsp = dashscope.VideoSynthesis.call(
                 api_key=self.s.dashscope_api_key, model=self.s.wan_model, prompt=prompt,
-                size=self.s.wan_size,
+                size=self.s.wan_size, **kwargs,
             )
             if getattr(rsp, "status_code", 200) != 200:
                 raise RuntimeError(f"wan {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
@@ -253,10 +260,12 @@ class QwenVideoGen(VideoGen):
         import dashscope
         import httpx
 
+        kwargs = {"seed": seed} if seed else {}
+
         def call() -> GenAsset:
             rsp = dashscope.VideoSynthesis.call(
                 api_key=self.s.dashscope_api_key, model=self.s.wan_i2v_model, prompt=prompt,
-                img_url=image_url,
+                img_url=image_url, **kwargs,
             )
             if getattr(rsp, "status_code", 200) != 200:
                 raise RuntimeError(f"wan-i2v {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")

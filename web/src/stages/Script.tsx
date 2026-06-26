@@ -1,252 +1,198 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  CornerDownLeft,
-  Pencil,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react";
-import { Head, Foot } from "../components/Frame";
-import { TYPES } from "../components/types-map";
-import { api } from "../api/client";
-import { DEMO_THREAD } from "../lib/demo";
-import type { Recipe, Slot, Timeline } from "../types";
+import { ArrowRight, MapPin, MessagesSquare, Users } from "lucide-react";
+import type { UseProduction } from "../lib/useProduction";
+import type { Character, Location, Production, Scene } from "../types";
+import { Editable } from "../components/Editable";
 
-interface Msg {
-  who: "agent" | "you";
-  text: string;
+interface StageProps {
+  ctl: UseProduction;
+  onAdvance: () => void;
 }
 
-export interface ScriptProps {
-  projectId: string;
-  recipe: Recipe;
-  timeline: Timeline;
-  /** patch a single slot's fields and autosave. */
-  patchSlot: (slotId: string, patch: Partial<Slot>) => void;
-  drafted: boolean;
-  setDrafted: (v: boolean) => void;
-  generate: () => void;
-  generating: boolean;
-  back: () => void;
-}
+export function ScriptStage({ ctl, onAdvance }: StageProps) {
+  const p = ctl.production!;
+  const patch = (next: Partial<Production>) =>
+    ctl.update({ ...p, ...next });
 
-export function Script({
-  projectId,
-  recipe,
-  timeline,
-  patchSlot,
-  drafted,
-  setDrafted,
-  generate,
-  generating,
-  back,
-}: ScriptProps) {
-  const [thread, setThread] = useState<Msg[]>([DEMO_THREAD[0]]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [demoStep, setDemoStep] = useState(1); // next canned message index
-  const [refiningId, setRefiningId] = useState<string | null>(null);
-  const threadRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [thread]);
-
-  const send = async () => {
-    const text = input.trim();
-    if (!text || busy) return;
-    setInput("");
-    setThread((t) => [...t, { who: "you", text }]);
-    setBusy(true);
-    try {
-      const res = await api.cowrite(projectId, text, recipe.recipe_id);
-      setThread((t) => [...t, { who: "agent", text: res.reply }]);
-      if (res.beats) applyBeats(res.beats);
-    } catch {
-      // canned fallback: advance the demo thread
-      const nextMsg = DEMO_THREAD[demoStep] ?? {
-        who: "agent" as const,
-        text: "Got it — I've woven that into the beats. Refine any line on the left, or generate the base cut when you're happy.",
-      };
-      setThread((t) => [...t, nextMsg]);
-      setDemoStep((s) => Math.min(DEMO_THREAD.length, s + 1));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const applyBeats = (beats: { index: number; text: string }[]) => {
-    const ordered = [...timeline.slots].sort((a, b) => a.order - b.order);
-    for (const b of beats) {
-      const slot = ordered[b.index];
-      if (slot) patchSlot(slot.id, { text: b.text });
-    }
-  };
-
-  const draft = async () => {
-    setBusy(true);
-    try {
-      const story = thread
-        .filter((m) => m.who === "you")
-        .map((m) => m.text)
-        .join("\n");
-      const res = await api.draftScript(projectId, recipe.recipe_id, story);
-      applyBeats(res.beats);
-    } catch {
-      // offline: recipe already seeded the slot text; nothing to do
-    } finally {
-      setBusy(false);
-      setDrafted(true);
-    }
-  };
-
-  const refine = async (slot: Slot) => {
-    setRefiningId(slot.id);
-    try {
-      const res = await api.refineSlot(
-        timeline.timeline_id,
-        slot.id,
-        "Make this punchier and more in my voice.",
-      );
-      patchSlot(slot.id, { text: res.text });
-    } catch {
-      // offline tweak so the button does something visible
-      patchSlot(slot.id, { text: slot.text.replace(/\.$/, "") + " — for real." });
-    } finally {
-      setRefiningId(null);
-    }
-  };
-
-  const ordered = [...timeline.slots].sort((a, b) => a.order - b.order);
-  const conversationStarted = thread.length > 1;
+  const setChar = (id: string, next: Partial<Character>) =>
+    patch({
+      characters: p.characters.map((c) =>
+        c.id === id ? { ...c, ...next } : c,
+      ),
+    });
+  const setLoc = (id: string, next: Partial<Location>) =>
+    patch({
+      locations: p.locations.map((l) => (l.id === id ? { ...l, ...next } : l)),
+    });
+  const setScene = (id: string, next: Partial<Scene>) =>
+    patch({
+      scenes: p.scenes.map((s) => (s.id === id ? { ...s, ...next } : s)),
+    });
 
   return (
     <div className="rc-stage">
-      <Head
-        k="03"
-        t="Your story, written into the recipe"
-        s="Share as much as you can about your idea. The agent asks, you answer, it maps everything onto the beats — back and forth until it sounds like you."
-      />
-      <div className="rc-script">
-        <div className="rc-scriptmain">
-          {!drafted ? (
-            <div className="rc-emptyscript">
-              <Sparkles size={20} />
-              <p>Your script appears here as you and the agent shape it.</p>
-              <button
-                className="rc-cta rc-draftbtn"
-                disabled={busy}
-                onClick={draft}
-              >
-                <Pencil size={15} /> {busy ? "Drafting…" : "Draft the script"}
-              </button>
-              {!conversationStarted && (
-                <span className="rc-note">
-                  Tip: chat with the agent first, then draft.
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="rc-beats">
-              {ordered.map((s) => {
-                const T = TYPES[s.type];
-                const kind =
-                  s.text_role === "on_screen_text"
-                    ? "On-screen text"
-                    : s.text_role === "voiceover"
-                      ? "Voiceover"
-                      : "No text";
-                return (
-                  <div className="rc-beatcard" key={s.id}>
-                    <div className="rc-beathead">
-                      <span
-                        className="rc-chip sm"
-                        style={{ background: T.soft, color: T.color }}
-                      >
-                        <T.Icon size={12} /> {s.beat_label}
-                      </span>
-                      <span className="rc-beatkind">{kind}</span>
-                    </div>
-                    <textarea
-                      className="rc-beatline"
-                      value={s.text}
-                      rows={2}
-                      aria-label={`Edit ${s.beat_label} line`}
-                      onChange={(e) => patchSlot(s.id, { text: e.target.value })}
-                    />
-                    <div className="rc-beatactions">
-                      <button
-                        className="rc-refine"
-                        disabled={refiningId === s.id}
-                        onClick={() => refine(s)}
-                      >
-                        <RefreshCw size={12} />{" "}
-                        {refiningId === s.id ? "Refining…" : "Refine"}
-                      </button>
-                      <span className="rc-edithint">
-                        click the line to edit directly
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      <div className="rc-head">
+        <div className="rc-kicker">STAGE 1 · THE WRITERS' ROOM</div>
+        <h2>The treatment</h2>
+        <p>
+          A writer drafted it, a critic pushed back, the writer revised. Read the
+          room below — then shape the treatment. Every field is editable and
+          autosaves.
+        </p>
+      </div>
 
-        <aside className="rc-chat">
-          <div className="rc-chathead">
-            <Sparkles size={14} /> Co-writing
+      <div className="sr-script-grid">
+        <div className="sr-treatment">
+          <label className="sr-field-label">Title</label>
+          <Editable
+            className="sr-title-edit"
+            value={p.title}
+            onCommit={(v) => patch({ title: v })}
+            aria-label="Title"
+          />
+
+          <label className="sr-field-label">Logline</label>
+          <Editable
+            value={p.logline}
+            onCommit={(v) => patch({ logline: v })}
+            multiline
+            placeholder="One sentence that sells the film…"
+            aria-label="Logline"
+          />
+
+          <div className="sr-section-head">
+            <Users size={14} /> Characters
           </div>
-          <div className="rc-thread" ref={threadRef}>
-            {thread.map((m, i) => (
-              <div key={i} className={"rc-msg " + m.who}>
-                {m.text}
+          <div className="sr-cards">
+            {p.characters.map((c) => (
+              <div className="sr-treat-card" key={c.id}>
+                <div className="sr-treat-row">
+                  <Editable
+                    className="sr-edit sr-strong"
+                    value={c.name}
+                    onCommit={(v) => setChar(c.id, { name: v })}
+                    aria-label="Character name"
+                  />
+                  <Editable
+                    className="sr-edit sr-role"
+                    value={c.role}
+                    onCommit={(v) => setChar(c.id, { role: v })}
+                    placeholder="role"
+                    aria-label="Character role"
+                  />
+                </div>
+                <Editable
+                  value={c.description}
+                  onCommit={(v) => setChar(c.id, { description: v })}
+                  multiline
+                  placeholder="Appearance + wardrobe…"
+                  aria-label="Character description"
+                />
               </div>
             ))}
-            {busy && <div className="rc-msg agent typing">typing…</div>}
+            {p.characters.length === 0 && (
+              <p className="sr-empty-note">No characters yet.</p>
+            )}
           </div>
-          <div className="rc-chatbar">
-            <input
-              value={input}
-              placeholder={drafted ? "Tweak any line…" : "Reply to the agent…"}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()}
-            />
-            <button onClick={send} disabled={busy} aria-label="Send">
-              {drafted ? (
-                <CornerDownLeft size={15} />
-              ) : (
-                <ArrowRight size={15} />
-              )}
-            </button>
+
+          <div className="sr-section-head">
+            <MapPin size={14} /> Locations
           </div>
-        </aside>
+          <div className="sr-cards">
+            {p.locations.map((l) => (
+              <div className="sr-treat-card" key={l.id}>
+                <Editable
+                  className="sr-edit sr-strong"
+                  value={l.name}
+                  onCommit={(v) => setLoc(l.id, { name: v })}
+                  aria-label="Location name"
+                />
+                <Editable
+                  value={l.description}
+                  onCommit={(v) => setLoc(l.id, { description: v })}
+                  multiline
+                  placeholder="Mood + lighting…"
+                  aria-label="Location description"
+                />
+              </div>
+            ))}
+            {p.locations.length === 0 && (
+              <p className="sr-empty-note">No locations yet.</p>
+            )}
+          </div>
+
+          <div className="sr-section-head">Scene beats</div>
+          <div className="sr-cards">
+            {p.scenes.map((s, i) => (
+              <div className="sr-treat-card sr-beat" key={s.id}>
+                <div className="sr-beat-num">{i + 1}</div>
+                <div className="sr-beat-body">
+                  <Editable
+                    className="sr-edit sr-heading"
+                    value={s.heading}
+                    onCommit={(v) => setScene(s.id, { heading: v })}
+                    placeholder="INT. LOCATION - TIME"
+                    aria-label="Scene heading"
+                  />
+                  <Editable
+                    value={s.summary}
+                    onCommit={(v) => setScene(s.id, { summary: v })}
+                    multiline
+                    placeholder="What happens — and why it matters…"
+                    aria-label="Scene summary"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <WritersRoom production={p} />
       </div>
-      <Foot
-        left={
-          <button className="rc-back" onClick={back}>
-            <ArrowLeft size={16} /> Recipe
-          </button>
-        }
-        right={
-          <button
-            className="rc-cta"
-            disabled={!drafted || generating}
-            onClick={generate}
-          >
-            {generating ? "Building…" : "Generate base cut"}{" "}
-            <ArrowRight size={16} />
-          </button>
-        }
-        note={
-          drafted
-            ? "On your go-ahead — slots get assigned and the cut is built."
-            : null
-        }
-      />
+
+      <div className="rc-foot">
+        <div className="rc-footl">
+          <span className="rc-note">{p.scenes.length} scenes · cheap text tokens only</span>
+        </div>
+        <button className="rc-cta" onClick={onAdvance}>
+          Approve → Cast <ArrowRight size={16} />
+        </button>
+      </div>
     </div>
+  );
+}
+
+function WritersRoom({ production }: { production: Production }) {
+  const room = production.writers_room;
+  return (
+    <aside className="sr-room">
+      <div className="sr-room-head">
+        <MessagesSquare size={15} /> Writers' room
+      </div>
+      <div className="sr-room-thread">
+        {room.length === 0 && (
+          <p className="sr-empty-note">The transcript will appear here.</p>
+        )}
+        {room.map((m, i) => {
+          const role = (m.role || "writer").toLowerCase();
+          const isCritic = role.includes("critic");
+          return (
+            <div
+              key={i}
+              className={"sr-room-msg " + (isCritic ? "critic" : "writer")}
+            >
+              <div className="sr-room-role">
+                {isCritic ? "Critic" : "Writer"}
+                {typeof m.score === "number" && (
+                  <span className="sr-room-score">
+                    score {m.score.toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <div className="sr-room-text">{m.text}</div>
+            </div>
+          );
+        })}
+      </div>
+    </aside>
   );
 }

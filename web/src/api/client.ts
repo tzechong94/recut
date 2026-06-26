@@ -1,18 +1,15 @@
 /**
- * Typed fetch client for the Recut backend.
+ * Typed fetch client for the Recut AI Showrunner backend.
  * All endpoints live under `${API_BASE}/api`. Media bytes stream from
  * `${API_BASE}/api/assets/{id}/raw`.
  */
 import type {
   Asset,
-  CaptionCoverResult,
-  CowriteReply,
-  DraftScriptResult,
   Job,
-  NewProject,
-  Project,
-  RefineResult,
-  Recipe,
+  Production,
+  ProductionSummary,
+  Scoreboard,
+  StyleSummary,
   Timeline,
 } from "../types";
 
@@ -87,20 +84,65 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-/* ----------------------------- Projects ----------------------------- */
 export const api = {
-  listProjects: () => request<Project[]>("/projects"),
-  createProject: (body: NewProject) =>
-    request<Project>("/projects", { method: "POST", body }),
-  getProject: (id: string) => request<Project>(`/projects/${id}`),
-  patchProject: (
-    id: string,
-    body: Partial<Pick<Project, "name" | "stage" | "tone">>,
-  ) => request<Project>(`/projects/${id}`, { method: "PATCH", body }),
-  deleteProject: (id: string) =>
-    request<void>(`/projects/${id}`, { method: "DELETE" }),
+  /* ------------------------------- Styles ------------------------------- */
+  listStyles: () => request<StyleSummary[]>("/styles"),
 
-  /* ------------------------------ Assets ------------------------------ */
+  /* ---------------------------- Productions ----------------------------- */
+  createProduction: (body: {
+    premise: string;
+    target_seconds: number;
+    style: string;
+  }) => request<Production>("/productions", { method: "POST", body }),
+  listProductions: () => request<ProductionSummary[]>("/productions"),
+  getProduction: (id: string) => request<Production>(`/productions/${id}`),
+  deleteProduction: (id: string) =>
+    request<void>(`/productions/${id}`, { method: "DELETE" }),
+  /** Persist all inline edits / autosave. Sends the full Production doc. */
+  saveProduction: (id: string, doc: Production) =>
+    request<Production>(`/productions/${id}`, { method: "PUT", body: doc }),
+
+  storyboard: (id: string) =>
+    request<Production>(`/productions/${id}/storyboard`, { method: "POST" }),
+
+  /** Generate a character/location reference image. Async — poll the job. */
+  cast: (id: string, target: "character" | "location", targetId: string) =>
+    request<{ job_id: string }>(`/productions/${id}/cast`, {
+      method: "POST",
+      body: { target, target_id: targetId },
+    }),
+
+  /** Attach a human-uploaded reference image to a character. */
+  attachCharacterReference: (
+    id: string,
+    cid: string,
+    assetId: string,
+    referenceUrl?: string,
+  ) =>
+    request<Production>(`/productions/${id}/characters/${cid}/reference`, {
+      method: "POST",
+      body: { asset_id: assetId, reference_url: referenceUrl },
+    }),
+
+  produce: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/produce`, {
+      method: "POST",
+    }),
+  regenerateShot: (id: string, sid: string) =>
+    request<{ job_id: string }>(
+      `/productions/${id}/shots/${sid}/regenerate`,
+      { method: "POST" },
+    ),
+
+  getTimeline: (id: string) =>
+    request<Timeline>(`/productions/${id}/timeline`),
+  getScoreboard: (id: string) =>
+    request<Scoreboard>(`/productions/${id}/scoreboard`),
+
+  /* ------------------------------- Jobs --------------------------------- */
+  getJob: (id: string) => request<Job>(`/jobs/${id}`),
+
+  /* ------------------------------ Assets -------------------------------- */
   uploadAsset: (projectId: string, file: File, kind = "upload") => {
     const fd = new FormData();
     fd.append("file", file);
@@ -111,91 +153,6 @@ export const api = {
     });
   },
   getAsset: (id: string) => request<Asset>(`/assets/${id}`),
-
-  /* ------------------------------ Recipe ------------------------------ */
-  analyse: (projectId: string, assetId: string) =>
-    request<Recipe>(`/projects/${projectId}/analyse`, {
-      method: "POST",
-      body: { asset_id: assetId },
-    }),
-  getRecipe: (recipeId: string) => request<Recipe>(`/recipes/${recipeId}`),
-  recipeLibrary: () => request<Recipe[]>("/recipes/library"),
-  saveRecipe: (recipeId: string, saved: boolean) =>
-    request<Recipe>(`/recipes/${recipeId}/save`, {
-      method: "POST",
-      body: { saved },
-    }),
-
-  /* ----------------------------- Timeline ----------------------------- */
-  baseCut: (projectId: string, recipeId: string) =>
-    request<Timeline>(`/projects/${projectId}/base-cut`, {
-      method: "POST",
-      body: { recipe_id: recipeId },
-    }),
-  getTimeline: (projectId: string) =>
-    request<Timeline>(`/projects/${projectId}/timeline`),
-  getTimelineById: (id: string) => request<Timeline>(`/timelines/${id}`),
-  putTimeline: (id: string, doc: Timeline) =>
-    request<Timeline>(`/timelines/${id}`, { method: "PUT", body: doc }),
-  uploadToSlot: (timelineId: string, slotId: string, assetId: string) =>
-    request<Timeline>(`/timelines/${timelineId}/slots/${slotId}/upload`, {
-      method: "POST",
-      body: { asset_id: assetId },
-    }),
-  addSlot: (timelineId: string, afterSlotId: string, prompt: string) =>
-    request<Timeline>(`/timelines/${timelineId}/slots`, {
-      method: "POST",
-      body: { after_slot_id: afterSlotId, prompt },
-    }),
-
-  /* ------------------------------- Jobs ------------------------------- */
-  exportTimeline: (timelineId: string) =>
-    request<{ job_id: string }>(`/timelines/${timelineId}/export`, {
-      method: "POST",
-    }),
-  getJob: (id: string) => request<Job>(`/jobs/${id}`),
-  /**
-   * Queue AI generation. Omit slotId to generate a clip for every
-   * not-yet-replaced visual slot; pass slotId to regenerate just that one.
-   * Returns the queued job ids to poll via getJob.
-   */
-  generate: (
-    timelineId: string,
-    opts?: { slotId?: string; voiceover?: boolean },
-  ) =>
-    request<{ job_ids: string[]; queued: number }>(
-      `/timelines/${timelineId}/generate`,
-      {
-        method: "POST",
-        body: {
-          ...(opts?.slotId ? { slot_id: opts.slotId } : {}),
-          ...(opts?.voiceover !== undefined
-            ? { voiceover: opts.voiceover }
-            : {}),
-        },
-      },
-    ),
-
-  /* --------------------------- Agent / chat --------------------------- */
-  cowrite: (projectId: string, message: string, recipeId: string) =>
-    request<CowriteReply>(`/projects/${projectId}/cowrite`, {
-      method: "POST",
-      body: { message, recipe_id: recipeId },
-    }),
-  draftScript: (projectId: string, recipeId: string, story: string) =>
-    request<DraftScriptResult>(`/projects/${projectId}/draft-script`, {
-      method: "POST",
-      body: { recipe_id: recipeId, story },
-    }),
-  refineSlot: (timelineId: string, slotId: string, instruction: string) =>
-    request<RefineResult>(`/timelines/${timelineId}/slots/${slotId}/refine`, {
-      method: "POST",
-      body: { instruction },
-    }),
-  captionCover: (timelineId: string) =>
-    request<CaptionCoverResult>(`/timelines/${timelineId}/caption-cover`, {
-      method: "POST",
-    }),
 };
 
 export { request as __request, buildUrl as __buildUrl };

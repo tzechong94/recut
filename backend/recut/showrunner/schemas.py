@@ -112,6 +112,8 @@ class Character(BaseModel):
     name: str
     description: str = ""  # appearance + wardrobe; drives the reference image prompt
     role: str = ""  # protagonist / antagonist / supporting
+    want: str = ""  # dramatic want (what they pursue) — gives the character an arc
+    flaw: str = ""  # the flaw/obstacle that creates conflict
     reference_asset_id: str | None = None  # stored reference still (consistency anchor)
     reference_url: str | None = None  # direct URL usable by Wan i2v (e.g. DashScope/OSS)
     source: AssetSource = AssetSource.none
@@ -197,10 +199,11 @@ class TokenLedger(BaseModel):
         return self.text_tokens + self.image_tokens + self.video_tokens + self.voice_tokens
 
     def naive_baseline(self, n_shots: int, avg_shot_s: float) -> int:
-        """Naive baseline: generate every shot 3x with no plan-locking / no critic
-        targeting, full re-gen on any change. The scoreboard shows how much the
-        plan-first + critic approach saves vs this."""
-        return int(n_shots * avg_shot_s * 1800 * 3) + 5000
+        """ESTIMATE of a no-discipline workflow: generate every shot, then regenerate the
+        whole film ~twice during iteration because there's no plan-lock and no targeted
+        critic (you re-roll blindly). Reported as a labeled estimate, not a hard claim —
+        the defensible facts are 0-video-tokens-pre-approval and targeted re-rolls."""
+        return int(n_shots * avg_shot_s * 1800 * 2) + 3000
 
 
 # --------------------------------------------------------------------------- #
@@ -212,6 +215,8 @@ class Production(BaseModel):
     premise: str = ""
     logline: str = ""
     title: str = "Untitled"
+    dramatic_question: str = ""  # the question the film answers (drives structure)
+    theme: str = ""
     target_seconds: int = 60
     stage: Stage = Stage.premise
     style: StyleLock = Field(default_factory=lambda: STYLE_PRESETS["cinematic"].model_copy())
