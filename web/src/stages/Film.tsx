@@ -51,6 +51,9 @@ export function FilmStage({ ctl, exportAssetId }: FilmStageProps) {
   }
 
   const shots = p.scenes.flatMap((s) => s.shots);
+  // Prefer the live produce-job result; fall back to the persisted production
+  // (e.g. when revisiting a finished film after a reload).
+  const finalAssetId = exportAssetId ?? p.export_asset_id ?? null;
 
   return (
     <div className="rc-stage">
@@ -64,14 +67,15 @@ export function FilmStage({ ctl, exportAssetId }: FilmStageProps) {
 
       <div className="sr-film-grid">
         <div className="sr-film-main">
-          <FilmPlayer exportAssetId={exportAssetId} timeline={timeline} />
-          {exportAssetId && (
+          <FilmPlayer exportAssetId={finalAssetId} timeline={timeline} />
+          {finalAssetId && (
             <a
               className="rc-cta sr-download"
-              href={assetRawUrl(exportAssetId)}
+              href={assetRawUrl(finalAssetId)}
               download={`${p.title || "film"}.mp4`}
+              data-testid="download-film"
             >
-              <Download size={16} /> Download MP4
+              <Download size={16} /> Download film
             </a>
           )}
 
