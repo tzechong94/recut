@@ -83,12 +83,19 @@ def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
 
     vo_paths: dict[str, str] = {}
     for shot in prod.shots:
+        # Cache keyed on the caption's CONTENT so re-runs reuse (idempotent, no double
+        # token count) but an EDITED line re-synthesizes (correct audio).
+        chash = content_hash(shot.caption.encode())[:8] if shot.caption else "silent"
+        existing = next((p for ext in ("wav", "mp3") if (p := Path(src_dir) / f"vo_{shot.id}_{chash}.{ext}").exists()), None)
+        if existing:
+            vo_paths[shot.id] = str(existing)
+            continue
         va = synth_shot_voice(ctx.models, prod, shot)
         if not va:
             shot.duration_s = max(_MIN_SHOT_S, min(_MAX_SHOT_S, shot.duration_s))
             continue
         ext = "wav" if va.mime.endswith("wav") else "mp3"
-        sp = Path(src_dir) / f"vo_{shot.id}.{ext}"
+        sp = Path(src_dir) / f"vo_{shot.id}_{chash}.{ext}"
         sp.write_bytes(va.data)
         vo_paths[shot.id] = str(sp)
         prod.token_ledger.voice_tokens += va.tokens
@@ -203,7 +210,11 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
             reason = f"consistency {score:.2f}" + (f"; re-rolled ×{rerolls} to fix drift" if rerolls else "; passed first try")
         else:
             reason = "no identity reference to verify"
-        prod.director_log.append({"shot": f"Shot {shot.index + 1}", "decision": decision, "reason": reason})
+        # Replace (not duplicate) this shot's prior generation entry on a re-run/regenerate
+        # (dedupe by the unique shot id; shot.index is per-scene so labels can collide).
+        # Editor entries have no "id" and are left intact.
+        prod.director_log = [e for e in prod.director_log if e.get("id") != shot.id]
+        prod.director_log.append({"shot": f"Shot {done}", "id": shot.id, "decision": decision, "reason": reason})
         repo.save_production(prod)
         queue.update_progress(job.id, done / total * 0.8)
 
