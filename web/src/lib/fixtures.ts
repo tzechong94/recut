@@ -2,7 +2,13 @@
  * Test/dev fixtures mirroring the backend's compiled render Timeline and the
  * Showrunner domain. Kept tiny and dependency-free.
  */
-import type { Production, Scoreboard, Slot, Timeline } from "../types";
+import type {
+  Production,
+  ProductionEval,
+  Scoreboard,
+  Slot,
+  Timeline,
+} from "../types";
 
 export function makeSlot(over: Partial<Slot> = {}): Slot {
   return {
@@ -75,6 +81,8 @@ export function makeProduction(over: Partial<Production> = {}): Production {
     premise: "A burnt-out detective gets one last case.",
     logline: "One last case before the rain washes it all away.",
     title: "The Last Case",
+    dramatic_question: "Will Vance solve the case before it solves him?",
+    theme: "redemption",
     target_seconds: 60,
     stage: "production",
     style: {
@@ -128,6 +136,7 @@ export function makeProduction(over: Partial<Production> = {}): Production {
             source: "standin",
             asset_id: null,
             status: "planned",
+            gen_tool: "i2v",
             reroll_count: 0,
             critic_score: null,
           },
@@ -145,8 +154,35 @@ export function makeProduction(over: Partial<Production> = {}): Production {
       { role: "writer", text: "The Last Case — One last case before the rain." },
       { role: "critic", text: "Raise the stakes in act two.", score: 0.7 },
       { role: "writer", text: "Revised per notes: sharper midpoint turn." },
+      { role: "critic", text: "Stronger. Tighten the ending beat.", score: 0.86 },
+      { role: "writer", text: "Final pass: the rain becomes the reckoning." },
     ],
     version: 1,
+    ...over,
+  };
+}
+
+export function makeEval(over: Partial<ProductionEval> = {}): ProductionEval {
+  return {
+    narrative: {
+      overall: 0.88,
+      scores: {
+        premise_clarity: 0.92,
+        character: 0.85,
+        stakes: 0.83,
+        payoff: 0.9,
+      },
+      notes: "Clear dramatic question; the midpoint turn lands and the ending pays it off.",
+    },
+    tokens: {
+      total: 133000,
+      video_tokens: 120000,
+      video_tokens_pre_approval: 0,
+      rerolls: 2,
+      baseline_estimate: 400000,
+      estimated_saved: 267000,
+    },
+    avg_consistency: 0.91,
     ...over,
   };
 }

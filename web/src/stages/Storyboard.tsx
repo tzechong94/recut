@@ -13,6 +13,7 @@ import { api } from "../api/client";
 import type { UseProduction } from "../lib/useProduction";
 import type { Production, Scene, Shot } from "../types";
 import { Editable } from "../components/Editable";
+import { ShotBadges } from "../components/ShotBadges";
 
 interface StageProps {
   ctl: UseProduction;
@@ -259,6 +260,7 @@ function ShotCard({
               <Users size={11} /> {charNames.join(", ")}
             </span>
           )}
+          <ShotBadges shot={shot} />
         </div>
 
         <Editable

@@ -541,6 +541,70 @@ html,body{background:#0b0a0f;}
 .sr-filmshot-meta{font-family:var(--mono);font-size:10.5px;color:var(--soft);margin-top:3px;text-transform:capitalize;}
 .sr-film-side{position:sticky;top:0;}
 
+/* ---------------- Dramatic question (Script) ---------------- */
+.sr-question{margin:6px 0 4px;background:linear-gradient(180deg,rgba(123,92,255,.12),rgba(123,92,255,.04));border:1px solid rgba(123,92,255,.3);border-left:3px solid var(--violet);border-radius:12px;padding:11px 14px;}
+.sr-question-tag{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--violet);margin-bottom:5px;}
+.sr-question-text{font-family:var(--display);font-weight:700;font-size:16px;line-height:1.4;color:var(--ink);letter-spacing:-.01em;}
+.sr-question-theme{font-size:11.5px;color:var(--soft);margin-top:7px;}
+.sr-question-theme b{color:var(--ink);text-transform:capitalize;}
+
+/* ---------------- Writers' room transcript extras ---------------- */
+.sr-room-final{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:#0FB5A6;background:rgba(15,181,166,.14);border-radius:999px;padding:3px 9px;}
+.sr-room-round{font-size:9px;letter-spacing:.08em;color:var(--violet);}
+.sr-room-msg.critic .sr-room-round{order:2;}
+.sr-room-score{display:inline-flex;align-items:center;gap:5px;color:#0FB5A6;font-weight:600;background:rgba(15,181,166,.12);border-radius:999px;padding:2px 8px;}
+.sr-room-delta{font-style:normal;font-size:9px;}
+.sr-room-delta.up{color:#3fd9c8;}
+.sr-room-delta.down{color:#ff9485;}
+
+/* ---------------- Shot orchestration badges ---------------- */
+.sr-shot-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px;}
+.sr-shotrow-body .sr-shot-badges{margin-top:5px;}
+.sr-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;padding:3px 8px;border-radius:7px;background:rgba(255,255,255,.05);color:var(--soft);border:1px solid var(--line);}
+.sr-badge-tool{text-transform:lowercase;}
+.sr-badge-tool.i2v{color:#b9a4ff;background:rgba(123,92,255,.16);border-color:rgba(123,92,255,.3);}
+.sr-badge-tool.t2v{color:#7fc4ff;background:rgba(77,195,255,.14);border-color:rgba(77,195,255,.3);}
+.sr-badge-tool.continuity{color:#f5c87a;background:rgba(245,165,36,.14);border-color:rgba(245,165,36,.3);}
+.sr-badge-score{color:var(--ink);}
+.sr-score-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.sr-badge-reroll{color:#ff9485;background:rgba(255,122,107,.12);border-color:rgba(255,122,107,.28);}
+
+/* ---------------- Proof panel (Film closer) ---------------- */
+.sr-proof{background:linear-gradient(180deg,#1a1530,#0e0b1a);border:1px solid rgba(15,181,166,.3);border-radius:18px;padding:18px;margin-bottom:16px;}
+.sr-proof-head{display:inline-flex;align-items:center;gap:8px;font-family:var(--display);font-weight:700;font-size:14px;color:#3fd9c8;margin-bottom:14px;}
+.sr-proof-hero{display:flex;align-items:center;gap:16px;margin-bottom:14px;}
+.sr-proof-overall{flex-shrink:0;}
+.sr-proof-overall-num{font-family:var(--display);font-weight:800;font-size:42px;line-height:1;letter-spacing:-.02em;color:#0FB5A6;}
+.sr-proof-overall-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);margin-top:4px;}
+.sr-proof-consistency{margin-left:auto;text-align:right;}
+.sr-proof-stat-label{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--soft);margin-bottom:5px;}
+.sr-proof-stat-value{font-family:var(--display);font-weight:800;font-size:22px;color:var(--ink);}
+.sr-proof-rubric{display:flex;flex-direction:column;gap:7px;margin-bottom:13px;}
+.sr-proof-rubric-row{display:grid;grid-template-columns:1fr 70px 34px;align-items:center;gap:9px;}
+.sr-proof-rubric-label{font-size:11.5px;color:var(--soft);text-transform:capitalize;}
+.sr-proof-rubric-bar{height:6px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;}
+.sr-proof-rubric-bar i{display:block;height:100%;background:linear-gradient(90deg,#0FB5A6,#3fd9c8);}
+.sr-proof-rubric-num{font-family:var(--mono);font-size:11px;color:var(--ink);text-align:right;}
+.sr-proof-notes{font-size:12px;line-height:1.5;color:var(--soft);font-style:italic;border-left:2px solid rgba(15,181,166,.4);padding-left:10px;margin:0 0 14px;}
+.sr-proof-facts{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:13px;}
+.sr-proof-fact{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--soft);line-height:1.4;}
+.sr-proof-fact svg{flex-shrink:0;margin-top:1px;color:var(--soft);}
+.sr-proof-fact b{color:var(--ink);font-family:var(--mono);}
+.sr-proof-fact.pre-approval{color:#3fd9c8;}
+.sr-proof-fact.pre-approval svg{color:#3fd9c8;}
+.sr-proof-fact.pre-approval b{color:#3fd9c8;}
+.sr-proof-fact.saved svg{color:#0FB5A6;}
+.sr-proof-fact.saved b{color:#0FB5A6;}
+.sr-film-side{position:sticky;top:0;display:flex;flex-direction:column;gap:16px;}
+
+/* ---------------- Film closing line ---------------- */
+.sr-closing{margin-top:30px;text-align:center;padding:28px 20px;border-top:1px solid var(--line);}
+.sr-closing-tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);}
+.sr-closing-q{font-family:var(--display);font-weight:800;font-size:24px;line-height:1.35;letter-spacing:-.02em;color:var(--ink);max-width:620px;margin:12px auto 0;}
+
+/* ---------------- Premise nudge ---------------- */
+.sr-premise-hint{font-size:12.5px;color:var(--soft);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:4px;}
+
 @media (max-width:900px){
   .sr-script-grid,.sr-produce-grid,.sr-film-grid{grid-template-columns:1fr;}
   .sr-room{position:static;max-height:none;}
