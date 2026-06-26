@@ -50,6 +50,23 @@ director." Top gaps being fixed this sprint:
   Cast & Style (show bible) → Storyboard → Produce (live status + scoreboard) → Film.
   40 web tests + build green. export_asset_id persisted for revisits.
 
+### Sprint 3 result: film polish (music/titles/captions) + eval harness. 118 tests.
+### Sprint 4 result: frontend polish (writers'-room debate, shot badges, proof panel). 45 web tests.
+
+## Sprint 5 — crit round 3 fixes (done). 124 backend tests.
+- Dialogue WRITTEN + CRITIQUED (pipeline/dialogue.py) then placed into shots; narrative
+  rubric now scores the actual lines (was grading a synopsis — the central hole).
+- Director's decision log (visible agent reasoning per shot).
+- Honest token counts (real units; estimates labeled). End card reprises title.
+- Robustness: degenerate-treatment retry, dropped-scene warnings.
+
+## Sprint 6 — frontend surfacing of Sprint 5 (in progress, background agent)
+Surface director_log, written dialogue in Script, warnings banner.
+
+### Crit themes addressed so far (rounds 1-3): functional re-roll, narrative depth +
+### real dialogue, audio-fit, honest scoreboard, continuity, film polish, eval proof,
+### visible agent reasoning. Remaining/deferred:
+
 ### Still open (next sprints / deferred)
 - Live validation of Sprint 1/2 on real Qwen (seed re-roll, i2v continuity) — costs $.
 - Multi-reference compositing for true two-character single frames (currently solved via
