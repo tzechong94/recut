@@ -7,6 +7,8 @@ import type { ProductionEval, Scoreboard, Shot, Timeline } from "../types";
 import { PreviewPlayer } from "../preview/PreviewPlayer";
 import { ScoreboardPanel } from "../components/Scoreboard";
 import { ProofPanel } from "../components/ProofPanel";
+import { DirectorLog } from "../components/DirectorLog";
+import { WarningsBanner } from "../components/WarningsBanner";
 
 interface FilmStageProps {
   ctl: UseProduction;
@@ -57,6 +59,8 @@ export function FilmStage({ ctl, exportAssetId }: FilmStageProps) {
         <h2>{p.title}</h2>
         <p>{p.logline}</p>
       </div>
+
+      <WarningsBanner warnings={p.warnings} />
 
       <div className="sr-film-grid">
         <div className="sr-film-main">
@@ -116,6 +120,7 @@ export function FilmStage({ ctl, exportAssetId }: FilmStageProps) {
         <div className="sr-film-side">
           <ProofPanel ev={evalData} />
           <ScoreboardPanel scoreboard={scoreboard} />
+          <DirectorLog log={p.director_log} />
         </div>
       </div>
 

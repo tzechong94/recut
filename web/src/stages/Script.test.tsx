@@ -50,4 +50,24 @@ describe("ScriptStage", () => {
     // header carries the final score
     expect(screen.getByTestId("room-final-score").textContent).toContain("0.86");
   });
+
+  it("renders the written dialogue as a screenplay block under the scene", () => {
+    const prod = makeProduction();
+    render(<ScriptStage ctl={ctlFor(prod)} onAdvance={vi.fn()} />);
+    const block = screen.getByTestId("script-block");
+    expect(block).toBeInTheDocument();
+    // character cue + the actual editable line that gets spoken/burned
+    expect(within(block).getAllByText("Detective Vance").length).toBe(2);
+    expect(
+      within(block).getByLabelText("Line 1 for Detective Vance"),
+    ).toHaveValue("Some cases don't want to be solved.");
+  });
+
+  it("folds dialogue-role transcript turns (with scores) into the writers' room", () => {
+    const prod = makeProduction();
+    render(<ScriptStage ctl={ctlFor(prod)} onAdvance={vi.fn()} />);
+    const room = screen.getByTestId("writers-room");
+    expect(within(room).getByText("Dialogue")).toBeInTheDocument();
+    expect(within(room).getByText("0.82")).toBeInTheDocument();
+  });
 });

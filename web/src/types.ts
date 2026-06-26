@@ -131,6 +131,15 @@ export interface Scene {
   heading: string;
   summary: string;
   shots: Shot[];
+  /** The written, critiqued dialogue for the scene — the lines that get spoken. */
+  script?: DialogueLine[];
+}
+
+/** A single entry in the director's reasoning log, emitted per shot. */
+export interface DirectorLogEntry {
+  shot: string;
+  decision: string;
+  reason: string;
 }
 
 export interface ProductionTokenLedger {
@@ -165,6 +174,10 @@ export interface Production {
   scenes: Scene[];
   token_ledger: ProductionTokenLedger;
   writers_room: WritersRoomEntry[];
+  /** The agent's per-shot reasoning, streamed in as production progresses. */
+  director_log?: DirectorLogEntry[];
+  /** Non-fatal heads-up issues (dropped scene, dialogue pass hiccup, …). */
+  warnings?: string[];
   version: number;
   created_at?: number;
 }

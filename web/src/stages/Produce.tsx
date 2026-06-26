@@ -21,6 +21,8 @@ import type {
 import { PreviewPlayer } from "../preview/PreviewPlayer";
 import { ScoreboardPanel } from "../components/Scoreboard";
 import { ShotBadges } from "../components/ShotBadges";
+import { DirectorLog } from "../components/DirectorLog";
+import { WarningsBanner } from "../components/WarningsBanner";
 
 interface StageProps {
   ctl: UseProduction;
@@ -126,6 +128,8 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
         </div>
       )}
 
+      <WarningsBanner warnings={p.warnings} />
+
       {run === "idle" ? (
         <div className="sr-action-gate">
           <Clapperboard size={40} />
@@ -202,6 +206,7 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
               </div>
             )}
             <ScoreboardPanel scoreboard={scoreboard} live={run === "running"} />
+            <DirectorLog log={p.director_log} live={run === "running"} />
           </div>
         </div>
       )}
