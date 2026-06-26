@@ -62,6 +62,7 @@ class GenAsset:
     mime: str
     duration_s: float = 0.0
     tokens: int = 0
+    url: str = ""  # provider URL when available (lets a generated still feed i2v directly)
 
 
 # --------------------------------------------------------------------------- #
@@ -86,6 +87,12 @@ class TextLLM(ABC):
 class VideoGen(ABC):
     @abstractmethod
     def generate(self, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset: ...
+
+    @abstractmethod
+    def generate_from_image(
+        self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0
+    ) -> GenAsset:
+        """Image-to-video: animate a reference still (character/location consistency)."""
 
 
 class ImageGen(ABC):
@@ -181,6 +188,12 @@ class StubTextLLM(TextLLM):
 class StubVideoGen(VideoGen):
     def generate(self, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset:
         s = seed or _seed_from("broll", prompt)
+        return GenAsset(data=_color_clip_png(1080, 1920, s), mime="image/png", duration_s=duration_s, tokens=int(duration_s * 1800))
+
+    def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset:
+        # Deterministic: tint derives from the reference url so the "same character" looks
+        # stable across shots in stub mode (consistency demo without a key).
+        s = seed or _seed_from("i2v", image_url)
         return GenAsset(data=_color_clip_png(1080, 1920, s), mime="image/png", duration_s=duration_s, tokens=int(duration_s * 1800))
 
 

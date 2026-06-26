@@ -47,6 +47,22 @@ def _retry(fn: Callable[[], T], *, attempts: int = 3, base_delay: float = 1.0) -
     raise last
 
 
+# wan2.2-t2i-flash accepts a fixed set of sizes; 1080*1920 is NOT one of them (returns
+# empty). Snap requested dims to the nearest supported size by aspect ratio.
+_IMAGE_SIZES = {"portrait": "720*1280", "landscape": "1280*720", "square": "1024*1024"}
+
+
+def _snap_image_size(width: int, height: int) -> str:
+    if not width or not height:
+        return _IMAGE_SIZES["portrait"]
+    ar = width / height
+    if ar < 0.85:
+        return _IMAGE_SIZES["portrait"]
+    if ar > 1.18:
+        return _IMAGE_SIZES["landscape"]
+    return _IMAGE_SIZES["square"]
+
+
 def _extract_json(text: str) -> dict:
     """Pull the first JSON object out of an LLM response, tolerating code fences."""
     t = text.strip()
@@ -200,6 +216,27 @@ class QwenVideoGen(VideoGen):
 
         return _retry(call, attempts=2, base_delay=3.0)
 
+    def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset:
+        import dashscope
+        import httpx
+
+        def call() -> GenAsset:
+            rsp = dashscope.VideoSynthesis.call(
+                api_key=self.s.dashscope_api_key, model=self.s.wan_i2v_model, prompt=prompt,
+                img_url=image_url,
+            )
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"wan-i2v {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
+            out = rsp.output
+            status = getattr(out, "task_status", "")
+            url = getattr(out, "video_url", "") or ""
+            if status != "SUCCEEDED" or not url:
+                raise RuntimeError(f"wan-i2v task {status}: {getattr(out, 'message', '') or 'no video_url'}")
+            data = httpx.get(url, timeout=180).content
+            return GenAsset(data=data, mime="video/mp4", duration_s=duration_s, tokens=int(duration_s * 1800))
+
+        return _retry(call, attempts=2, base_delay=3.0)
+
 
 class QwenImageGen(ImageGen):
     def __init__(self, s: Settings):
@@ -209,16 +246,21 @@ class QwenImageGen(ImageGen):
         import dashscope
         import httpx
 
+        size = _snap_image_size(width, height)
+
         def call() -> GenAsset:
             rsp = dashscope.ImageSynthesis.call(
                 api_key=self.s.dashscope_api_key, model=self.s.qwen_image_model, prompt=prompt,
-                n=1, size=f"{width}*{height}",
+                n=1, size=size,
             )
             if getattr(rsp, "status_code", 200) != 200:
                 raise RuntimeError(f"image {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
-            url = rsp.output.results[0].url
+            results = getattr(rsp.output, "results", None) or []
+            if not results:
+                raise RuntimeError(f"image returned no results (size={size}, task={getattr(rsp.output,'task_status','?')})")
+            url = results[0].url
             data = httpx.get(url, timeout=60).content
-            return GenAsset(data=data, mime="image/png", tokens=250)
+            return GenAsset(data=data, mime="image/png", tokens=250, url=url)
 
         return _retry(call, attempts=2, base_delay=2.0)
 

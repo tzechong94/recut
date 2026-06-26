@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # Valid wan2.2-t2v-plus sizes: 1080*1920, 1920*1080, 1440*1440, 1632*1248,
     # 1248*1632, 480*832, 832*480, 624*624. Use 1080*1920 for 9:16 (480*832 = cheaper/faster).
     wan_size: str = "1080*1920"
+    wan_i2v_model: str = "wan2.2-i2v-plus"  # image-to-video (character consistency)
     qwen_image_model: str = "wanx2.1-t2i-turbo"
     cosyvoice_model: str = "cosyvoice-v2"
     cosyvoice_voice: str = "longxiaochun_v2"  # must match the cosyvoice model version
