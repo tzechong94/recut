@@ -67,7 +67,21 @@ Surface director_log, written dialogue in Script, warnings banner.
 ### real dialogue, audio-fit, honest scoreboard, continuity, film polish, eval proof,
 ### visible agent reasoning. Remaining/deferred:
 
+## Sprint 6 result: frontend surfacing (dialogue, director's log, warnings). 52 web tests.
+## Sprint 7 result: scene-boundary dip-to-black fades. 125 backend tests.
+## Sprint 8 — crit round 4 (done). 126 backend tests.
+- Crit 4: substance CONVERGED; gaps were watchability + the "edit" stage.
+- Editor pass (logged cut decisions), dialogue coverage reframe (OTS/profile so no
+  lip-sync needed reads as craft), music = real assets only (no synthetic hum).
+
+### NEXT: docs are STALE (README/ARCHITECTURE.md/CLAUDE.md still describe the old reel
+### product) — update for the Showrunner before submission. Then crit round 5.
+
 ### Still open (next sprints / deferred)
+- Update README / ARCHITECTURE.md / CLAUDE.md for the Showrunner pivot (currently reel).
+- Write DEMO.md (the 3-min demo script).
+- Lip-sync / talking avatars (needs a model; deferred — coverage reframe is the offline answer).
+- Real DashScope billing units (needs live).
 - Live validation of Sprint 1/2 on real Qwen (seed re-roll, i2v continuity) — costs $.
 - Multi-reference compositing for true two-character single frames (currently solved via
   shot/reverse-shot, which is cinematically correct). 
