@@ -35,15 +35,17 @@ _BED_TONE = {"noir": (98.0, 320), "anime": (220.0, 900), "claymation": (146.83, 
              "storybook": (196.0, 700), "pixar": (174.61, 800), "cinematic": (130.81, 450)}
 
 
-def find_or_make_bed(style_name: str, out_path: str, settings: Settings) -> str | None:
-    """Return a music-bed audio path: a real asset at assets/music/{style}.* if present,
-    else a soft generated ambient pad. The render loops + ducks it under the voiceover."""
+def find_or_make_bed(style_name: str, out_path: str, settings: Settings, *, generate_fallback: bool = False) -> str | None:
+    """Return a music-bed audio path: a real royalty-free asset at assets/music/{style}.*
+    if present (preferred). Only synthesize an ambient pad when generate_fallback=True —
+    by default we ship SILENCE rather than a synthetic test-tone hum (silence under VO
+    beats a hum). Drop loops in assets/music/ to enable a real bed. Render ducks it under VO."""
     repo_root = Path(__file__).resolve().parents[4]
-    for ext in ("mp3", "wav", "m4a"):
+    for ext in ("mp3", "wav", "m4a", "ogg"):
         cand = repo_root / "assets" / "music" / f"{style_name}.{ext}"
         if cand.exists():
             return str(cand)
-    if not shutil_which(settings.ffmpeg_bin):
+    if not generate_fallback or not shutil_which(settings.ffmpeg_bin):
         return None
     freq, cutoff = _BED_TONE.get(style_name, _BED_TONE["cinematic"])
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)

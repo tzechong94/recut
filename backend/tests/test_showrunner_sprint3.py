@@ -66,8 +66,10 @@ def test_bed_generation():
     from recut.core.config import get_settings
     from recut.showrunner.pipeline.assemble import find_or_make_bed
 
-    bed = find_or_make_bed("noir", get_settings().work_dir + "/bedtest.wav", get_settings())
-    assert bed and shutil.which  # produced a pad
+    # real-only by default (no hum shipped); explicit opt-in still generates a pad
+    assert find_or_make_bed("noir", get_settings().work_dir + "/b0.wav", get_settings()) is None
+    bed = find_or_make_bed("noir", get_settings().work_dir + "/b1.wav", get_settings(), generate_fallback=True)
+    assert bed  # opt-in pad produced
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

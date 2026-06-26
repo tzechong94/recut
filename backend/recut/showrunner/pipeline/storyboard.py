@@ -29,9 +29,12 @@ _SYS = (
     "\"dialogue\":[{\"character\":str,\"line\":str}],\"narration\":str}]}. "
     "Keep total scene length tight. Action lines must be vivid and filmable. "
     "IMPORTANT for visual consistency: for dialogue, use SHOT/REVERSE-SHOT — each speaking "
-    "shot features exactly ONE character in frame (single-character close-ups that alternate), "
-    "never two named characters in the same shot. Open scenes with an establishing shot of the "
-    "location (no characters)."
+    "shot features exactly ONE character in frame, never two named characters together. Open "
+    "scenes with an establishing shot of the location (no characters). "
+    "COVERAGE for dialogue (the line plays as off-screen/over dialogue, so the speaker need "
+    "NOT be lip-syncing to camera): prefer over-the-shoulder, profile, a reaction shot of the "
+    "LISTENER, or a meaningful cutaway/insert while the line is heard — avoid frontal "
+    "talking-head close-ups. Action lines should describe such coverage explicitly."
 )
 
 
