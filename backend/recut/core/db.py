@@ -84,6 +84,17 @@ class TimelineRow(Base):
     created_at: Mapped[float] = mapped_column(Float, default=_now)
 
 
+class ProductionRow(Base):
+    __tablename__ = "productions"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: _uid("prod"))
+    project_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str] = mapped_column(String, default="Untitled")
+    stage: Mapped[str] = mapped_column(String, default="premise")
+    doc: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[float] = mapped_column(Float, default=_now)
+    updated_at: Mapped[float] = mapped_column(Float, default=_now, onupdate=_now)
+
+
 class Job(Base):
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: _uid("job"))

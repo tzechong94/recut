@@ -140,6 +140,39 @@ class QwenVision(VisionAnalyzer):
 
         return _retry(call)
 
+    def score_consistency(self, reference: str, candidate: str) -> float:
+        """Qwen-VL compares the locked reference still to a generated shot's keyframe and
+        scores character/location consistency 0..1. Drives the auto re-roll."""
+        import os
+
+        import dashscope
+
+        def uri(p: str) -> str:
+            return p if "://" in p else "file://" + os.path.abspath(p)
+
+        prompt = (
+            "Image 1 is a locked character/location reference. Image 2 is a frame from a "
+            "generated shot meant to depict the SAME subject. Return STRICT JSON "
+            '{"score": float 0..1, "reason": str} where score is how consistent the subject '
+            "identity, wardrobe, and art style are (1=identical subject, 0=totally different)."
+        )
+
+        def call() -> float:
+            resp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_vl_model,
+                messages=[{"role": "user", "content": [{"image": uri(reference)}, {"image": uri(candidate)}, {"text": prompt}]}],
+            )
+            if getattr(resp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-vl consistency {getattr(resp,'code','?')}: {getattr(resp,'message',resp)}")
+            raw = resp["output"]["choices"][0]["message"]["content"]
+            text = raw if isinstance(raw, str) else " ".join(p.get("text", "") for p in raw if isinstance(p, dict))
+            return float(_extract_json(text).get("score", 0.0))
+
+        try:
+            return _retry(call, attempts=2)
+        except Exception:  # noqa: BLE001 — critic is advisory; on failure don't block the shot
+            return 1.0
+
 
 class QwenTranscriber(Transcriber):
     def __init__(self, s: Settings):
