@@ -35,7 +35,7 @@ def test_compile_adds_title_and_end_cards():
     tl = compile_to_timeline(p)
     assert len(tl.slots) == 4  # title + 2 shots + end
     assert tl.slots[0].type == SlotType.text and "Last Call" in tl.slots[0].text
-    assert tl.slots[-1].type == SlotType.text and "Trust" in tl.slots[-1].text
+    assert tl.slots[-1].type == SlotType.text and "Last Call" in tl.slots[-1].text  # end card reprises title
     # opt-out
     assert len(compile_to_timeline(p, with_cards=False).slots) == 2
 
@@ -58,7 +58,7 @@ def test_token_efficiency_facts():
     p = develop_treatment(get_models().text, "x")
     eff = token_efficiency(p)
     assert eff["video_tokens_pre_approval"] == 0
-    assert "baseline_estimate" in eff and eff["total_tokens"] >= 0
+    assert "baseline_estimate" in eff and eff["total_token_estimate"] >= 0
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

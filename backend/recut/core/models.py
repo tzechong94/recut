@@ -197,6 +197,14 @@ class StubTextLLM(TextLLM):
             payload = _stub_treatment(user)
         elif "showrunner:critic" in marker:
             payload = _stub_writers_critic(user)
+        elif "showrunner:dialogue-critic" in marker:
+            payload = {"scores": {"dialogue_quality": 0.82, "subtext": 0.78, "distinct_voices": 0.8}, "overall": 0.8, "notes": "Lines carry subtext; voices distinct."}
+        elif "showrunner:dialogue" in marker:
+            payload = {"lines": [
+                {"character": "", "line": "You were the one I never checked."},
+                {"character": "", "line": "Because you didn't want to find me."},
+                {"character": "", "line": "I do now."},
+            ]}
         elif "showrunner:rubric" in marker:
             payload = _stub_rubric()
         elif "showrunner:storyboard" in marker:

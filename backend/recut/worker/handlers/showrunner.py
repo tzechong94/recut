@@ -191,6 +191,15 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         shot.reroll_count = rerolls
         prod.token_ledger.video_tokens += tokens
         prod.token_ledger.rerolls += rerolls
+        # visible agent reasoning — why this shot was made the way it was
+        decision = {"generate_shot_i2v": "image-to-video from locked reference",
+                    "generate_shot_i2v_continuity": "image-to-video chained from previous frame",
+                    "generate_shot_t2v": "text-to-video (establishing / no character)"}.get(tool, tool)
+        if score is not None:
+            reason = f"consistency {score:.2f}" + (f"; re-rolled ×{rerolls} to fix drift" if rerolls else "; passed first try")
+        else:
+            reason = "no identity reference to verify"
+        prod.director_log.append({"shot": f"Shot {shot.index + 1}", "decision": decision, "reason": reason})
         repo.save_production(prod)
         queue.update_progress(job.id, done / total * 0.8)
 

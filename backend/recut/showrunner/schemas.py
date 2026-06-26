@@ -182,6 +182,7 @@ class Scene(BaseModel):
     index: int = 0
     heading: str = ""  # e.g. "INT. DETECTIVE'S OFFICE - NIGHT"
     summary: str = ""  # one-line beat: what happens, why it matters
+    script: list[DialogueLine] = Field(default_factory=list)  # the WRITTEN, critiqued dialogue
     shots: list[Shot] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -232,6 +233,8 @@ class Production(BaseModel):
     scenes: list[Scene] = Field(default_factory=list)
     token_ledger: TokenLedger = Field(default_factory=TokenLedger)
     writers_room: list[dict] = Field(default_factory=list)  # transcript [{role, text}]
+    director_log: list[dict] = Field(default_factory=list)  # [{shot, decision, reason}] — visible agent reasoning
+    warnings: list[str] = Field(default_factory=list)  # surfaced non-fatal issues (dropped scene, etc.)
     export_asset_id: str | None = None  # the finished film (set on produce; for revisits)
     version: int = 1
     created_at: float = Field(default_factory=_now)

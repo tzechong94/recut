@@ -77,7 +77,7 @@ def compile_to_timeline(prod: Production, *, with_cards: bool = True) -> Timelin
     slots = [shot_to_slot(sh, style_name=prod.style.name) for sh in prod.shots]
     if with_cards and slots:
         title = prod.title or "Untitled"
-        end_text = prod.theme or "An AI Showrunner film"
+        end_text = (prod.title or "An AI Showrunner film")  # reprise the title, not the theme label
         slots = (
             [_card_slot(f"title_{prod.id}", title, size=Size.l)]
             + slots

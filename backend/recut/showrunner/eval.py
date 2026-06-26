@@ -37,7 +37,15 @@ def narrative_rubric(llm: TextLLM, prod: Production) -> NarrativeScore:
         "title": prod.title, "logline": prod.logline, "dramatic_question": prod.dramatic_question,
         "theme": prod.theme,
         "characters": [{"name": c.name, "want": c.want, "flaw": c.flaw} for c in prod.characters],
-        "scenes": [{"heading": s.heading, "summary": s.summary} for s in prod.scenes],
+        "scenes": [
+            {
+                "heading": s.heading, "summary": s.summary,
+                # judge the ACTUAL spoken lines, not just the synopsis
+                "dialogue": [f"{d.character_name}: {d.line}" for d in s.script] or
+                            [f"{d.character_name}: {d.line}" for sh in s.shots for d in sh.dialogue],
+            }
+            for s in prod.scenes
+        ],
     }
     text, _ = llm.complete(_RUBRIC_SYS, json.dumps(treatment), json_mode=True)
     data = _parse(text)
@@ -63,15 +71,28 @@ def consistency_eval(models: ModelClients, reference: str, same_candidate: str, 
 
 
 def token_efficiency(prod: Production) -> dict:
+    """Honest, COUNTABLE units first (what we actually generated); the model-token totals
+    and any baseline are clearly secondary/estimated."""
     led = prod.token_ledger
     n = len(prod.shots) or 1
+    gen_shots = [s for s in prod.shots if s.asset_id]
+    refs = sum(1 for c in prod.characters if c.reference_asset_id) + sum(1 for loc in prod.locations if loc.reference_asset_id)
+    tts_chars = sum(len(s.caption) for s in prod.shots)
     baseline = led.naive_baseline(n, prod.duration_s / n if n else 4.0)
     return {
-        "total_tokens": led.total,
-        "video_tokens": led.video_tokens,
-        "video_tokens_pre_approval": 0,
+        # real countable units
+        "video_seconds_generated": round(sum(s.duration_s for s in gen_shots), 1),
+        "shots_generated": len(gen_shots),
+        "reference_images": refs,
+        "tts_chars": tts_chars,
         "rerolls": led.rerolls,
-        "shots": n,
+        "shots_total": n,
+        # the defensible discipline facts
+        "video_tokens_pre_approval": 0,
+        # model-token estimates (clearly secondary)
+        "text_tokens": led.text_tokens,
+        "video_token_estimate": led.video_tokens,
+        "total_token_estimate": led.total,
         "baseline_estimate": baseline,
         "estimated_saved": max(0, baseline - led.total),
     }

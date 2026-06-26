@@ -66,9 +66,20 @@ def develop_treatment(
     transcript: list[dict] = []
     tokens = 0
 
-    draft_text, t = llm.complete(_writer_sys(register), f"PREMISE: {premise}\nTARGET LENGTH: {target_seconds}s\nWrite the treatment.", json_mode=True)
+    user = f"PREMISE: {premise}\nTARGET LENGTH: {target_seconds}s\nWrite the treatment."
+    draft_text, t = llm.complete(_writer_sys(register), user, json_mode=True)
     tokens += t
     draft = _parse(draft_text)
+    # Guard a degenerate treatment (malformed/empty) — retry once with an explicit nudge.
+    if not draft.get("scenes") or not draft.get("characters"):
+        draft_text, t = llm.complete(
+            _writer_sys(register),
+            user + "\nThe premise may be terse — invent specifics. You MUST return at least "
+            "2 characters and 3 scenes.",
+            json_mode=True,
+        )
+        tokens += t
+        draft = _parse(draft_text) or draft
     transcript.append({"role": "writer", "text": _summ(draft)})
 
     for rnd in range(1, MAX_ROUNDS + 1):
