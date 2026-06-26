@@ -41,7 +41,7 @@ def test_production_indexes_and_durations():
 
 def test_shot_caption_prefers_dialogue_then_narration():
     p = _prod()
-    assert p.shots[0].caption == "It was you."
+    assert p.shots[0].caption == "Mara: It was you."  # speaker-attributed
     assert p.shots[1].caption == "The truth was here all along."
 
 
@@ -64,11 +64,11 @@ def test_compile_to_timeline_maps_shots_to_slots():
     p.scenes[0].shots[0].source = AssetSource.generated
     p.scenes[0].shots[0].asset_id = "a_gen"
     p.scenes[0].shots[0].status = ShotStatus.ready
-    tl = compile_to_timeline(p)
+    tl = compile_to_timeline(p, with_cards=False)  # cards tested separately
     assert len(tl.slots) == 2
     assert tl.slots[0].id == p.shots[0].id  # shot id preserved for render cache
     assert tl.slots[0].source == SlotSource.generated and tl.slots[0].asset_id == "a_gen"
-    assert tl.slots[0].text == "It was you."  # caption burned
+    assert tl.slots[0].text == "Mara: It was you."  # speaker-attributed caption burned
     assert tl.slots[1].source == SlotSource.standin
     assert all(s.type == SlotType.broll for s in tl.slots)
     assert tl.duration_s == 7.0

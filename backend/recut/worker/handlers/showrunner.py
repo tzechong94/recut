@@ -212,7 +212,13 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     assets = {a_id: AssetMeta(storage_key=r["storage_key"], mime=r["mime"], duration_s=r["duration_s"], width=r["width"], height=r["height"])
               for a_id, r in repo.assets_by_ids([s.asset_id for s in shots if s.asset_id]).items()}
 
-    vo_path = concat_voiceover(vo_segments, str(src_dir / "voiceover.wav"), ctx.settings) if any(p for p, _ in vo_segments) else None
+    from recut.showrunner.pipeline.assemble import find_or_make_bed
+
+    # voiceover (per-shot, aligned)
+    try:
+        vo_path = concat_voiceover(vo_segments, str(src_dir / "voiceover.wav"), ctx.settings) if any(p for p, _ in vo_segments) else None
+    except Exception:  # noqa: BLE001 — audio is enhancement; never block the film on it
+        vo_path = None
     if vo_path:
         vo_key = f"productions/{prod.id}/voiceover.wav"
         ctx.storage.put_file(vo_key, vo_path, content_type="audio/wav")
@@ -221,11 +227,34 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         timeline.audio.voiceover.enabled = True
         assets[vo_asset["id"]] = AssetMeta(storage_key=vo_key, mime="audio/wav", duration_s=timeline.duration_s)
 
-    out_path = render_timeline(timeline, assets=assets, storage=ctx.storage, settings=ctx.settings, on_progress=lambda p: queue.update_progress(job.id, 0.8 + p * 0.2))
+    # music bed (style-matched, ducked under VO by the render)
+    bed = find_or_make_bed(prod.style.name, str(src_dir / "bed.wav"), ctx.settings)
+    if bed:
+        bed_key = f"productions/{prod.id}/bed.wav"
+        ctx.storage.put_file(bed_key, bed, content_type="audio/wav")
+        bed_asset = repo.create_asset(kind="audio", storage_key=bed_key, project_id=prod.project_id, mime="audio/wav")
+        timeline.audio.bed.asset_id = bed_asset["id"]
+        timeline.audio.bed.enabled = True
+        timeline.audio.bed.gain_db = -16.0
+        assets[bed_asset["id"]] = AssetMeta(storage_key=bed_key, mime="audio/wav")
+
+    # Render. If it fails, the production still has every READY shot playable via the
+    # timeline preview — degrade gracefully, report the partial state, never lose work.
+    ready_shots = sum(1 for s in shots if s.asset_id)
+    try:
+        out_path = render_timeline(timeline, assets=assets, storage=ctx.storage, settings=ctx.settings, on_progress=lambda p: queue.update_progress(job.id, 0.8 + p * 0.2))
+    except Exception as exc:  # noqa: BLE001
+        prod.stage = Stage.production
+        repo.save_production(prod)
+        return {"partial": True, "stage": "render_failed", "error": f"{type(exc).__name__}: {exc}",
+                "shots_ready": ready_shots, "shots_total": len(shots),
+                "note": "shots generated; final render failed — preview plays the ready shots"}
+
     export_key = f"productions/{prod.id}/film_v{prod.version}.mp4"
     ctx.storage.put_file(export_key, out_path, content_type="video/mp4")
     export_asset = repo.create_asset(kind="export", storage_key=export_key, project_id=prod.project_id, mime="video/mp4", duration_s=timeline.duration_s, width=1080, height=1920)
     prod.stage = Stage.export
     prod.export_asset_id = export_asset["id"]
     repo.save_production(prod)
-    return {"export_asset_id": export_asset["id"], "url": ctx.storage.url(export_key), "duration_s": timeline.duration_s, "tokens": prod.token_ledger.total}
+    return {"export_asset_id": export_asset["id"], "url": ctx.storage.url(export_key), "duration_s": timeline.duration_s,
+            "tokens": prod.token_ledger.total, "shots_ready": ready_shots, "shots_total": len(shots)}
