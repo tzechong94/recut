@@ -47,33 +47,40 @@ class ShotRender:
     reference_url: str | None  # the still used for i2v + the critic comparison
 
 
-def reference_for_shot(prod: Production, shot: Shot) -> str | None:
-    """The locked reference URL to seed i2v + check consistency against: a character in
-    frame first, else the location."""
+def reference_for_shot(prod: Production, shot: Shot) -> tuple[str | None, bool]:
+    """The locked reference URL to seed i2v + check consistency against, and whether it's
+    an IDENTITY reference (character/location → critic should verify) vs continuity.
+    A character in frame wins (identity), else the location plate."""
     for cid in shot.character_ids:
         c = prod.character(cid)
         if c and c.reference_url:
-            return c.reference_url
+            return c.reference_url, True
     if shot.location_id:
         loc = prod.location(shot.location_id)
         if loc and loc.reference_url:
-            return loc.reference_url
-    return None
+            return loc.reference_url, True
+    return None, False
 
 
 def generate_shot(
-    models: ModelClients, prod: Production, shot: Shot, *, seed: int = 0, corrective: str = ""
+    models: ModelClients, prod: Production, shot: Shot, *, seed: int = 0, corrective: str = "",
+    prev_frame_url: str | None = None,
 ) -> ShotRender:
-    """Generate one shot. `seed` varies per attempt so a re-roll is a real redraw, not a
-    coin-flip repeat; `corrective` is the critic's specific drift note fed back in to
-    actually fix the problem (e.g. 'jacket must be navy, not red')."""
+    """Generate one shot. `seed` varies per attempt so a re-roll is a real redraw;
+    `corrective` is the critic's specific drift note fed back in to fix the problem.
+    `prev_frame_url` chains continuity: an establishing/insert shot with no character is
+    animated from the previous shot's last frame so lighting/world carry across the cut."""
     prompt = build_shot_prompt(prod, shot)
     if corrective:
         prompt += f". IMPORTANT continuity correction: {corrective}"
-    ref_url = reference_for_shot(prod, shot)
+    ref_url, is_identity = reference_for_shot(prod, shot)
     if ref_url:
         asset = models.video.generate_from_image(ref_url, prompt, duration_s=shot.duration_s, seed=seed)
-        return ShotRender(asset=asset, tool="generate_shot_i2v", reference_url=ref_url)
+        # only an identity reference (a character/location) should be critic-verified
+        return ShotRender(asset=asset, tool="generate_shot_i2v", reference_url=ref_url if is_identity else None)
+    if prev_frame_url:
+        asset = models.video.generate_from_image(prev_frame_url, prompt, duration_s=shot.duration_s, seed=seed)
+        return ShotRender(asset=asset, tool="generate_shot_i2v_continuity", reference_url=None)
     asset = models.video.generate(prompt, duration_s=shot.duration_s, seed=seed)
     return ShotRender(asset=asset, tool="generate_shot_t2v", reference_url=None)
 
