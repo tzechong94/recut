@@ -21,3 +21,9 @@ dist/
 assets/uploads/
 *.log
 .DS_Store
+
+# generated eval reports
+eval/report.json
+eval/report.md
+eval/showrunner_report.json
+eval/showrunner_report.md
