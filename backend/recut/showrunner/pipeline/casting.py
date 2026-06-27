@@ -11,24 +11,29 @@ from recut.core.models import GenAsset, ModelClients
 from recut.showrunner.schemas import Character, Location, StyleLock
 
 
-def character_reference_prompt(char: Character, style: StyleLock) -> str:
+def character_reference_prompt(char: Character, style: StyleLock, instruction: str = "") -> str:
+    # LEAD with the medium so the style actually lands (claymation reads as clay, not a
+    # realistic render). Avoid "portrait / design sheet / sharp, well-lit" — those pull the
+    # model toward photoreal. `instruction` is the user's regenerate note ("older, red scarf").
+    extra = f" {instruction.strip()}." if instruction.strip() else ""
     return (
-        f"Character reference portrait of {char.name}: {char.description}. "
-        f"{style.prompt_suffix()}. Full figure, neutral plain background, consistent "
-        f"character design sheet, sharp, well-lit."
+        f"{style.prompt_suffix()}. A full-body character reference of {char.name}: "
+        f"{char.description}.{extra} Standing against a plain neutral backdrop, even soft "
+        f"lighting, consistent character design."
     )
 
 
-def location_reference_prompt(loc: Location, style: StyleLock) -> str:
+def location_reference_prompt(loc: Location, style: StyleLock, instruction: str = "") -> str:
+    extra = f" {instruction.strip()}." if instruction.strip() else ""
     return (
-        f"Establishing location plate: {loc.description}. {style.prompt_suffix()}. "
+        f"{style.prompt_suffix()}. Establishing location plate: {loc.description}.{extra} "
         f"No people, wide empty set, consistent art direction."
     )
 
 
-def generate_character_reference(models: ModelClients, char: Character, style: StyleLock) -> GenAsset:
-    return models.image.generate(character_reference_prompt(char, style), width=720, height=1280)
+def generate_character_reference(models: ModelClients, char: Character, style: StyleLock, instruction: str = "") -> GenAsset:
+    return models.image.generate(character_reference_prompt(char, style, instruction), width=720, height=1280)
 
 
-def generate_location_reference(models: ModelClients, loc: Location, style: StyleLock) -> GenAsset:
-    return models.image.generate(location_reference_prompt(loc, style), width=1280, height=720)
+def generate_location_reference(models: ModelClients, loc: Location, style: StyleLock, instruction: str = "") -> GenAsset:
+    return models.image.generate(location_reference_prompt(loc, style, instruction), width=1280, height=720)

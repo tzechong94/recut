@@ -36,11 +36,15 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
   const setBusyFor = (id: string, v: boolean) =>
     setBusy((b) => ({ ...b, [id]: v }));
 
-  async function generate(target: "character" | "location", id: string) {
+  async function generate(
+    target: "character" | "location",
+    id: string,
+    instruction = "",
+  ) {
     setBusyFor(id, true);
     setErrors((e) => ({ ...e, [id]: "" }));
     try {
-      const { job_id } = await api.cast(p.id, target, id);
+      const { job_id } = await api.cast(p.id, target, id, instruction);
       await pollJob(job_id);
       await ctl.refetch();
     } catch (e) {
@@ -159,7 +163,7 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
             source={c.source}
             busy={!!busy[c.id]}
             error={errors[c.id]}
-            onGenerate={() => generate("character", c.id)}
+            onGenerate={(instruction) => generate("character", c.id, instruction)}
             onUpload={(f) => uploadFor("character", c.id, f)}
             onRename={(v) =>
               ctl.update({
@@ -183,7 +187,7 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
             source={l.source}
             busy={!!busy[l.id]}
             error={errors[l.id]}
-            onGenerate={() => generate("location", l.id)}
+            onGenerate={(instruction) => generate("location", l.id, instruction)}
             onUpload={(f) => uploadFor("location", l.id, f)}
             onRename={(v) =>
               ctl.update({
@@ -234,7 +238,7 @@ interface RefCardProps {
   source: string;
   busy: boolean;
   error?: string;
-  onGenerate: () => void;
+  onGenerate: (instruction: string) => void;
   onUpload: (file: File) => void;
   onRename: (name: string) => void;
 }
@@ -252,6 +256,7 @@ function RefCard({
   onRename,
 }: RefCardProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const [note, setNote] = useState("");
   const has = !!assetId;
 
   return (
@@ -288,8 +293,28 @@ function RefCard({
 
       {error && <div className="rc-err">{error}</div>}
 
+      <input
+        className="sr-edit sr-cast-note"
+        value={note}
+        disabled={busy}
+        placeholder={
+          kind === "character"
+            ? "Note to steer it — e.g. older, red scarf, kinder eyes"
+            : "Note to steer it — e.g. at night, more cluttered"
+        }
+        onChange={(e) => setNote(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !busy) onGenerate(note.trim());
+        }}
+        aria-label={`${kind} generation note`}
+      />
+
       <div className="sr-bible-actions">
-        <button className="sr-mini" disabled={busy} onClick={onGenerate}>
+        <button
+          className="sr-mini"
+          disabled={busy}
+          onClick={() => onGenerate(note.trim())}
+        >
           {busy ? (
             <Loader2 size={13} className="rc-spin" />
           ) : has ? (

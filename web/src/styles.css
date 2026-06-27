@@ -465,6 +465,9 @@ html,body{background:#0b0a0f;}
 .sr-bible-kind{position:absolute;bottom:9px;right:9px;font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.5);padding:3px 7px;border-radius:6px;}
 .sr-bible-name{font-size:15px;}
 .sr-bible-desc{color:var(--soft);font-size:12px;line-height:1.45;padding:0 9px;margin:4px 0 10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.sr-cast-note{width:100%;box-sizing:border-box;margin:0 0 8px;padding:6px 9px;font-size:12px;border:1px solid var(--line);border-radius:7px;background:rgba(255,255,255,.03);color:var(--ink);}
+.sr-cast-note::placeholder{color:var(--soft);opacity:.7;}
+.sr-cast-note:focus{outline:none;border-color:var(--accent);}
 .sr-bible-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .sr-bible-ok{color:#0FB5A6;display:grid;place-items:center;margin-left:auto;}
 .sr-mini{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#fff;background:var(--violet);border-radius:9px;padding:8px 11px;transition:opacity .12s,transform .12s;}

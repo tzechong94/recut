@@ -72,15 +72,16 @@ describe("showrunner api client", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
   });
 
-  it("POST /cast sends target + target_id", async () => {
+  it("POST /cast sends target + target_id + instruction", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j1" }));
-    const res = await api.cast("prod_1", "character", "char_1");
+    const res = await api.cast("prod_1", "character", "char_1", "older, red scarf");
     expect(res).toEqual({ job_id: "j1" });
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_BASE}/api/productions/prod_1/cast`);
     expect(JSON.parse(opts.body)).toEqual({
       target: "character",
       target_id: "char_1",
+      instruction: "older, red scarf",
     });
   });
 

@@ -110,11 +110,20 @@ export const api = {
   storyboard: (id: string) =>
     request<Production>(`/productions/${id}/storyboard`, { method: "POST" }),
 
-  /** Generate a character/location reference image. Async — poll the job. */
-  cast: (id: string, target: "character" | "location", targetId: string) =>
+  /**
+   * Generate a character/location reference image. Async — poll the job.
+   * `instruction` is an optional regenerate note ("make him older, add a red scarf")
+   * that's woven into the reference prompt so the user steers the look.
+   */
+  cast: (
+    id: string,
+    target: "character" | "location",
+    targetId: string,
+    instruction = "",
+  ) =>
     request<{ job_id: string }>(`/productions/${id}/cast`, {
       method: "POST",
-      body: { target, target_id: targetId },
+      body: { target, target_id: targetId, instruction },
     }),
 
   /**
