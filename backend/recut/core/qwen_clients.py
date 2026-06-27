@@ -335,6 +335,29 @@ class QwenImageGen(ImageGen):
 
         return _retry(call, attempts=2, base_delay=2.0)
 
+    def edit(self, image_url: str, instruction: str) -> GenAsset:
+        """qwen-image-edit: place the locked character into the shot's scene/location while
+        preserving identity + art style (the keyframe step before i2v). Returns a hosted
+        URL so the keyframe can feed image-to-video directly."""
+        import dashscope
+        import httpx
+
+        def call() -> GenAsset:
+            rsp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_image_edit_model,
+                messages=[{"role": "user", "content": [{"image": image_url}, {"text": instruction}]}],
+            )
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"image-edit {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
+            content = rsp.output.choices[0].message.content
+            url = next((p["image"] for p in content if isinstance(p, dict) and p.get("image")), None) if isinstance(content, list) else None
+            if not url:
+                raise RuntimeError("image-edit returned no image")
+            data = httpx.get(url, timeout=90).content
+            return GenAsset(data=data, mime="image/png", tokens=300, url=url)
+
+        return _retry(call, attempts=2, base_delay=2.0)
+
 
 class QwenVoiceGen(VoiceGen):
     def __init__(self, s: Settings):

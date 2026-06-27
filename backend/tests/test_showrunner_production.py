@@ -61,7 +61,7 @@ def test_cast_reference_locks_character():
     assert c.reference_asset_id and c.reference_url
 
 
-def test_generate_shot_uses_i2v_when_reference_present():
+def test_generate_shot_uses_keyframe_i2v_when_character_present():
     p = _seed_production()
     # give a character a reference, put them in shot 0
     c = p.characters[0]
@@ -69,7 +69,11 @@ def test_generate_shot_uses_i2v_when_reference_present():
     shot = p.shots[0]
     shot.character_ids = [c.id]
     r = generate_shot(get_models(), p, shot)
-    assert r.tool == "generate_shot_i2v" and r.reference_url == c.reference_url
+    # keyframe-first: compose the character INTO the scene, then animate it; the critic
+    # still compares against the LOCKED character reference (identity), and we keep the
+    # composed keyframe still.
+    assert r.tool == "generate_shot_keyframe_i2v" and r.reference_url == c.reference_url
+    assert r.keyframe is not None
     # no reference -> t2v
     shot.character_ids = []
     shot.location_id = None

@@ -38,17 +38,18 @@ def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
     if not prod:
         raise ValueError("production not found")
     target, tid = job.payload["target"], job.payload["target_id"]
+    instruction = job.payload.get("instruction", "") or ""  # user's regenerate note
 
     if target == "character":
         subject = prod.character(tid)
         if not subject:
             raise ValueError("character not found")
-        gen = generate_character_reference(ctx.models, subject, prod.style)
+        gen = generate_character_reference(ctx.models, subject, prod.style, instruction)
     else:
         subject = prod.location(tid)
         if not subject:
             raise ValueError("location not found")
-        gen = generate_location_reference(ctx.models, subject, prod.style)
+        gen = generate_location_reference(ctx.models, subject, prod.style, instruction)
 
     key = f"productions/{prod.id}/refs/{target}_{tid}_{content_hash(gen.data)}.png"
     _store_bytes(ctx, key, gen.data, "image/png")
@@ -73,7 +74,7 @@ def _keyframe(video_path: str, mime: str) -> str | None:
     return extract_keyframe(video_path, 0.3)
 
 
-_MIN_SHOT_S, _MAX_SHOT_S = 2.0, 12.0
+_MIN_SHOT_S, _MAX_SHOT_S = 2.5, 6.0  # legacy fallback; real clamps come from settings
 
 
 def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
@@ -90,13 +91,14 @@ def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
         if existing:
             vo_paths[shot.id] = str(existing)
             continue
+        lo, hi = ctx.settings.min_shot_s, ctx.settings.max_shot_s
         try:
             va = synth_shot_voice(ctx.models, prod, shot)
         except Exception as exc:  # noqa: BLE001 — voice is enhancement; a flaky TTS socket must never kill the film
             prod.warnings.append(f"voiceover failed for a shot ({type(exc).__name__}); rendered silent")
             va = None
         if not va:
-            shot.duration_s = max(_MIN_SHOT_S, min(_MAX_SHOT_S, shot.duration_s))
+            shot.duration_s = max(lo, min(hi, shot.duration_s))
             continue
         ext = "wav" if va.mime.endswith("wav") else "mp3"
         sp = Path(src_dir) / f"vo_{shot.id}_{chash}.{ext}"
@@ -104,7 +106,7 @@ def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
         vo_paths[shot.id] = str(sp)
         prod.token_ledger.voice_tokens += va.tokens
         dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
-        shot.duration_s = round(max(_MIN_SHOT_S, min(_MAX_SHOT_S, dur + 0.4)), 2)  # small tail pad
+        shot.duration_s = round(max(lo, min(hi, dur + 0.4)), 2)  # small tail pad
     return vo_paths
 
 
@@ -119,21 +121,24 @@ def _project_cap(prod, ctx) -> int:
 MAX_ATTEMPTS = 3  # 1 initial + up to 2 re-rolls (bounded so the critic can't blow the budget)
 
 
-def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None) -> tuple[bytes, str, str, int, float | None, int]:
+def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None) -> tuple[bytes, str, str, int, float | None, int, int]:
     """Generate a shot, scoring each attempt against its reference and re-rolling drift
     with a NEW seed + the critic's corrective note. Returns the BEST attempt
-    (bytes, mime, tool, tokens, best_score, rerolls)."""
+    (bytes, mime, tool, video_tokens, best_score, rerolls, keyframe_image_tokens)."""
     import hashlib
 
     best = None  # (score, bytes, mime, tool, tokens)
     corrective = ""
     rerolls = 0
+    kf_tokens = 0  # keyframe image-gen tokens spent across attempts (honest accounting)
     for attempt in range(MAX_ATTEMPTS):
         seed = int(hashlib.sha256(f"{shot.id}:{attempt}".encode()).hexdigest()[:7], 16)
         try:
             render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective, prev_frame_url=prev_frame_url)
         except Exception:  # noqa: BLE001 — continuity i2v can fail (unhosted frame); fall back to t2v
             render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective)
+        if render.keyframe:
+            kf_tokens += render.keyframe.tokens
         data, mime = render.asset.data, render.asset.mime
         score = None
         if render.reference_url:
@@ -152,7 +157,7 @@ def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None) -> tup
             break  # good enough (or critic unavailable -> don't burn budget re-rolling)
         rerolls += 1
     score_val = best[0] if best[0] >= 0 else None
-    return best[1], best[2], best[3], best[4], score_val, rerolls
+    return best[1], best[2], best[3], best[4], score_val, rerolls, kf_tokens
 
 
 @register("produce_film")
@@ -192,7 +197,8 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         shot.status = ShotStatus.generating
         repo.save_production(prod)
 
-        data, mime, tool, tokens, score, rerolls = _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url)
+        data, mime, tool, tokens, score, rerolls, kf_tokens = _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url)
+        prod.token_ledger.image_tokens += kf_tokens  # keyframe composition is real spend
         ext = "png" if mime.startswith("image") else "mp4"
         key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(data)}.{ext}"
         _store_bytes(ctx, key, data, mime)
@@ -207,7 +213,8 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         prod.token_ledger.video_tokens += tokens
         prod.token_ledger.rerolls += rerolls
         # visible agent reasoning — why this shot was made the way it was
-        decision = {"generate_shot_i2v": "image-to-video from locked reference",
+        decision = {"generate_shot_keyframe_i2v": "composed keyframe (character placed in the location + style) → image-to-video",
+                    "generate_shot_i2v": "image-to-video from locked reference",
                     "generate_shot_i2v_continuity": "image-to-video chained from previous frame",
                     "generate_shot_t2v": "text-to-video (establishing / no character)"}.get(tool, tool)
         if score is not None:

@@ -164,6 +164,7 @@ def storyboard(pid: str) -> dict:
 class CastRequest(BaseModel):
     target: str = "character"  # character | location
     target_id: str
+    instruction: str = ""  # optional regenerate note ("make him older, add a red scarf")
 
 
 @router.post("/productions/{pid}/cast", status_code=202)
@@ -171,7 +172,11 @@ def cast(pid: str, body: CastRequest) -> dict:
     prod = repo.get_production(pid)
     if not prod:
         raise HTTPException(404, "production not found")
-    job_id = queue.enqueue("cast_reference", {"production_id": pid, "target": body.target, "target_id": body.target_id}, project_id=prod.project_id)
+    job_id = queue.enqueue(
+        "cast_reference",
+        {"production_id": pid, "target": body.target, "target_id": body.target_id, "instruction": body.instruction.strip()},
+        project_id=prod.project_id,
+    )
     return {"job_id": job_id, "status": "queued"}
 
 

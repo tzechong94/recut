@@ -22,15 +22,15 @@ from recut.showrunner.schemas import (
 )
 
 _SYS = (
-    "showrunner:storyboard — You are a director. Break this scene into 2-4 shots as STRICT JSON: "
+    "showrunner:storyboard — You are a director. Break this scene into shots as STRICT JSON: "
     "{\"shots\":[{\"action\":str(what we SEE — the visual, for an image/video model),"
     "\"shot_type\":\"wide|medium|close_up|insert|two_shot\",\"camera\":\"static|pan|push_in|pull_out|handheld|aerial\","
     "\"duration_s\":number,\"character_names\":[str],\"location_name\":str,"
     "\"dialogue\":[{\"character\":str,\"line\":str}],\"narration\":str}]}. "
-    "Keep total scene length tight. Action lines must be vivid and filmable. "
+    "FEWER, LONGER shots beat many micro-cuts: each shot should hold ~3-4 seconds and earn "
+    "its place. Action lines must be vivid and filmable. "
     "IMPORTANT for visual consistency: for dialogue, use SHOT/REVERSE-SHOT — each speaking "
-    "shot features exactly ONE character in frame, never two named characters together. Open "
-    "scenes with an establishing shot of the location (no characters). "
+    "shot features exactly ONE character in frame, never two named characters together. "
     "COVERAGE for dialogue (the line plays as off-screen/over dialogue, so the speaker need "
     "NOT be lip-syncing to camera): prefer over-the-shoulder, profile, a reaction shot of the "
     "LISTENER, or a meaningful cutaway/insert while the line is heard — avoid frontal "
@@ -38,12 +38,22 @@ _SYS = (
 )
 
 
-def storyboard_scene(llm: TextLLM, prod: Production, scene: Scene) -> tuple[list[Shot], int]:
+def _shot_budget(prod: Production) -> int:
+    """Total shots for the whole film, from the target runtime — so a 20s film is ~6 shots
+    of ~3-4s, not 22 one-second jump-cuts."""
+    from recut.core.config import get_settings
+
+    spp = get_settings().seconds_per_shot or 3.5
+    return max(3, round(prod.target_seconds / spp))
+
+
+def storyboard_scene(llm: TextLLM, prod: Production, scene: Scene, n_shots: int) -> tuple[list[Shot], int]:
     cast = ", ".join(f"{c.name} ({c.description})" for c in prod.characters)
     locs = ", ".join(f"{l.name}" for l in prod.locations)
     user = (
         f"STYLE: {prod.style.name}\nCAST: {cast}\nLOCATIONS: {locs}\n"
-        f"SCENE: {scene.heading} — {scene.summary}\nBreak it into shots."
+        f"SCENE: {scene.heading} — {scene.summary}\n"
+        f"Break it into about {n_shots} shot(s) (no more than {n_shots + 1})."
     )
     text, tokens = llm.complete(_SYS, user, json_mode=True)
     data = _parse(text)
@@ -58,10 +68,14 @@ def build_storyboard(llm: TextLLM, prod: Production) -> Production:
 
     prod = write_dialogue(llm, prod)
 
+    budget = _shot_budget(prod)
+    n_scenes = len(prod.scenes) or 1
+    per_scene = max(1, round(budget / n_scenes))  # spread the budget across scenes
+
     total = 0
     for scene in prod.scenes:
         try:
-            shots, t = storyboard_scene(llm, prod, scene)
+            shots, t = storyboard_scene(llm, prod, scene, per_scene)
             total += t
             if shots:
                 scene.shots = shots
@@ -71,9 +85,36 @@ def build_storyboard(llm: TextLLM, prod: Production) -> Production:
             prod.warnings.append(f"storyboard failed for scene '{scene.heading}': {type(exc).__name__}")
             continue
         _place_dialogue(scene)
+    _enforce_budget(prod, budget)  # hard cap if the model over-produced
     prod.token_ledger.text_tokens += total
     prod.stage = Stage.storyboard
     return Production.model_validate(prod.model_dump())
+
+
+def _enforce_budget(prod: Production, budget: int) -> None:
+    """Trim to the shot budget if scenes over-produced. Drop the least essential shots
+    first — silent shots (no dialogue) before shots that carry a line — and never empty a
+    scene. Dialogue is re-placed afterwards so no line is lost."""
+    total = sum(len(s.shots) for s in prod.scenes)
+    if total <= budget:
+        return
+    # candidates to cut: (scene, shot) for silent shots, scenes with >1 shot, last-first
+    while total > budget:
+        cut = None
+        for scene in sorted(prod.scenes, key=lambda s: len(s.shots), reverse=True):
+            if len(scene.shots) <= 1:
+                continue
+            silent = [sh for sh in scene.shots if not sh.dialogue]
+            victim = silent[-1] if silent else scene.shots[-1]
+            cut = (scene, victim)
+            break
+        if not cut:
+            break  # every scene down to 1 shot; stop even if still over budget
+        scene, victim = cut
+        scene.shots.remove(victim)
+        total -= 1
+    for scene in prod.scenes:
+        _place_dialogue(scene)  # re-home any lines that were on a removed shot
 
 
 def _place_dialogue(scene) -> None:
