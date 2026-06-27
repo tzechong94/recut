@@ -90,7 +90,11 @@ def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
         if existing:
             vo_paths[shot.id] = str(existing)
             continue
-        va = synth_shot_voice(ctx.models, prod, shot)
+        try:
+            va = synth_shot_voice(ctx.models, prod, shot)
+        except Exception as exc:  # noqa: BLE001 — voice is enhancement; a flaky TTS socket must never kill the film
+            prod.warnings.append(f"voiceover failed for a shot ({type(exc).__name__}); rendered silent")
+            va = None
         if not va:
             shot.duration_s = max(_MIN_SHOT_S, min(_MAX_SHOT_S, shot.duration_s))
             continue

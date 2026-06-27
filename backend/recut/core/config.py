@@ -40,8 +40,10 @@ class Settings(BaseSettings):
     wan_size: str = "1080*1920"
     wan_i2v_model: str = "wan2.2-i2v-plus"  # image-to-video (character consistency)
     qwen_image_model: str = "wanx2.1-t2i-turbo"
-    cosyvoice_model: str = "cosyvoice-v2"
-    cosyvoice_voice: str = "longxiaochun_v2"  # must match the cosyvoice model version
+    # TTS: qwen3-tts-flash is HTTP-based and served on the intl endpoint (CosyVoice's
+    # websocket API is China-region only and 'ModelNotFound's on dashscope-intl).
+    cosyvoice_model: str = "qwen3-tts-flash"
+    cosyvoice_voice: str = "Cherry"  # intl voices: Cherry, Serena, Ethan, Chelsie, ...
 
     # --- token / cost discipline ---
     project_token_cap: int = 200_000  # hard ceiling on generation tokens per project
