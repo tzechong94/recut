@@ -197,6 +197,12 @@ class StubTextLLM(TextLLM):
             payload = _stub_treatment(user)
         elif "showrunner:critic" in marker:
             payload = _stub_writers_critic(user)
+        elif "showrunner:revise" in marker:
+            # Offline: echo the existing treatment with a small marked tweak so the
+            # revise flow is exercised; live Qwen honors the actual note.
+            t = _stub_treatment(user)
+            t["title"] = t["title"] + " (revised)"
+            payload = t
         elif "showrunner:premise" in marker:
             if "refine" in user.lower():
                 payload = {"premise": "A burnt-out detective must decide whether to expose the partner who once saved her life."}
