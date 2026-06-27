@@ -89,6 +89,10 @@ export const api = {
   /* ------------------------------- Styles ------------------------------- */
   listStyles: () => request<StyleSummary[]>("/styles"),
 
+  /* ------------------------------ Premise ------------------------------- */
+  suggestPremise: (premise = "") =>
+    request<{ premise: string }>("/premise/suggest", { method: "POST", body: { premise } }),
+
   /* ---------------------------- Productions ----------------------------- */
   createProduction: (body: {
     premise: string;

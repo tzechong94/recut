@@ -42,7 +42,20 @@ export function Premise({ open }: PremiseProps) {
   const [styles, setStyles] = useState<StyleSummary[]>(FALLBACK_STYLES);
   const [productions, setProductions] = useState<ProductionSummary[]>([]);
   const [starting, setStarting] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const suggest = async () => {
+    setSuggesting(true);
+    try {
+      const r = await api.suggestPremise(premise.trim());
+      if (r?.premise) setPremise(r.premise);
+    } catch {
+      /* offline / unavailable — leave the box as-is */
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   useEffect(() => {
     api
@@ -112,7 +125,20 @@ export function Premise({ open }: PremiseProps) {
         </header>
 
         <div className="sr-premise-card">
-          <label className="sr-field-label">Your premise</label>
+          <div className="sr-premise-labelrow">
+            <label className="sr-field-label">Your premise</label>
+            <button
+              type="button"
+              className="sr-suggest"
+              onClick={suggest}
+              disabled={suggesting}
+              data-testid="suggest-premise"
+              title={premise.trim() ? "Sharpen this premise" : "Generate a premise"}
+            >
+              <Sparkles size={13} />
+              {suggesting ? "Thinking…" : premise.trim() ? "Refine with AI" : "Surprise me"}
+            </button>
+          </div>
           <textarea
             className="sr-premise-input"
             placeholder="A lighthouse keeper discovers the light is talking back…"

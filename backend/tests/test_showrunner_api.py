@@ -98,3 +98,10 @@ def test_mcp_agentic_pipeline():
     cid = prod["characters"][0]["id"]
     assert t.showrunner_cast(pid, cid)["job_id"]
     assert t.showrunner_produce(pid)["job_id"]
+
+
+def test_suggest_premise_generate_and_refine(client):
+    gen = client.post("/api/premise/suggest", json={"premise": ""}).json()
+    assert gen["premise"] and len(gen["premise"]) > 10
+    ref = client.post("/api/premise/suggest", json={"premise": "a guy finds a dog"}).json()
+    assert ref["premise"]  # returns a sharpened premise

@@ -83,3 +83,23 @@ describe("Premise · productions gallery", () => {
     );
   });
 });
+
+describe("Premise · AI suggest button", () => {
+  beforeEach(() => {
+    vi.spyOn(api, "listStyles").mockResolvedValue([]);
+    vi.spyOn(api, "listProductions").mockResolvedValue([]);
+  });
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("fills the premise from the AI suggestion and labels by state", async () => {
+    const spy = vi.spyOn(api, "suggestPremise").mockResolvedValue({ premise: "A diver finds her own name carved in a wreck." });
+    render(<Premise open={vi.fn()} />);
+    const btn = await screen.findByTestId("suggest-premise");
+    expect(btn).toHaveTextContent(/surprise me/i); // empty -> generate
+    await userEvent.click(btn);
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(""));
+    const box = screen.getByPlaceholderText(/lighthouse keeper/i) as HTMLTextAreaElement;
+    await waitFor(() => expect(box.value).toMatch(/diver finds her own name/i));
+    expect(await screen.findByTestId("suggest-premise")).toHaveTextContent(/refine with ai/i); // now has text
+  });
+});
