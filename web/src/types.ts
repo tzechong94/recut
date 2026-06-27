@@ -70,6 +70,7 @@ export interface StyleSummary {
   name: string;
   descriptors: string;
   palette: string;
+  image?: string; // fixed reference still served from /public/styles/{name}.jpg
 }
 
 export interface StyleLock extends StyleSummary {

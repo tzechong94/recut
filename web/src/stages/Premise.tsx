@@ -157,7 +157,19 @@ export function Premise({ open }: PremiseProps) {
                       STYLE_SWATCH[s.name] ||
                       "linear-gradient(150deg,#5B3DF5,#241a55)",
                   }}
-                />
+                >
+                  {s.image && (
+                    <img
+                      className="sr-style-img"
+                      src={s.image}
+                      alt={`${s.name} style`}
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  )}
+                </span>
                 <span className="sr-style-name">{s.name}</span>
               </button>
             ))}
