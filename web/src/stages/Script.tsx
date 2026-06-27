@@ -72,7 +72,7 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
         <div className="sr-treatment">
           <label className="sr-field-label">Title</label>
           <Editable
-            className="sr-title-edit"
+            className="sr-edit sr-title-edit"
             value={p.title}
             onCommit={(v) => patch({ title: v })}
             aria-label="Title"
@@ -91,7 +91,7 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
             <div className="sr-question" data-testid="dramatic-question">
               <span className="sr-question-tag">The question</span>
               <Editable
-                className="sr-question-text"
+                className="sr-edit sr-edit-multi sr-question-text"
                 value={p.dramatic_question}
                 onCommit={(v) => patch({ dramatic_question: v })}
                 multiline
