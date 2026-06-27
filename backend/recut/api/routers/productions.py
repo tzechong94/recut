@@ -113,6 +113,44 @@ def save_production(pid: str, body: dict) -> dict:
     return prod.model_dump(mode="json")
 
 
+class RenameCharacter(BaseModel):
+    name: str
+
+
+@router.post("/productions/{pid}/characters/{cid}/rename")
+def rename_character(pid: str, cid: str, body: RenameCharacter) -> dict:
+    """Rename a character once; the new name propagates across the whole script."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    if not prod.character(cid):
+        raise HTTPException(404, "character not found")
+    from recut.showrunner.revise import rename_character as _rename
+
+    _rename(prod, cid, body.name)
+    repo.save_production(prod)
+    return prod.model_dump(mode="json")
+
+
+class ReviseRequest(BaseModel):
+    instruction: str
+
+
+@router.post("/productions/{pid}/revise")
+def revise(pid: str, body: ReviseRequest) -> dict:
+    """Give the writers' room a plain-English note; it rewrites the affected parts."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    if not body.instruction.strip():
+        raise HTTPException(400, "empty instruction")
+    from recut.showrunner.revise import revise_treatment
+
+    revise_treatment(models().text, prod, body.instruction.strip())
+    repo.save_production(prod)
+    return prod.model_dump(mode="json")
+
+
 @router.post("/productions/{pid}/storyboard")
 def storyboard(pid: str) -> dict:
     prod = repo.get_production(pid)
