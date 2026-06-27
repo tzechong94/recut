@@ -22,7 +22,8 @@ from recut.showrunner.schemas import (
 )
 
 QUALITY_BAR = 0.8
-MAX_ROUNDS = 3
+MAX_ROUNDS = 2  # writer + up to 2 critic/revise rounds — keeps live latency ~40-50s while
+                # still a visible multi-round debate (stops early once the bar is met)
 _VOICE_POOL = ["longxiaochun_v2", "longshu_v2", "longwan_v2", "longcheng_v2", "longhua_v2"]
 
 _REGISTER = {
