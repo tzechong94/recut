@@ -52,8 +52,8 @@ class Settings(BaseSettings):
 
     # --- pacing: a shot budget derived from runtime so a 20s film is ~6 shots of ~3-4s,
     # not 22 jump-cuts of 1s. seconds_per_shot sets the cadence; min/max clamp each shot.
-    seconds_per_shot: float = 3.5
-    min_shot_s: float = 2.5
+    seconds_per_shot: float = 4.0  # fewer, longer shots so dialogue lands (not jump-cuts)
+    min_shot_s: float = 3.0
     max_shot_s: float = 8.0  # generous ceiling so a longer VO line is never clipped
 
     # --- generation model ---
