@@ -27,7 +27,12 @@ router = APIRouter(prefix="/api", tags=["showrunner"])
 
 @router.get("/styles")
 def list_styles() -> list[dict]:
-    return [{"name": s.name, "descriptors": s.descriptors, "palette": s.palette} for s in STYLE_PRESETS.values()]
+    # `image` is a fixed, pre-generated reference still per style (served by the web app
+    # from /public/styles/), so the picker shows the actual look, not just a word.
+    return [
+        {"name": s.name, "descriptors": s.descriptors, "palette": s.palette, "image": f"/styles/{s.name}.jpg"}
+        for s in STYLE_PRESETS.values()
+    ]
 
 
 class CreateProduction(BaseModel):
