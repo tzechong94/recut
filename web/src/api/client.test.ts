@@ -94,6 +94,33 @@ describe("showrunner api client", () => {
     expect(opts.method).toBe("POST");
   });
 
+  it("POST /characters/{cid}/rename sends the new name and returns the production", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ id: "prod_1", title: "X" }),
+    );
+    const res = await api.renameCharacter("prod_1", "char_1", "Mara");
+    expect(res).toEqual({ id: "prod_1", title: "X" });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      `${API_BASE}/api/productions/prod_1/characters/char_1/rename`,
+    );
+    expect(opts.method).toBe("POST");
+    expect(opts.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(opts.body)).toEqual({ name: "Mara" });
+  });
+
+  it("POST /revise sends the instruction and returns the production", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ id: "prod_1", logline: "noir now" }),
+    );
+    const res = await api.reviseProduction("prod_1", "make it noir");
+    expect(res).toEqual({ id: "prod_1", logline: "noir now" });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/revise`);
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual({ instruction: "make it noir" });
+  });
+
   it("GET /scoreboard returns the ledger payload", async () => {
     fetchMock.mockResolvedValueOnce(
       mockResponse({ tokens: { total: 10 }, shots_total: 3 }),

@@ -1,10 +1,14 @@
 import {
   ArrowRight,
+  Loader2,
   MapPin,
   MessagesSquare,
+  Send,
   TrendingUp,
   Users,
 } from "lucide-react";
+import { useState } from "react";
+import { api } from "../api/client";
 import type { UseProduction } from "../lib/useProduction";
 import type {
   Character,
@@ -26,12 +30,41 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
   const patch = (next: Partial<Production>) =>
     ctl.update({ ...p, ...next });
 
+  // Which character cards are mid-rename (server round-trip propagates the new
+  // name across the whole script, so we replace local state with the response).
+  const [renaming, setRenaming] = useState<Record<string, boolean>>({});
+
   const setChar = (id: string, next: Partial<Character>) =>
     patch({
       characters: p.characters.map((c) =>
         c.id === id ? { ...c, ...next } : c,
       ),
     });
+
+  /**
+   * A character name change is special: instead of the generic patch/PUT we call
+   * the rename endpoint, which propagates the new name everywhere and returns the
+   * full Production. Replace local state with the response so the propagation
+   * shows immediately. On error (e.g. endpoint 404 / offline) keep the old name.
+   */
+  const renameChar = async (id: string, name: string) => {
+    const trimmed = name.trim();
+    const current = p.characters.find((c) => c.id === id);
+    if (!trimmed || !current || trimmed === current.name) return;
+    setRenaming((r) => ({ ...r, [id]: true }));
+    try {
+      const updated = await api.renameCharacter(p.id, id, trimmed);
+      ctl.set(updated);
+    } catch {
+      // Graceful degradation (e.g. endpoint 404 / offline): leave the production
+      // untouched so the old name stands and the field reverts on its own.
+    } finally {
+      setRenaming((r) => {
+        const { [id]: _drop, ...rest } = r;
+        return rest;
+      });
+    }
+  };
   const setLoc = (id: string, next: Partial<Location>) =>
     patch({
       locations: p.locations.map((l) => (l.id === id ? { ...l, ...next } : l)),
@@ -112,12 +145,22 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
             {p.characters.map((c) => (
               <div className="sr-treat-card" key={c.id}>
                 <div className="sr-treat-row">
-                  <Editable
-                    className="sr-edit sr-strong"
-                    value={c.name}
-                    onCommit={(v) => setChar(c.id, { name: v })}
-                    aria-label="Character name"
-                  />
+                  <div className="sr-name-wrap">
+                    <Editable
+                      className="sr-edit sr-strong"
+                      value={c.name}
+                      onCommit={(v) => renameChar(c.id, v)}
+                      aria-label="Character name"
+                    />
+                    {renaming[c.id] && (
+                      <span
+                        className="sr-renaming"
+                        data-testid={`renaming-${c.id}`}
+                      >
+                        <Loader2 size={11} className="rc-spin" /> propagating…
+                      </span>
+                    )}
+                  </div>
                   <Editable
                     className="sr-edit sr-role"
                     value={c.role}
@@ -196,7 +239,7 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
           </div>
         </div>
 
-        <WritersRoom production={p} />
+        <WritersRoom production={p} ctl={ctl} />
       </div>
 
       <div className="rc-foot">
@@ -253,7 +296,13 @@ function roomKind(role: string): "critic" | "system" | "writer" | "dialogue" {
   return "writer";
 }
 
-function WritersRoom({ production }: { production: Production }) {
+function WritersRoom({
+  production,
+  ctl,
+}: {
+  production: Production;
+  ctl: UseProduction;
+}) {
   const room = production.writers_room;
   // Track the critic's score as it climbs across rounds so each critic turn can
   // show its delta vs. the previous critic pass — the "narrative" showpiece.
@@ -327,6 +376,81 @@ function WritersRoom({ production }: { production: Production }) {
           );
         })}
       </div>
+      <NotesToRoom production={production} ctl={ctl} />
     </aside>
+  );
+}
+
+/**
+ * "Notes to the writers' room" — a plain-English director's note that triggers a
+ * consistent rewrite of the treatment. It's an LLM call (a few seconds), so we
+ * show a revising state and disable Send while in-flight or empty. The response
+ * is the full updated Production (note + revision already in writers_room, plus
+ * any warnings), so we just swap local state in via ctl.set.
+ */
+function NotesToRoom({
+  production,
+  ctl,
+}: {
+  production: Production;
+  ctl: UseProduction;
+}) {
+  const [note, setNote] = useState("");
+  const [revising, setRevising] = useState(false);
+
+  const send = async () => {
+    const instruction = note.trim();
+    if (!instruction || revising) return;
+    setRevising(true);
+    try {
+      const updated = await api.reviseProduction(production.id, instruction);
+      ctl.set(updated);
+      setNote("");
+    } catch {
+      // Graceful degradation: keep the note in the box so it can be retried.
+    } finally {
+      setRevising(false);
+    }
+  };
+
+  const disabled = revising || note.trim().length === 0;
+
+  return (
+    <form
+      className="sr-notes"
+      data-testid="notes-to-room"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+    >
+      {revising && (
+        <div className="sr-notes-status" data-testid="revising-status">
+          <Loader2 size={12} className="rc-spin" /> The room is revising…
+        </div>
+      )}
+      <div className="sr-notes-bar">
+        <input
+          className="sr-notes-input"
+          value={note}
+          disabled={revising}
+          placeholder="Tell the room what to change — 'darker tone', 'rename Eli to Mara', 'cut the rival'…"
+          aria-label="Notes to the writers' room"
+          onChange={(e) => setNote(e.target.value)}
+        />
+        <button
+          type="submit"
+          className="sr-notes-send"
+          disabled={disabled}
+          aria-label="Send note to writers' room"
+        >
+          {revising ? (
+            <Loader2 size={15} className="rc-spin" />
+          ) : (
+            <Send size={15} />
+          )}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -419,7 +419,7 @@ html,body{background:#0b0a0f;}
 .sr-beat-body{flex:1;min-width:0;}
 .sr-room{position:sticky;top:0;background:linear-gradient(180deg,#16121f,#100d18);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 150px);}
 .sr-room-head{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px;color:var(--ink);font-family:var(--display);}
-.sr-room-thread{padding:16px;display:flex;flex-direction:column;gap:14px;overflow:auto;}
+.sr-room-thread{padding:16px;display:flex;flex-direction:column;gap:14px;overflow:auto;flex:1;}
 .sr-room-msg{animation:fade .35s ease;max-width:94%;}
 .sr-room-msg.writer{align-self:flex-start;}
 .sr-room-msg.critic{align-self:flex-end;text-align:right;}
@@ -429,6 +429,23 @@ html,body{background:#0b0a0f;}
 .sr-room-text{font-size:13px;line-height:1.5;padding:11px 13px;border-radius:13px;}
 .sr-room-msg.writer .sr-room-text{background:rgba(123,92,255,.12);border:1px solid rgba(123,92,255,.22);border-bottom-left-radius:4px;}
 .sr-room-msg.critic .sr-room-text{background:rgba(245,165,36,.1);border:1px solid rgba(245,165,36,.25);border-bottom-right-radius:4px;text-align:left;}
+
+/* ---- Notes to the writers' room (director's note → revision) ---- */
+.sr-notes{border-top:1px solid var(--line);background:rgba(255,255,255,.02);}
+.sr-notes-status{display:flex;align-items:center;gap:7px;padding:9px 14px 0;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--violet);}
+.sr-notes-bar{display:flex;gap:8px;padding:12px 14px;align-items:flex-end;}
+.sr-notes-input{flex:1;min-width:0;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-family:var(--ui);font-size:13px;line-height:1.4;padding:9px 11px;transition:border-color .12s,background .12s;}
+.sr-notes-input::placeholder{color:var(--soft);}
+.sr-notes-input:focus{outline:none;background:rgba(123,92,255,.08);border-color:var(--violet);}
+.sr-notes-input:disabled{opacity:.5;}
+.sr-notes-send{flex-shrink:0;width:38px;height:38px;border-radius:10px;background:var(--violet);color:#fff;display:grid;place-items:center;transition:transform .12s,opacity .12s;}
+.sr-notes-send:hover:not(:disabled){transform:translateY(-1px);}
+.sr-notes-send:disabled{opacity:.35;cursor:not-allowed;}
+
+/* ---- Character name: rename propagation in-flight ---- */
+.sr-name-wrap{display:flex;align-items:center;gap:8px;min-width:0;flex:1;}
+.sr-name-wrap .sr-edit{flex:1;min-width:0;}
+.sr-renaming{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--violet);white-space:nowrap;}
 
 /* ---------------- Cast / show bible ---------------- */
 .sr-style-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--paper2);border:1px solid var(--line);border-radius:14px;padding:12px 16px;}

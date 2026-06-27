@@ -117,6 +117,30 @@ export const api = {
       body: { target, target_id: targetId },
     }),
 
+  /**
+   * Rename a character — the backend propagates the new name across the whole
+   * script (logline, question, theme, scene beats, every dialogue line + action)
+   * and returns the FULL updated Production. Use this instead of the generic PUT
+   * for name changes so the propagation lands everywhere at once.
+   */
+  renameCharacter: (id: string, cid: string, name: string) =>
+    request<Production>(`/productions/${id}/characters/${cid}/rename`, {
+      method: "POST",
+      body: { name },
+    }),
+
+  /**
+   * Send a plain-English director's note to the writers' room ("make it noir",
+   * "merge the two sisters", "rename Eli to Mara and make her a botanist"). The
+   * writer rewrites the treatment consistently and returns the FULL updated
+   * Production (also appends to writers_room and may add a warnings entry).
+   */
+  reviseProduction: (id: string, instruction: string) =>
+    request<Production>(`/productions/${id}/revise`, {
+      method: "POST",
+      body: { instruction },
+    }),
+
   /** Attach a human-uploaded reference image to a character. */
   attachCharacterReference: (
     id: string,
