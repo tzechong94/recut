@@ -197,6 +197,11 @@ class StubTextLLM(TextLLM):
             payload = _stub_treatment(user)
         elif "showrunner:critic" in marker:
             payload = _stub_writers_critic(user)
+        elif "showrunner:premise" in marker:
+            if "refine" in user.lower():
+                payload = {"premise": "A burnt-out detective must decide whether to expose the partner who once saved her life."}
+            else:
+                payload = {"premise": "A lonely radio operator starts hearing tomorrow's news a day early — and one broadcast names her."}
         elif "showrunner:dialogue-critic" in marker:
             payload = {"scores": {"dialogue_quality": 0.82, "subtext": 0.78, "distinct_voices": 0.8}, "overall": 0.8, "notes": "Lines carry subtext; voices distinct."}
         elif "showrunner:dialogue" in marker:

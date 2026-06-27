@@ -35,6 +35,32 @@ def list_styles() -> list[dict]:
     ]
 
 
+class SuggestPremise(BaseModel):
+    premise: str = ""  # empty → generate a fresh premise; non-empty → refine it
+
+
+@router.post("/premise/suggest")
+def suggest_premise(body: SuggestPremise) -> dict:
+    """Blank-page helper: generate a premise when empty, or sharpen an existing one.
+    Cheap text tokens; the human stays in control (it just fills the box)."""
+    cur = body.premise.strip()
+    sys = (
+        "showrunner:premise — You write one-sentence short-film premises with a clear "
+        "character, a want, and a turn/conflict. Return STRICT JSON {\"premise\": str}. "
+        "One vivid sentence, no preamble."
+    )
+    user = f"REFINE this premise into something sharper and more cinematic (keep it one sentence): {cur}" if cur \
+        else "GENERATE one original, surprising short-film premise."
+    try:
+        import json
+
+        text, _ = models().text.complete(sys, user, json_mode=True)
+        premise = json.loads(text).get("premise", "").strip()
+    except Exception:  # noqa: BLE001
+        premise = ""
+    return {"premise": premise or cur or "A lighthouse keeper receives a letter addressed to someone who died a century ago."}
+
+
 class CreateProduction(BaseModel):
     premise: str
     target_seconds: int = 60
