@@ -64,16 +64,45 @@ def _snap_image_size(width: int, height: int) -> str:
     return _IMAGE_SIZES["square"]
 
 
-def _extract_json(text: str) -> dict:
-    """Pull the first JSON object out of an LLM response, tolerating code fences."""
+def _json_objects(text: str) -> list[dict]:
+    """Every top-level JSON object in an LLM response, tolerating code fences, prose,
+    and NDJSON. Live qwen-max often stacks objects (one per line) instead of returning a
+    single wrapper, which makes a naive json.loads choke on 'Extra data'. We scan with
+    raw_decode so stacked/garnished output still parses."""
     t = text.strip()
     if t.startswith("```"):
         t = t.split("```", 2)[1]
         t = t[4:] if t.lower().startswith("json") else t
-    start, end = t.find("{"), t.rfind("}")
-    if start == -1 or end == -1:
+    dec = json.JSONDecoder()
+    out: list[dict] = []
+    i, n = 0, len(t)
+    while i < n:
+        brace = t.find("{", i)
+        if brace == -1:
+            break
+        try:
+            obj, end = dec.raw_decode(t, brace)
+        except json.JSONDecodeError:
+            i = brace + 1
+            continue
+        if isinstance(obj, dict):
+            out.append(obj)
+        i = end
+    return out
+
+
+def _extract_json(text: str) -> dict:
+    """The intended single JSON object from an LLM response. If the model stacked several
+    line-shaped objects (NDJSON) instead of the requested {"lines":[...]} wrapper, fold
+    them back into that wrapper so the dialogue pass survives; otherwise take the first."""
+    objs = _json_objects(text)
+    if not objs:
         raise ValueError("no JSON object in model response")
-    return json.loads(t[start : end + 1])
+    if len(objs) == 1:
+        return objs[0]
+    if all(("line" in o or "character" in o or "text" in o) for o in objs):
+        return {"lines": objs}
+    return objs[0]
 
 
 class QwenVision(VisionAnalyzer):
@@ -313,15 +342,22 @@ class QwenVoiceGen(VoiceGen):
 
     def synthesize(self, text: str, *, voice: str = "default") -> GenAsset:
         import dashscope
+        import httpx
 
         chosen = self.s.cosyvoice_voice if voice in ("", "default", None) else voice
 
         def call() -> GenAsset:
-            synth = dashscope.audio.tts_v2.SpeechSynthesizer(
-                model=self.s.cosyvoice_model, voice=chosen
+            # qwen3-tts-flash returns a hosted audio URL (no websocket); fetch the bytes.
+            rsp = dashscope.audio.qwen_tts.SpeechSynthesizer.call(
+                model=self.s.cosyvoice_model, api_key=self.s.dashscope_api_key,
+                text=text, voice=chosen,
             )
-            audio = synth.call(text)
-            return GenAsset(data=audio, mime="audio/mp3", duration_s=max(1.0, len(text) * 0.06), tokens=len(text))
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-tts failed: {getattr(rsp, 'code', '')} {getattr(rsp, 'message', '')}")
+            url = rsp.output.audio["url"]
+            data = httpx.get(url, timeout=60).content
+            mime = "audio/wav" if data[:4] == b"RIFF" else "audio/mp3"
+            return GenAsset(data=data, mime=mime, duration_s=max(1.0, len(text) * 0.06), tokens=len(text))
 
         return _retry(call)
 
