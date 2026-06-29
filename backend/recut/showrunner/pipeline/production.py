@@ -42,21 +42,31 @@ def build_shot_prompt(prod: Production, shot: Shot) -> str:
     return ", ".join(b for b in bits if b)
 
 
-def build_keyframe_instruction(prod: Production, shot: Shot) -> str:
+def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool = False) -> str:
     """Instruction for the image-edit model: keep the character's identity but place them
     INTO the shot's location, doing the shot's action, in the show's style. The result is
-    the i2v first frame, so the video already has the right world + look (fixes both the
-    'character floating on a blank background' and the 'style didn't land' problems)."""
+    the i2v first frame, so the video already has the right world + look. When `has_plate`,
+    a SECOND input image is the locked location plate, so we tell the model to reuse that
+    exact set — that's what keeps the location consistent shot-to-shot."""
     loc = prod.location(shot.location_id) if shot.location_id else None
+    action = shot.action.strip() or "present in the scene"
+    framing = _TYPE_CUES.get(shot.shot_type, "medium shot")
+    if has_plate:
+        return (
+            f"{prod.style.prompt_suffix()}. Image 1 is the CHARACTER; image 2 is the SET. "
+            f"Place the exact character from image 1 into the exact set from image 2 — keep the "
+            f"SAME face, hair, wardrobe and art style, AND keep the SAME location layout, colors "
+            f"and props. The character is: {action}. {framing}."
+        )
     parts = [
-        f"Restyle and recompose as: {prod.style.prompt_suffix()}.",
+        f"{prod.style.prompt_suffix()}.",
         "Keep the SAME character (same face, hair, wardrobe, art style) but place them into a "
         "full scene with a detailed background — not a plain backdrop.",
     ]
     if loc:
         parts.append(f"Setting: {loc.name} — {loc.description}.")
-    parts.append(f"Action in frame: {shot.action.strip() or 'the character in the scene'}.")
-    parts.append(f"Shot framing: {_TYPE_CUES.get(shot.shot_type, 'medium shot')}.")
+    parts.append(f"The character is: {action}.")
+    parts.append(f"Shot framing: {framing}.")
     return " ".join(parts)
 
 
@@ -106,12 +116,17 @@ def generate_shot(
 
     char = _identity_character(prod, shot)
     if char:
-        # 1) keyframe: same character, now IN the location + action + style
-        instruction = build_keyframe_instruction(prod, shot)
+        # 1) keyframe: same character, now IN the location + action + style. If the shot's
+        # location has a locked plate, feed it as a 2nd image so the SAME set carries across
+        # every shot (cross-shot consistency).
+        loc = prod.location(shot.location_id) if shot.location_id else None
+        plate_url = loc.reference_url if (loc and loc.reference_url) else None
+        images = [char.reference_url, plate_url] if plate_url else char.reference_url
+        instruction = build_keyframe_instruction(prod, shot, has_plate=bool(plate_url))
         if corrective:
             instruction += f" Correction from the consistency critic: {corrective}."
         try:
-            keyframe = models.image.edit(char.reference_url, instruction)
+            keyframe = models.image.edit(images, instruction)
             kf_url = keyframe.url or char.reference_url  # stub has no hosted url → i2v ignores it
             # 2) animate the composed keyframe; critic still checks identity vs the LOCKED ref
             asset = models.video.generate_from_image(kf_url, prompt, duration_s=shot.duration_s, seed=seed)

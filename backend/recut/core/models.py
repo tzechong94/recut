@@ -113,12 +113,13 @@ class ImageGen(ABC):
     @abstractmethod
     def generate(self, prompt: str, *, width: int, height: int) -> GenAsset: ...
 
-    def edit(self, image_url: str, instruction: str) -> GenAsset:
-        """Identity-preserving edit: keep the SUBJECT of `image_url` (same face, wardrobe,
-        art style) but recompose per `instruction` — used to build a per-shot keyframe that
-        puts the locked character INTO the scene/location before image-to-video. Backends
-        without an edit model fall back to a fresh generate() (loses identity but still
-        renders); the live Qwen backend overrides this with qwen-image-edit."""
+    def edit(self, image_url: "str | list[str]", instruction: str) -> GenAsset:
+        """Identity-preserving edit/compose: keep the SUBJECT(s) of the input image(s) (same
+        face, wardrobe, art style — and, with two images, the same LOCATION) but recompose
+        per `instruction`. Used to build a per-shot keyframe that puts the locked character
+        INTO the locked location before image-to-video. Pass one URL (character) or a list
+        [character, location plate] to lock both. Backends without an edit model fall back to
+        a fresh generate(); the live Qwen backend overrides this with qwen-image-edit."""
         return self.generate(instruction, width=720, height=1280)
 
 

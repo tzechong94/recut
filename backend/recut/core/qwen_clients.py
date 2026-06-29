@@ -335,17 +335,22 @@ class QwenImageGen(ImageGen):
 
         return _retry(call, attempts=2, base_delay=2.0)
 
-    def edit(self, image_url: str, instruction: str) -> GenAsset:
-        """qwen-image-edit: place the locked character into the shot's scene/location while
-        preserving identity + art style (the keyframe step before i2v). Returns a hosted
-        URL so the keyframe can feed image-to-video directly."""
+    def edit(self, image_url: str | list[str], instruction: str) -> GenAsset:
+        """qwen-image-edit: compose a keyframe that places the locked character into the
+        shot's location while preserving identity + art style (the step before i2v). Accepts
+        ONE image (character) or a list [character, location plate] — with two images the
+        SAME locked kitchen carries across every shot. Returns a hosted URL so the keyframe
+        can feed image-to-video directly."""
         import dashscope
         import httpx
 
+        urls = [image_url] if isinstance(image_url, str) else list(image_url)
+
         def call() -> GenAsset:
+            content = [{"image": u} for u in urls] + [{"text": instruction}]
             rsp = dashscope.MultiModalConversation.call(
                 api_key=self.s.dashscope_api_key, model=self.s.qwen_image_edit_model,
-                messages=[{"role": "user", "content": [{"image": image_url}, {"text": instruction}]}],
+                messages=[{"role": "user", "content": content}],
             )
             if getattr(rsp, "status_code", 200) != 200:
                 raise RuntimeError(f"image-edit {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
