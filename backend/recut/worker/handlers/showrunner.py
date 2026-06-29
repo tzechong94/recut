@@ -110,6 +110,30 @@ def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
     return vo_paths
 
 
+def _ensure_location_plates(prod, ctx) -> None:
+    """Generate + lock a plate for every location a shot actually uses but that has none, so
+    the multi-image keyframe can compose the character into the SAME set across shots. A
+    plate failure is non-fatal — that shot just falls back to character-only composition."""
+    used = {sh.location_id for sh in prod.shots if sh.location_id}
+    for loc in prod.locations:
+        if loc.id not in used or loc.reference_url:
+            continue
+        try:
+            gen = generate_location_reference(ctx.models, loc, prod.style)
+        except Exception as exc:  # noqa: BLE001 — best-effort; consistency degrades, film still renders
+            prod.warnings.append(f"could not lock location '{loc.name}' ({type(exc).__name__}); shots use character-only composition")
+            continue
+        key = f"productions/{prod.id}/refs/location_{loc.id}_{content_hash(gen.data)}.png"
+        _store_bytes(ctx, key, gen.data, "image/png")
+        asset = repo.create_asset(kind="reference", storage_key=key, project_id=prod.project_id, mime="image/png", width=1280, height=720)
+        loc.reference_asset_id = asset["id"]
+        loc.reference_url = gen.url or ctx.storage.url(key)
+        loc.source = AssetSource.generated
+        loc.locked = True
+        prod.token_ledger.image_tokens += gen.tokens
+    repo.save_production(prod)
+
+
 def _project_cap(prod, ctx) -> int:
     if prod.project_id:
         p = repo.get_project(prod.project_id)
@@ -170,6 +194,10 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     cap = _project_cap(prod, ctx)
     src_dir = Path(ctx.settings.work_dir) / f"prod_{prod.id}" / "src"
     src_dir.mkdir(parents=True, exist_ok=True)
+
+    # PASS 0 — lock locations: any location a shot uses but that has no plate gets one now,
+    # so the keyframe step composes every shot into the SAME set (cross-shot consistency).
+    _ensure_location_plates(prod, ctx)
 
     # PASS 1 — audio-fit: synth each line, set shot duration to fit it (no truncation)
     vo_paths = _fit_durations_to_voice(prod, ctx, src_dir)
