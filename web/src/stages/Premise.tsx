@@ -215,7 +215,7 @@ export function Premise({ open }: PremiseProps) {
                   style={{
                     background:
                       STYLE_SWATCH[s.name] ||
-                      "linear-gradient(150deg,#5B3DF5,#241a55)",
+                      "linear-gradient(150deg,#2c2c30,#1a1a1d)",
                   }}
                 >
                   {s.image && (
@@ -246,7 +246,7 @@ export function Premise({ open }: PremiseProps) {
               <span
                 className="sr-style-swatch sr-style-custom"
                 style={{
-                  background: "linear-gradient(150deg,#5B3DF5,#241a55)",
+                  background: "linear-gradient(150deg,#2c2c30,#1a1a1d)",
                 }}
               >
                 {customRefs[0] ? (
