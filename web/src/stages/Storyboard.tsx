@@ -349,7 +349,57 @@ function ShotCard({
 
   return (
     <div className="sr-shot">
-      <div className="sr-shot-num">{index + 1}</div>
+      <div className="sr-shot-top">
+        <div className="sr-shot-num">{index + 1}</div>
+        <Select
+          value={shot.shot_type}
+          options={SHOT_TYPES}
+          onChange={(v) => onChange({ shot_type: v as Shot["shot_type"] })}
+          label="Shot type"
+        />
+        <Select
+          value={shot.camera}
+          options={CAMERAS}
+          onChange={(v) => onChange({ camera: v as Shot["camera"] })}
+          label="Camera"
+          icon={<Camera size={11} />}
+        />
+        <input
+          className="sr-dur-edit"
+          type="number"
+          min={1}
+          max={12}
+          step={0.5}
+          value={shot.duration_s}
+          aria-label="Duration seconds"
+          onChange={(e) => onChange({ duration_s: Number(e.target.value) || 1 })}
+        />
+        <span className="sr-dur-unit">s</span>
+        <span className="sr-shot-top-spacer" />
+        <button
+          className="rc-iconbtn sm"
+          disabled={first}
+          aria-label="Move shot earlier"
+          onClick={onUp}
+        >
+          <ArrowUp size={13} />
+        </button>
+        <button
+          className="rc-iconbtn sm"
+          disabled={last}
+          aria-label="Move shot later"
+          onClick={onDown}
+        >
+          <ArrowDown size={13} />
+        </button>
+        <button
+          className="rc-iconbtn sm sr-del"
+          aria-label="Remove shot"
+          onClick={onRemove}
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
       <div className="sr-still">
         <div className={"sr-still-frame" + (stale ? " is-stale" : "")}>
           {stale && <span className="sr-still-stale">stale</span>}
@@ -392,32 +442,6 @@ function ShotCard({
       </div>
       <div className="sr-shot-body">
         <div className="sr-shot-meta">
-          <Select
-            value={shot.shot_type}
-            options={SHOT_TYPES}
-            onChange={(v) => onChange({ shot_type: v as Shot["shot_type"] })}
-            label="Shot type"
-          />
-          <Select
-            value={shot.camera}
-            options={CAMERAS}
-            onChange={(v) => onChange({ camera: v as Shot["camera"] })}
-            label="Camera"
-            icon={<Camera size={11} />}
-          />
-          <input
-            className="sr-dur-edit"
-            type="number"
-            min={1}
-            max={12}
-            step={0.5}
-            value={shot.duration_s}
-            aria-label="Duration seconds"
-            onChange={(e) =>
-              onChange({ duration_s: Number(e.target.value) || 1 })
-            }
-          />
-          <span className="sr-dur-unit">s</span>
           <ShotBadges shot={shot} />
         </div>
 
@@ -499,31 +523,6 @@ function ShotCard({
         )}
       </div>
 
-      <div className="sr-shot-side">
-        <button
-          className="rc-iconbtn sm"
-          disabled={first}
-          aria-label="Move shot up"
-          onClick={onUp}
-        >
-          <ArrowUp size={14} />
-        </button>
-        <button
-          className="rc-iconbtn sm"
-          disabled={last}
-          aria-label="Move shot down"
-          onClick={onDown}
-        >
-          <ArrowDown size={14} />
-        </button>
-        <button
-          className="rc-iconbtn sm sr-del"
-          aria-label="Remove shot"
-          onClick={onRemove}
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
     </div>
   );
 }

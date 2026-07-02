@@ -526,15 +526,17 @@ html,body{background:#0b0a0f;}
 .sr-board-scene{margin-bottom:24px;}
 .sr-board-heading{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--violet);margin-bottom:11px;flex-wrap:wrap;}
 .sr-board-summary{color:var(--soft);font-family:var(--ui);font-size:12.5px;font-style:italic;}
-.sr-shots{display:flex;flex-direction:column;gap:9px;}
-.sr-shot{display:flex;gap:11px;background:var(--paper2);border:1px solid var(--line);border-radius:13px;padding:12px;}
-/* the still IS the shot — make it the hero of the card, not a side thumbnail */
-.sr-still{flex-shrink:0;width:186px;display:flex;flex-direction:column;gap:7px;}
-.sr-still-frame{width:186px;height:330px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.03);display:grid;place-items:center;color:var(--soft);overflow:hidden;}
+/* LTX-style filmstrip: a GRID of frame-first cards — the still IS the shot */
+.sr-shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;}
+.sr-shot{display:flex;flex-direction:column;gap:9px;background:var(--paper2);border:1px solid var(--line);border-radius:13px;padding:11px;}
+.sr-shot-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.sr-shot-top-spacer{flex:1;}
+.sr-still{width:100%;display:flex;flex-direction:column;gap:7px;}
+.sr-still-frame{width:100%;aspect-ratio:9/16;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.03);display:grid;place-items:center;color:var(--soft);overflow:hidden;position:relative;}
 .sr-still-frame img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;}
 .sr-still-note{display:flex;gap:5px;align-items:center;}
-.sr-still-note .sr-edit{padding:7px 9px;font-size:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);}
-.sr-still-note .sr-edit::placeholder{color:var(--soft);opacity:.8;}
+.sr-still-note .sr-edit{padding:8px 10px;font-size:12.5px;border:1px solid var(--line);background:rgba(255,255,255,.05);}
+.sr-still-note .sr-edit::placeholder{color:#a49ec2;opacity:1;}
 .sr-still-note .sr-mini{padding:7px 8px;border-radius:8px;flex-shrink:0;}
 .sr-still-redo{width:100%;justify-content:center;}
 .sr-stills-bar{display:flex;align-items:center;gap:9px;margin:0 0 14px;padding:9px 13px;border:1px solid var(--line);border-radius:11px;background:rgba(123,92,255,.06);color:var(--soft);font-size:13px;}
