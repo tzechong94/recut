@@ -117,3 +117,19 @@ produce a real film end-to-end on your key (~$2-5) to confirm sprints 1-10 hold 
 
 ## Sprint 11 (offline value): eval report artifact (eval/run_showrunner.py). 128 tests.
 ## Sprint 12 (offline value): robustness/edge-case tests (terse premise, single scene, all-narration film, casting-skipped t2v, edited-line vo re-synth). 136 tests.
+
+## Overnight sprint 2026-07-03 (autonomous, user asleep) — "The Fidelity Contract"
+Gauntlet: /office-hours (design doc rev3, 2 adversarial rounds, 33 fixes) →
+/plan-ceo-review (SCOPE EXPANSION: +animatic +voice studio +take compare; season mode
++ export pack → TODOS) → /plan-eng-review (13 findings vs real code, all adopted).
+Built: permanent Takes + chosen_take_id (upgrade-on-read migration), per-shot routing
+(speaking→wan2.6-i2v + INPUT AUDIO [our TTS embedded, xcorr 0.998 → hard voice
+consistency + lip-sync]; silent→flash/plus by draft|ship mode), master-cut (unchosen
+append → picker), scope/force/render produce payload, server-owned takes in PUT merge,
+$0-video ANIMATIC through the render engine, voice casting studio (audition real
+lines), take picker + side-by-side compare UI, run-sheet model groups + re-film
+preview, de-slop restyle (charcoal + film-amber). Live SHAKEDOWN passed 11/11 on
+prod_b11d0ead8319 ("Time's Whisper"): contract held — pilot takes byte-untouched
+through final render; avg consistency 0.974. Crit fixes from the shakedown: dialogue
+line cap (≤12 words), ONE line per shot placement (killed caption walls + 3.7×
+runtime blowout), wan2.6 portrait-via-prompt fact. 232 backend + 71 web tests.
