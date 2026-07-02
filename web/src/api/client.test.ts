@@ -85,6 +85,23 @@ describe("showrunner api client", () => {
     });
   });
 
+  it("POST /board queues the shot-board stills job", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j5" }));
+    const res = await api.boardStills("prod_1");
+    expect(res).toEqual({ job_id: "j5" });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/board`);
+    expect(opts.method).toBe("POST");
+  });
+
+  it("POST /shots/{sid}/still sends the steering note", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j6" }));
+    await api.shotStill("prod_1", "shot_9", "make it rain");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/shots/shot_9/still`);
+    expect(JSON.parse(opts.body)).toEqual({ instruction: "make it rain" });
+  });
+
   it("POST /shots/{sid}/regenerate hits the regenerate endpoint", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j2" }));
     await api.regenerateShot("prod_1", "shot_9");
