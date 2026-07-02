@@ -22,6 +22,7 @@ export default function App() {
           key={view.productionId}
           productionId={view.productionId}
           exit={() => setView({ name: "premise" })}
+          open={(id) => setView({ name: "production", productionId: id })}
         />
       )}
     </div>

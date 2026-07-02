@@ -70,6 +70,19 @@ def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool 
     return " ".join(parts)
 
 
+def still_signature(shot: Shot) -> str:
+    """Signature of the fields a board still is composed FROM. Stored on the shot when
+    the still is made; if the live fields no longer match, the still is stale and the
+    UI flags it — the human never approves a board that lies about the film.
+    (Mirrored client-side in Storyboard.tsx — keep the format in sync.)"""
+    return "|".join([
+        shot.action.strip(),
+        shot.shot_type.value,
+        ",".join(sorted(shot.character_ids)),
+        shot.location_id or "",
+    ])
+
+
 def compose_shot_still(models: ModelClients, prod: Production, shot: Shot, *, instruction: str = "") -> GenAsset:
     """The BOARD STILL: the exact first frame the film will animate for this shot.
     A character shot composes the locked reference into the (locked) location; a

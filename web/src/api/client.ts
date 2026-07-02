@@ -177,6 +177,14 @@ export const api = {
       body: { asset_id: assetId, reference_url: referenceUrl },
     }),
 
+  /**
+   * Greenlight the NEXT EPISODE: the writers' room continues from this film's
+   * cliffhanger; the locked cast + location references carry over by name.
+   * Returns the new Production (at script stage).
+   */
+  nextEpisode: (id: string) =>
+    request<Production>(`/productions/${id}/next-episode`, { method: "POST" }),
+
   produce: (id: string) =>
     request<{ job_id: string }>(`/productions/${id}/produce`, {
       method: "POST",

@@ -102,6 +102,17 @@ describe("showrunner api client", () => {
     expect(JSON.parse(opts.body)).toEqual({ instruction: "make it rain" });
   });
 
+  it("POST /next-episode returns the continuation production", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ id: "prod_2", episode: 2, previous_production_id: "prod_1" }),
+    );
+    const res = await api.nextEpisode("prod_1");
+    expect(res.episode).toBe(2);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/next-episode`);
+    expect(opts.method).toBe("POST");
+  });
+
   it("POST /shots/{sid}/regenerate hits the regenerate endpoint", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j2" }));
     await api.regenerateShot("prod_1", "shot_9");
