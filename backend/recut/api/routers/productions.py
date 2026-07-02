@@ -19,6 +19,13 @@ from pydantic import BaseModel
 
 from recut.api.deps import models
 from recut.core import queue, repo
+from recut.core.models import stub_models
+
+
+def _text_for(prod: Production):
+    """The text LLM for THIS production: test-mode productions run on the stub
+    (0 provider tokens), everything else uses the configured backend."""
+    return stub_models().text if prod.test_mode else models().text
 from recut.showrunner.compile import compile_to_timeline
 from recut.showrunner.pipeline.storyboard import build_storyboard
 from recut.showrunner.pipeline.writers_room import develop_treatment
@@ -67,6 +74,7 @@ class CreateProduction(BaseModel):
     premise: str
     target_seconds: int = 60
     style: str = "cinematic"
+    test_mode: bool = False  # walk the whole flow on stubs — zero provider tokens
 
 
 @router.post("/productions", status_code=201)
@@ -74,10 +82,12 @@ def create_production(body: CreateProduction) -> dict:
     if not body.premise.strip():
         raise HTTPException(400, "premise required")
     project = repo.create_project(name=body.premise[:60])
+    llm = stub_models().text if body.test_mode else models().text
     prod = develop_treatment(
-        models().text, body.premise.strip(), target_seconds=body.target_seconds,
+        llm, body.premise.strip(), target_seconds=body.target_seconds,
         style_name=body.style, project_id=project["id"],
     )
+    prod.test_mode = body.test_mode
     repo.save_production(prod)
     return prod.model_dump(mode="json")
 
@@ -148,7 +158,7 @@ def revise(pid: str, body: ReviseRequest) -> dict:
         raise HTTPException(400, "empty instruction")
     from recut.showrunner.revise import revise_treatment
 
-    revise_treatment(models().text, prod, body.instruction.strip())
+    revise_treatment(_text_for(prod), prod, body.instruction.strip())
     repo.save_production(prod)
     return prod.model_dump(mode="json")
 
@@ -158,7 +168,7 @@ def storyboard(pid: str) -> dict:
     prod = repo.get_production(pid)
     if not prod:
         raise HTTPException(404, "production not found")
-    prod = build_storyboard(models().text, prod)
+    prod = build_storyboard(_text_for(prod), prod)
     repo.save_production(prod)
     return prod.model_dump(mode="json")
 
@@ -250,7 +260,7 @@ def next_episode(pid: str) -> dict:
         raise HTTPException(404, "production not found")
     from recut.showrunner.series import continue_series
 
-    nxt = continue_series(models().text, prev)
+    nxt = continue_series(_text_for(prev), prev)
     repo.save_production(nxt)
     return nxt.model_dump(mode="json")
 
@@ -307,7 +317,7 @@ def production_eval(pid: str) -> dict:
         raise HTTPException(404, "production not found")
     from recut.showrunner.eval import as_dict, narrative_rubric, token_efficiency
 
-    rubric = narrative_rubric(models().text, prod)
+    rubric = narrative_rubric(_text_for(prod), prod)
     scored = [s.critic_score for s in prod.shots if s.critic_score is not None]
     return {
         "narrative": as_dict(rubric),

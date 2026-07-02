@@ -189,16 +189,26 @@ export interface Production {
   /** Serialized drama: which episode this is, and the film it continues. */
   episode?: number;
   previous_production_id?: string | null;
+  /** Test mode: the whole flow runs on stubs — zero provider tokens. */
+  test_mode?: boolean;
   version: number;
   created_at?: number;
 }
 
-/** Compact production summary returned by GET /productions. */
+/** Compact production summary returned by GET /productions (home-gallery card). */
 export interface ProductionSummary {
   id: string;
   title: string;
   stage: Stage;
   updated_at?: string | number;
+  logline?: string;
+  style?: string;
+  episode?: number;
+  test_mode?: boolean;
+  /** First shot-board still — the card's cover image. */
+  cover_asset_id?: string | null;
+  export_asset_id?: string | null;
+  n_shots?: number;
   [key: string]: unknown;
 }
 

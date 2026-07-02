@@ -247,6 +247,9 @@ class Production(BaseModel):
     # reusing its LOCKED cast + location references (identity is free across episodes)
     episode: int = 1
     previous_production_id: str | None = None
+    # TEST MODE: the entire flow runs on deterministic stubs — walk every stage,
+    # spend zero provider tokens. Set at creation, carried into next episodes.
+    test_mode: bool = False
     version: int = 1
     created_at: float = Field(default_factory=_now)
 

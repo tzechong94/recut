@@ -56,14 +56,18 @@ describe("Premise · productions gallery", () => {
     expect(within(second).getByText("3d ago")).toBeInTheDocument();
   });
 
-  it("wires Resume to open the production", async () => {
+  it("wires Watch (finished) and Resume (in progress) to open the production", async () => {
     const open = vi.fn();
     render(<Premise open={open} />);
 
     const cards = await screen.findAllByTestId("prod-card");
-    const resume = within(cards[0]).getByRole("button", { name: /resume/i });
-    await userEvent.click(resume);
+    // a finished film says Watch, an in-progress one says Resume
+    const watch = within(cards[0]).getByRole("button", { name: /watch/i });
+    await userEvent.click(watch);
     expect(open).toHaveBeenCalledWith("prod_a");
+    const resume = within(cards[1]).getByRole("button", { name: /resume/i });
+    await userEvent.click(resume);
+    expect(open).toHaveBeenCalledWith("prod_b");
   });
 
   it("wires Delete to remove the production", async () => {

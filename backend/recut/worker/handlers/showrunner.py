@@ -27,6 +27,18 @@ from recut.worker.registry import WorkerContext, register
 CONSISTENCY_THRESHOLD = 0.6
 
 
+def _ctx_for(prod, ctx: WorkerContext) -> WorkerContext:
+    """TEST-MODE productions run every model call on the deterministic stubs — the
+    whole flow is walkable for zero provider tokens, even on a live-backend worker."""
+    if not prod.test_mode:
+        return ctx
+    from dataclasses import replace
+
+    from recut.core.models import stub_models
+
+    return replace(ctx, models=stub_models())
+
+
 def _store_bytes(ctx, key: str, data: bytes, mime: str) -> str:
     ctx.storage.put(key, data, content_type=mime)
     return key
@@ -37,6 +49,7 @@ def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
     prod = repo.get_production(job.payload["production_id"])
     if not prod:
         raise ValueError("production not found")
+    ctx = _ctx_for(prod, ctx)
     target, tid = job.payload["target"], job.payload["target_id"]
     instruction = job.payload.get("instruction", "") or ""  # user's regenerate note
 
@@ -73,6 +86,7 @@ def handle_board_stills(job: Job, ctx: WorkerContext) -> dict:
     prod = repo.get_production(job.payload["production_id"])
     if not prod:
         raise ValueError("production not found")
+    ctx = _ctx_for(prod, ctx)
     shot_id = job.payload.get("shot_id")
     instruction = job.payload.get("instruction", "") or ""
 
@@ -232,6 +246,7 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     prod = repo.get_production(job.payload["production_id"])
     if not prod:
         raise ValueError("production not found")
+    ctx = _ctx_for(prod, ctx)
     shots = prod.shots
     total = len(shots) or 1
     cap = _project_cap(prod, ctx)

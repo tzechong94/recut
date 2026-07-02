@@ -37,6 +37,7 @@ def continue_series(llm: TextLLM, prev: Production) -> Production:
     )
     prod.episode = episode
     prod.previous_production_id = prev.id
+    prod.test_mode = prev.test_mode  # a test-drive serial stays free end to end
     prod.style = prev.style.model_copy()  # the exact lock, including any human tweaks
 
     for c in prod.characters:

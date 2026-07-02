@@ -372,12 +372,9 @@ class ModelClients:
     voice: VoiceGen
 
 
-def get_models(settings: Settings | None = None) -> ModelClients:
-    s = settings or get_settings()
-    if s.model_backend == "qwen":
-        from recut.core.qwen_clients import build_qwen_clients
-
-        return build_qwen_clients(s)
+def stub_models() -> ModelClients:
+    """The deterministic offline set. Also used for TEST-MODE productions: the whole
+    flow runs against stubs (0 provider tokens) even when the server backend is live."""
     return ModelClients(
         vision=StubVision(),
         transcriber=StubTranscriber(),
@@ -386,3 +383,12 @@ def get_models(settings: Settings | None = None) -> ModelClients:
         image=StubImageGen(),
         voice=StubVoiceGen(),
     )
+
+
+def get_models(settings: Settings | None = None) -> ModelClients:
+    s = settings or get_settings()
+    if s.model_backend == "qwen":
+        from recut.core.qwen_clients import build_qwen_clients
+
+        return build_qwen_clients(s)
+    return stub_models()
