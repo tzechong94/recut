@@ -20,7 +20,7 @@ from recut.pipeline.render import AssetMeta, render_timeline
 from recut.showrunner.compile import compile_to_timeline
 from recut.showrunner.pipeline.assemble import concat_voiceover, synth_shot_voice
 from recut.showrunner.pipeline.casting import generate_character_reference, generate_location_reference
-from recut.showrunner.pipeline.production import generate_shot, should_reroll
+from recut.showrunner.pipeline.production import compose_shot_still, generate_shot, should_reroll
 from recut.showrunner.schemas import AssetSource, ShotStatus, Stage
 from recut.worker.registry import WorkerContext, register
 
@@ -62,6 +62,48 @@ def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
     prod.token_ledger.image_tokens += gen.tokens
     repo.save_production(prod)
     return {"target": target, "target_id": tid, "asset_id": asset["id"], "reference_url": subject.reference_url}
+
+
+@register("board_stills")
+def handle_board_stills(job: Job, ctx: WorkerContext) -> dict:
+    """Generate the shot board's stills — one composed frame per shot (character placed
+    into the locked location, doing the action, in the style). Cheap image tokens the
+    human iterates on BEFORE any video spend; produce then animates the approved frames.
+    Payload: production_id, optional shot_id (regenerate just one) + instruction (note)."""
+    prod = repo.get_production(job.payload["production_id"])
+    if not prod:
+        raise ValueError("production not found")
+    shot_id = job.payload.get("shot_id")
+    instruction = job.payload.get("instruction", "") or ""
+
+    # plates first, so every still composes into the SAME set (cross-shot consistency)
+    _ensure_location_plates(prod, ctx)
+
+    if shot_id:
+        target = prod.find_shot(shot_id)
+        if not target:
+            raise ValueError("shot not found")
+        targets = [target]
+    else:
+        targets = [s for s in prod.shots if not s.keyframe_url]
+    made, total = 0, len(targets) or 1
+    for i, shot in enumerate(targets):
+        try:
+            gen = compose_shot_still(ctx.models, prod, shot, instruction=instruction)
+        except Exception as exc:  # noqa: BLE001 — one failed still must not sink the board
+            prod.warnings.append(f"board still failed for a shot ({type(exc).__name__})")
+            repo.save_production(prod)
+            continue
+        key = f"productions/{prod.id}/stills/{shot.id}_{content_hash(gen.data)}.png"
+        _store_bytes(ctx, key, gen.data, "image/png")
+        asset = repo.create_asset(kind="still", storage_key=key, project_id=prod.project_id, mime="image/png", width=720, height=1280)
+        shot.keyframe_asset_id = asset["id"]
+        shot.keyframe_url = gen.url or ctx.storage.url(key)
+        prod.token_ledger.image_tokens += gen.tokens
+        made += 1
+        repo.save_production(prod)
+        queue.update_progress(job.id, (i + 1) / total)
+    return {"stills": made, "total": len(targets)}
 
 
 def _keyframe(video_path: str, mime: str) -> str | None:
@@ -241,7 +283,8 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         prod.token_ledger.video_tokens += tokens
         prod.token_ledger.rerolls += rerolls
         # visible agent reasoning — why this shot was made the way it was
-        decision = {"generate_shot_keyframe_i2v": "composed keyframe (character placed in the location + style) → image-to-video",
+        decision = {"generate_shot_board_i2v": "animated the human-approved board still → image-to-video",
+                    "generate_shot_keyframe_i2v": "composed keyframe (character placed in the location + style) → image-to-video",
                     "generate_shot_i2v": "image-to-video from locked reference",
                     "generate_shot_i2v_continuity": "image-to-video chained from previous frame",
                     "generate_shot_t2v": "text-to-video (establishing / no character)"}.get(tool, tool)

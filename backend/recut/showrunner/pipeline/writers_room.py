@@ -45,6 +45,10 @@ def _writer_sys(register: str) -> str:
         "\"scenes\":[{\"heading\":str,\"summary\":str(the beat: what happens + the turn/escalation)}]}. "
         "Rules: 2-4 characters each with a clear want AND flaw; 3-5 scenes that build setup -> midpoint "
         "turn -> climax answering the dramatic question; subtext over on-the-nose. "
+        "FORMAT: this is a VERTICAL MICRO-DRAMA (ReelShort-style). The FIRST scene opens "
+        "mid-conflict — a HOOK the viewer can't scroll past in the first seconds (no slow "
+        "establishing). Every scene escalates. The FINAL scene lands a CLIFFHANGER or "
+        "gut-punch turn that leaves them needing the next episode. "
         f"GENRE REGISTER: {register}"
     )
 

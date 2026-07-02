@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
   Camera,
   Clapperboard,
+  ImageIcon,
   Loader2,
   Plus,
+  RotateCw,
   Trash2,
   Users,
 } from "lucide-react";
-import { api } from "../api/client";
+import { api, assetRawUrl } from "../api/client";
+import { pollJob } from "../lib/jobs";
 import type { UseProduction } from "../lib/useProduction";
 import type { Production, Scene, Shot } from "../types";
 import { Editable } from "../components/Editable";
@@ -26,7 +29,11 @@ const CAMERAS = ["static", "pan", "push_in", "pull_out", "handheld", "aerial"];
 export function StoryboardStage({ ctl, onAdvance }: StageProps) {
   const p = ctl.production!;
   const [building, setBuilding] = useState(false);
+  const [stillsBusy, setStillsBusy] = useState(false);
+  const [stillBusy, setStillBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
   const hasShots = p.scenes.some((s) => s.shots.length > 0);
 
   useEffect(() => {
@@ -40,10 +47,51 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
     try {
       const next = await api.storyboard(p.id);
       ctl.set(next);
+      void generateStills(); // a board without pictures isn't a board
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't build the storyboard");
     } finally {
       setBuilding(false);
+    }
+  }
+
+  /** Generate every missing shot still — the exact frames produce will animate.
+   *  Stills stream into the board as each one lands (the job saves per shot). */
+  async function generateStills() {
+    setStillsBusy(true);
+    setError(null);
+    try {
+      const { job_id } = await api.boardStills(p.id);
+      await pollJob(job_id, {
+        timeoutMs: 15 * 60 * 1000,
+        onProgress: () => { if (alive.current) void ctl.refetch(); },
+      });
+    } catch (e) {
+      if (alive.current)
+        setError(e instanceof Error ? e.message : "Couldn't generate the stills");
+    } finally {
+      if (alive.current) {
+        await ctl.refetch().catch(() => {});
+        setStillsBusy(false);
+      }
+    }
+  }
+
+  /** Redo ONE still, steered by the card's note. */
+  async function redoStill(shotId: string, note: string) {
+    setStillBusy(shotId);
+    setError(null);
+    try {
+      const { job_id } = await api.shotStill(p.id, shotId, note);
+      await pollJob(job_id, { timeoutMs: 10 * 60 * 1000 });
+    } catch (e) {
+      if (alive.current)
+        setError(e instanceof Error ? e.message : "Couldn't redo the still");
+    } finally {
+      if (alive.current) {
+        await ctl.refetch().catch(() => {});
+        setStillBusy(null);
+      }
     }
   }
 
@@ -115,19 +163,44 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
   const totalDur = p.scenes
     .flatMap((s) => s.shots)
     .reduce((a, s) => a + s.duration_s, 0);
+  const missingStills = p.scenes
+    .flatMap((s) => s.shots)
+    .filter((s) => !s.keyframe_asset_id && !s.keyframe_url).length;
 
   return (
     <div className="rc-stage">
       <div className="rc-head">
         <div className="rc-kicker">STAGE 3 · THE BOARD</div>
-        <h2>Storyboard</h2>
+        <h2>Shot board</h2>
         <p>
-          Every shot the agent will generate. Tune the visual action, framing,
-          and dialogue. Reorder, add, or cut shots — then call action.
+          Every still below is the exact first frame the film will animate.
+          Fix the pictures here — notes and redos cost cheap image tokens.
+          Video tokens are spent only on frames you approve.
         </p>
       </div>
 
       {error && <div className="rc-err">{error}</div>}
+
+      {(stillsBusy || missingStills > 0) && (
+        <div className="sr-stills-bar">
+          {stillsBusy ? (
+            <>
+              <Loader2 size={14} className="rc-spin" />
+              <span>Composing stills — each shot's character placed into its set…</span>
+            </>
+          ) : (
+            <>
+              <ImageIcon size={14} />
+              <span>
+                {missingStills} shot{missingStills === 1 ? "" : "s"} without a still
+              </span>
+              <button className="sr-mini" onClick={() => void generateStills()}>
+                <ImageIcon size={13} /> Generate stills
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {p.scenes.map((sc) => (
         <section className="sr-board-scene" key={sc.id}>
@@ -145,6 +218,11 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
                 production={p}
                 first={i === 0}
                 last={i === sc.shots.length - 1}
+                stillPending={
+                  stillBusy === sh.id ||
+                  (stillsBusy && !sh.keyframe_asset_id && !sh.keyframe_url)
+                }
+                onRedoStill={(note) => void redoStill(sh.id, note)}
                 onChange={(n) => setShot(sc.id, sh.id, n)}
                 onUp={() => moveShot(sc.id, i, -1)}
                 onDown={() => moveShot(sc.id, i, 1)}
@@ -203,6 +281,8 @@ interface ShotCardProps {
   production: Production;
   first: boolean;
   last: boolean;
+  stillPending: boolean;
+  onRedoStill: (note: string) => void;
   onChange: (next: Partial<Shot>) => void;
   onUp: () => void;
   onDown: () => void;
@@ -215,18 +295,63 @@ function ShotCard({
   production,
   first,
   last,
+  stillPending,
+  onRedoStill,
   onChange,
   onUp,
   onDown,
   onRemove,
 }: ShotCardProps) {
+  const [note, setNote] = useState("");
   const charNames = shot.character_ids
     .map((id) => production.characters.find((c) => c.id === id)?.name)
     .filter(Boolean) as string[];
+  const hasStill = Boolean(shot.keyframe_asset_id || shot.keyframe_url);
+
+  const redo = () => {
+    onRedoStill(note.trim());
+    setNote("");
+  };
 
   return (
     <div className="sr-shot">
       <div className="sr-shot-num">{index + 1}</div>
+      <div className="sr-still">
+        <div className="sr-still-frame">
+          {stillPending ? (
+            <Loader2 size={18} className="rc-spin" />
+          ) : shot.keyframe_asset_id ? (
+            <img
+              src={assetRawUrl(shot.keyframe_asset_id)}
+              alt={`Still for shot ${index + 1}`}
+            />
+          ) : shot.keyframe_url ? (
+            <img src={shot.keyframe_url} alt={`Still for shot ${index + 1}`} />
+          ) : (
+            <ImageIcon size={18} />
+          )}
+        </div>
+        <div className="sr-still-note">
+          <input
+            className="sr-edit"
+            value={note}
+            placeholder={hasStill ? "fix this still…" : "note for the still…"}
+            aria-label={`Still note for shot ${index + 1}`}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !stillPending) redo();
+            }}
+          />
+          <button
+            className="sr-mini"
+            disabled={stillPending}
+            aria-label={`Redo still for shot ${index + 1}`}
+            onClick={redo}
+          >
+            <RotateCw size={12} />
+          </button>
+        </div>
+      </div>
       <div className="sr-shot-body">
         <div className="sr-shot-meta">
           <Select

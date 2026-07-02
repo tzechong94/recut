@@ -47,13 +47,14 @@ def _shot_budget(prod: Production) -> int:
     return max(3, round(prod.target_seconds / spp))
 
 
-def storyboard_scene(llm: TextLLM, prod: Production, scene: Scene, n_shots: int) -> tuple[list[Shot], int]:
+def storyboard_scene(llm: TextLLM, prod: Production, scene: Scene, n_shots: int, position: str = "") -> tuple[list[Shot], int]:
     cast = ", ".join(f"{c.name} ({c.description})" for c in prod.characters)
     locs = ", ".join(f"{l.name}" for l in prod.locations)
     user = (
         f"STYLE: {prod.style.name}\nCAST: {cast}\nLOCATIONS: {locs}\n"
         f"SCENE: {scene.heading} — {scene.summary}\n"
         f"Break it into about {n_shots} shot(s) (no more than {n_shots + 1})."
+        + (f"\nPOSITION: {position}" if position else "")
     )
     text, tokens = llm.complete(_SYS, user, json_mode=True)
     data = _parse(text)
@@ -73,9 +74,16 @@ def build_storyboard(llm: TextLLM, prod: Production) -> Production:
     per_scene = max(1, round(budget / n_scenes))  # spread the budget across scenes
 
     total = 0
-    for scene in prod.scenes:
+    last = len(prod.scenes) - 1
+    for i, scene in enumerate(prod.scenes):
+        # micro-drama beats: the film opens on a HOOK and closes on the CLIFFHANGER
+        position = ""
+        if i == 0:
+            position = "OPENING — the very FIRST shot is the HOOK: start mid-conflict, arresting, no slow establishing."
+        if i == last:
+            position = (position + " " if position else "") + "FINALE — the LAST shot lands the CLIFFHANGER/turn and holds on it."
         try:
-            shots, t = storyboard_scene(llm, prod, scene, per_scene)
+            shots, t = storyboard_scene(llm, prod, scene, per_scene, position)
             total += t
             if shots:
                 scene.shots = shots

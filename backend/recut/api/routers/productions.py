@@ -3,6 +3,8 @@
   POST   /productions                      premise -> writers' room -> treatment (script stage)
   PUT    /productions/{id}                  save human edits (script/cast/style/shots)
   POST   /productions/{id}/storyboard       beats -> shots
+  POST   /productions/{id}/board            shot-board stills for shots missing one (async)
+  POST   /productions/{id}/shots/{sid}/still  redo one still with a steering note (async)
   POST   /productions/{id}/cast             generate a character/location reference (async)
   POST   /productions/{id}/characters/{cid}/reference   attach an uploaded reference
   POST   /productions/{id}/produce          autonomous production -> MP4 (async, post-approval)
@@ -159,6 +161,39 @@ def storyboard(pid: str) -> dict:
     prod = build_storyboard(models().text, prod)
     repo.save_production(prod)
     return prod.model_dump(mode="json")
+
+
+@router.post("/productions/{pid}/board", status_code=202)
+def board_stills(pid: str) -> dict:
+    """Generate the shot board's stills (one composed frame per shot missing one) —
+    cheap image tokens the human approves BEFORE any video spend."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    if not prod.shots:
+        raise HTTPException(409, "no shots — run storyboard first")
+    job_id = queue.enqueue("board_stills", {"production_id": pid}, project_id=prod.project_id)
+    return {"job_id": job_id, "status": "queued"}
+
+
+class StillRequest(BaseModel):
+    instruction: str = ""  # steering note ("make it rain", "closer on her hands")
+
+
+@router.post("/productions/{pid}/shots/{sid}/still", status_code=202)
+def regenerate_still(pid: str, sid: str, body: StillRequest) -> dict:
+    """Redo ONE shot's board still, steered by the human's note."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    if not prod.find_shot(sid):
+        raise HTTPException(404, "shot not found")
+    job_id = queue.enqueue(
+        "board_stills",
+        {"production_id": pid, "shot_id": sid, "instruction": body.instruction.strip()},
+        project_id=prod.project_id,
+    )
+    return {"job_id": job_id, "status": "queued"}
 
 
 class CastRequest(BaseModel):

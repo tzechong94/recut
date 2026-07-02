@@ -116,6 +116,9 @@ export interface Shot {
   character_ids: string[];
   location_id?: string | null;
   duration_s: number;
+  /** Shot-board still: the approved first frame produce will animate. */
+  keyframe_asset_id?: string | null;
+  keyframe_url?: string | null;
   source: AssetSource;
   asset_id?: string | null;
   status: ShotStatus;

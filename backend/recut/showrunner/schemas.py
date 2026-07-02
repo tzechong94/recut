@@ -152,6 +152,11 @@ class Shot(BaseModel):
     location_id: str | None = None
     duration_s: float = Field(default=4.0, gt=0)
 
+    # shot-board still — the exact first frame the film animates (approved by the human
+    # on the board, cheap image tokens; produce i2v's THIS frame, never a surprise)
+    keyframe_asset_id: str | None = None
+    keyframe_url: str | None = None
+
     # production state
     source: AssetSource = AssetSource.standin
     asset_id: str | None = None  # generated/uploaded video clip

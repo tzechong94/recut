@@ -70,6 +70,28 @@ def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool 
     return " ".join(parts)
 
 
+def compose_shot_still(models: ModelClients, prod: Production, shot: Shot, *, instruction: str = "") -> GenAsset:
+    """The BOARD STILL: the exact first frame the film will animate for this shot.
+    A character shot composes the locked reference into the (locked) location; a
+    location-only shot redresses the plate for the action; a shot with neither is plain
+    text-to-image. `instruction` is the human's steering note from the shot board."""
+    note = f" Note from the director: {instruction.strip()}." if instruction.strip() else ""
+    char = _identity_character(prod, shot)
+    loc = prod.location(shot.location_id) if shot.location_id else None
+    plate_url = loc.reference_url if (loc and loc.reference_url) else None
+    if char:
+        images = [char.reference_url, plate_url] if plate_url else char.reference_url
+        return models.image.edit(images, build_keyframe_instruction(prod, shot, has_plate=bool(plate_url)) + note)
+    if plate_url:
+        framing = _TYPE_CUES.get(shot.shot_type, "medium shot")
+        return models.image.edit(
+            plate_url,
+            f"{prod.style.prompt_suffix()}. Keep this EXACT location — same layout, colors and "
+            f"props. Show: {shot.action.strip() or 'the empty set'}. {framing}.{note}",
+        )
+    return models.image.generate(build_shot_prompt(prod, shot) + note, width=720, height=1280)
+
+
 @dataclass
 class ShotRender:
     asset: GenAsset
@@ -113,6 +135,17 @@ def generate_shot(
     prompt = build_shot_prompt(prod, shot)
     if corrective:
         prompt += f". IMPORTANT continuity correction: {corrective}"
+
+    if shot.keyframe_url:
+        # The human approved this exact still on the shot board — animate IT, never
+        # recompose. Re-rolls vary the seed/prompt only; the approved frame is sacred.
+        try:
+            asset = models.video.generate_from_image(shot.keyframe_url, prompt, duration_s=shot.duration_s, seed=seed)
+            anchor = _identity_character(prod, shot)
+            return ShotRender(asset=asset, tool="generate_shot_board_i2v",
+                              reference_url=anchor.reference_url if anchor else shot.keyframe_url)
+        except Exception:  # noqa: BLE001 — provider still URLs expire (~24h); recompose below
+            pass
 
     char = _identity_character(prod, shot)
     if char:

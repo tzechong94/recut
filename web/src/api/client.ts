@@ -111,6 +111,21 @@ export const api = {
     request<Production>(`/productions/${id}/storyboard`, { method: "POST" }),
 
   /**
+   * Generate the shot board's stills — one composed frame (character in the locked
+   * location, doing the action, in the style) per shot missing one. Cheap image
+   * tokens; the human approves these exact frames before any video spend. Async.
+   */
+  boardStills: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/board`, { method: "POST" }),
+
+  /** Redo ONE shot's board still, steered by a note ("make it rain"). Async. */
+  shotStill: (id: string, sid: string, instruction = "") =>
+    request<{ job_id: string }>(`/productions/${id}/shots/${sid}/still`, {
+      method: "POST",
+      body: { instruction },
+    }),
+
+  /**
    * Generate a character/location reference image. Async — poll the job.
    * `instruction` is an optional regenerate note ("make him older, add a red scarf")
    * that's woven into the reference prompt so the user steers the look.
