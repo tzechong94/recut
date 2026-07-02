@@ -109,6 +109,7 @@ STYLE_PRESETS: dict[str, StyleLock] = {
     "claymation": StyleLock(name="claymation", descriptors="claymation stop-motion, handmade clay figures, tactile, soft studio light", palette="warm earthy"),
     "storybook": StyleLock(name="storybook", descriptors="painterly children's storybook illustration, soft watercolor, whimsical", palette="pastel"),
     "pixar": StyleLock(name="pixar", descriptors="3D animated feature film, expressive characters, polished lighting", palette="vivid"),
+    "ghibli": StyleLock(name="ghibli", descriptors="hand-painted 2D anime film, lush painterly watercolor backgrounds, soft natural light, wind-swept grass and clouds, gentle nostalgic warmth", palette="verdant greens, sky blue, warm cream"),
     "ink_wash": StyleLock(name="ink_wash", descriptors="traditional Chinese ink wash painting (shuimo), flowing brushstrokes, negative space, misty gradients", palette="black ink on rice paper, sparse red accents"),
     "comic": StyleLock(name="comic", descriptors="graphic novel panel art, bold ink outlines, halftone shading, dramatic panel lighting", palette="high-contrast primaries"),
     "pixel": StyleLock(name="pixel", descriptors="detailed pixel art, 32-bit era, dithered gradients, crisp sprite work", palette="limited retro palette"),

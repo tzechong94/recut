@@ -30,6 +30,7 @@ const STYLE_SWATCH: Record<string, string> = {
   storybook: "linear-gradient(150deg,#f6d5e0,#a8c0e8)",
   cinematic: "linear-gradient(150deg,#3a4a5a,#11161c)",
   pixar: "linear-gradient(150deg,#4dc3ff,#9b6bff)",
+  ghibli: "linear-gradient(150deg,#a8d8a8,#4a7ba6)",
   ink_wash: "linear-gradient(150deg,#e8e4da,#42403a)",
   comic: "linear-gradient(150deg,#ffd23f,#ee4266)",
   pixel: "linear-gradient(150deg,#5efc8d,#233d4d)",
@@ -199,24 +200,6 @@ export function Premise({ open }: PremiseProps) {
             autoFocus
           />
 
-          <div className="sr-premise-controls">
-            <div className="sr-control">
-              <label className="sr-field-label">
-                Target length · <b>{seconds}s</b>
-              </label>
-              <input
-                className="sr-range"
-                type="range"
-                min={15}
-                max={90}
-                step={5}
-                value={seconds}
-                aria-label="Target length in seconds"
-                onChange={(e) => setSeconds(Number(e.target.value))}
-              />
-            </div>
-          </div>
-
           <label className="sr-field-label">Style</label>
           <div className="sr-styles">
             {styles.map((s) => (
@@ -322,34 +305,49 @@ export function Premise({ open }: PremiseProps) {
             </div>
           )}
 
-          <div className="sr-tone-row">
-            <label className="sr-field-label">Tone</label>
-            <select
-              className="sr-tone-select"
-              value={tone}
-              aria-label="Writing tone"
-              onChange={(e) => setTone(e.target.value)}
-            >
-              {TONES.map((t) => (
-                <option key={t} value={t}>
-                  {t === "" ? "match the style" : t}
-                </option>
-              ))}
-            </select>
+          <div className="sr-controls-row">
+            <div className="sr-control sr-control-len">
+              <label className="sr-field-label">
+                Length · <b>{seconds}s</b>
+              </label>
+              <input
+                className="sr-range"
+                type="range"
+                min={15}
+                max={90}
+                step={5}
+                value={seconds}
+                aria-label="Target length in seconds"
+                onChange={(e) => setSeconds(Number(e.target.value))}
+              />
+            </div>
+            <div className="sr-control">
+              <label className="sr-field-label">Tone</label>
+              <select
+                className="sr-tone-select"
+                value={tone}
+                aria-label="Writing tone"
+                onChange={(e) => setTone(e.target.value)}
+              >
+                {TONES.map((t) => (
+                  <option key={t} value={t}>
+                    {t === "" ? "match the style" : t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="sr-testmode" data-testid="test-mode-toggle">
+              <input
+                type="checkbox"
+                checked={testMode}
+                onChange={(e) => setTestMode(e.target.checked)}
+              />
+              <FlaskConical size={13} />
+              <span>
+                <b>Test drive</b> · zero tokens
+              </span>
+            </label>
           </div>
-
-          <label className="sr-testmode" data-testid="test-mode-toggle">
-            <input
-              type="checkbox"
-              checked={testMode}
-              onChange={(e) => setTestMode(e.target.checked)}
-            />
-            <FlaskConical size={13} />
-            <span>
-              <b>Test drive</b> — walk every stage with stub story &amp; stills,
-              zero tokens spent
-            </span>
-          </label>
 
           {error && <div className="rc-err">{error}</div>}
 
