@@ -6,6 +6,8 @@ tier, the option to film a pilot subset first, and a cancel that keeps finished 
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -112,6 +114,27 @@ def test_retake_with_note_refilms_only_that_shot_and_carries_the_note(client, mo
     assert updated.find_shot(first).asset_id  # re-filmed
     assert sum(1 for s in updated.shots if s.asset_id) == 1  # ONLY that shot
     assert any("hold on her face" in pr for pr in prompts)  # the note rode the prompt
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_mux_voice_into_clip_adds_an_audio_stream(tmp_path):
+    """A reviewed shot clip must SPEAK its line (the film render strips clip audio and
+    re-mixes, so this can't double the dialogue)."""
+    import subprocess
+
+    from recut.worker.handlers.showrunner import _mux_voice_into_clip
+
+    video = tmp_path / "clip.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "color=c=black:s=64x64:d=1", str(video)], check=True)
+    wav = tmp_path / "line.wav"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "sine=frequency=440:duration=1", str(wav)], check=True)
+    out = _mux_voice_into_clip(video.read_bytes(), str(wav), tmp_path, "shot_x")
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a",
+                            "-show_entries", "stream=codec_type", "-of", "csv=p=0", "-"],
+                           input=out, capture_output=True)
+    assert b"audio" in probe.stdout  # the clip now carries its spoken line
 
 
 def test_cancel_endpoint_flags_a_running_job(client):
