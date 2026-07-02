@@ -138,6 +138,14 @@ export const api = {
   saveProduction: (id: string, doc: Production) =>
     request<Production>(`/productions/${id}`, { method: "PUT", body: doc }),
 
+  /**
+   * TABLE READ: speak the script aloud, each line in its character's voice.
+   * Cheap voice tokens, human-triggered. Async — poll the job; the result carries
+   * ordered {scene, character, line, asset_id} entries for karaoke playback.
+   */
+  tableRead: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/table-read`, { method: "POST" }),
+
   storyboard: (id: string) =>
     request<Production>(`/productions/${id}/storyboard`, { method: "POST" }),
 

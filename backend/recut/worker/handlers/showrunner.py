@@ -84,6 +84,41 @@ def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
     return {"target": target, "target_id": tid, "asset_id": asset["id"], "reference_url": subject.reference_url}
 
 
+@register("table_read")
+def handle_table_read(job: Job, ctx: WorkerContext) -> dict:
+    """The TABLE READ: speak the written, critiqued script aloud — each line in its
+    character's voice — so the writing is judged by ear before a single video token.
+    Cheap voice tokens, human-triggered, per-line assets for karaoke-style playback."""
+    prod = repo.get_production(job.payload["production_id"])
+    if not prod:
+        raise ValueError("production not found")
+    ctx = _ctx_for(prod, ctx)
+
+    lines = [(sc, line) for sc in prod.scenes for line in (sc.script or []) if line.line.strip()]
+    if not lines:  # storyboard may hold the placed lines instead
+        lines = [(sc, d) for sc in prod.scenes for sh in sc.shots for d in sh.dialogue if d.line.strip()]
+    out, total = [], len(lines) or 1
+    for i, (sc, line) in enumerate(lines):
+        c = prod.character(line.character_id) if line.character_id else None
+        try:
+            va = ctx.models.voice.synthesize(line.line, voice=(c.voice if c else "default"))
+        except Exception:  # noqa: BLE001 — skip a flaky line, keep reading
+            continue
+        if not va:
+            continue
+        ext = "wav" if va.mime.endswith("wav") else "mp3"
+        key = f"productions/{prod.id}/tableread/{i}_{content_hash(va.data)}.{ext}"
+        _store_bytes(ctx, key, va.data, va.mime)
+        asset = repo.create_asset(kind="audio", storage_key=key, project_id=prod.project_id,
+                                  mime=va.mime, duration_s=va.duration_s)
+        prod.token_ledger.voice_tokens += va.tokens
+        out.append({"scene": sc.heading, "character": line.character_name, "line": line.line,
+                    "asset_id": asset["id"]})
+        queue.update_progress(job.id, (i + 1) / total)
+    repo.save_production(prod)
+    return {"lines": out}
+
+
 @register("board_stills")
 def handle_board_stills(job: Job, ctx: WorkerContext) -> dict:
     """Generate the shot board's stills — one composed frame per shot (character placed

@@ -234,6 +234,19 @@ def storyboard(pid: str) -> dict:
     return prod.model_dump(mode="json")
 
 
+@router.post("/productions/{pid}/table-read", status_code=202)
+def table_read(pid: str) -> dict:
+    """Speak the script aloud, each line in its character's voice (cheap voice tokens,
+    human-triggered) — judge the writing by ear before any video spend."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    if not any((sc.script or []) or any(sh.dialogue for sh in sc.shots) for sc in prod.scenes):
+        raise HTTPException(409, "no written dialogue yet")
+    job_id = queue.enqueue("table_read", {"production_id": pid}, project_id=prod.project_id)
+    return {"job_id": job_id, "status": "queued"}
+
+
 @router.post("/productions/{pid}/board", status_code=202)
 def board_stills(pid: str) -> dict:
     """Generate the shot board's stills (one composed frame per shot missing one) —

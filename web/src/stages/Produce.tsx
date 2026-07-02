@@ -19,6 +19,7 @@ import type {
   Timeline,
 } from "../types";
 import { PreviewPlayer } from "../preview/PreviewPlayer";
+import { OrchestrationMap } from "../components/OrchestrationMap";
 import { ScoreboardPanel } from "../components/Scoreboard";
 import { ShotBadges } from "../components/ShotBadges";
 import { DirectorLog } from "../components/DirectorLog";
@@ -133,13 +134,14 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
       {run === "idle" ? (
         <div className="sr-action-gate">
           <Clapperboard size={40} />
-          <h3>{shots.length} shots ready to generate</h3>
+          <h3>The run sheet — what happens when you call action</h3>
+          <RunSheet production={p} />
           <p>
-            Everything up to here was cheap text &amp; stills. Pressing action
-            commits the expensive video pass. Make sure the board is right.
+            You're approving this exact plan. Everything above the line is
+            already paid (cheap text &amp; stills); video spend starts below it.
           </p>
           <button className="rc-cta sr-action-btn" onClick={start}>
-            <Clapperboard size={17} /> Action — produce the film
+            <Clapperboard size={17} /> Action — approve the plan &amp; roll
           </button>
         </div>
       ) : (
@@ -206,10 +208,46 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
               </div>
             )}
             <ScoreboardPanel scoreboard={scoreboard} live={run === "running"} />
+            <OrchestrationMap production={p} scoreboard={scoreboard} />
             <DirectorLog log={p.director_log} live={run === "running"} />
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** The approval artifact: every call the agent will make, with the estimated spend.
+ *  The human approves THIS, not a vibe. Estimates labeled; ~1800 video tokens/s. */
+function RunSheet({ production: p }: { production: Production }) {
+  const shots = p.scenes.flatMap((s) => s.shots);
+  const stills = shots.filter((s) => s.keyframe_asset_id || s.keyframe_url).length;
+  const gated = shots.filter((s) => s.keyframe_score != null).length;
+  const spoken = shots.filter((s) => s.dialogue.length > 0 || s.narration).length;
+  const estVideo = Math.round(shots.reduce((a, s) => a + s.duration_s * 1800, 0) / 1000);
+  return (
+    <div className="sr-runsheet" data-testid="run-sheet">
+      <div className="sr-rs-row is-done">
+        <span>{stills}/{shots.length} board stills composed{gated ? ` · ${gated} gated by the critic` : ""}</span>
+        <b>already spent (image)</b>
+      </div>
+      <div className="sr-rs-line" aria-hidden="true" />
+      <div className="sr-rs-row">
+        <span>{shots.length} × Wan i2v — animate your approved frames</span>
+        <b>≈{estVideo}k video tokens (est.)</b>
+      </div>
+      <div className="sr-rs-row">
+        <span>Qwen-VL critic verifies every shot against its approved still</span>
+        <b>re-rolls bounded: ≤2 per drifted shot</b>
+      </div>
+      <div className="sr-rs-row">
+        <span>{spoken} spoken shot{spoken === 1 ? "" : "s"} — qwen3-tts in character voices</span>
+        <b>voice tokens (tiny)</b>
+      </div>
+      <div className="sr-rs-row">
+        <span>Assemble: music bed, captions, title cards, ffmpeg render</span>
+        <b>0 model tokens</b>
+      </div>
     </div>
   );
 }

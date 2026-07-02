@@ -437,7 +437,7 @@ class QwenVoiceGen(VoiceGen):
         import dashscope
         import httpx
 
-        chosen = self.s.cosyvoice_voice if voice in ("", "default", None) else voice
+        chosen = resolve_tts_voice(voice, self.s.cosyvoice_voice)
 
         def call() -> GenAsset:
             # qwen3-tts-flash returns a hosted audio URL (no websocket); fetch the bytes.
@@ -453,6 +453,25 @@ class QwenVoiceGen(VoiceGen):
             return GenAsset(data=data, mime=mime, duration_s=max(1.0, len(text) * 0.06), tokens=len(text))
 
         return _retry(call)
+
+
+# qwen3-tts-flash roster (intl). Characters may still carry legacy CosyVoice ids
+# ("longxiaochun_v2") — those don't exist here and would fail the call (→ silent film).
+_QWEN_TTS_VOICES = ("Cherry", "Serena", "Ethan", "Chelsie")
+
+
+def resolve_tts_voice(requested: str | None, default: str) -> str:
+    """Map any requested voice onto the qwen-tts roster: known names pass through,
+    legacy/unknown ids resolve deterministically to a roster voice (stable per id, so
+    a character keeps the same voice across shots and episodes)."""
+    if not requested or requested == "default":
+        return default
+    if requested in _QWEN_TTS_VOICES:
+        return requested
+    import hashlib
+
+    i = int(hashlib.sha256(requested.encode()).hexdigest(), 16) % len(_QWEN_TTS_VOICES)
+    return _QWEN_TTS_VOICES[i]
 
 
 def build_qwen_clients(s: Settings) -> ModelClients:

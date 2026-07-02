@@ -4,11 +4,14 @@ import {
   MapPin,
   MessagesSquare,
   Send,
+  Square,
   TrendingUp,
   Users,
+  Volume2,
 } from "lucide-react";
-import { useState } from "react";
-import { api } from "../api/client";
+import { useEffect, useRef, useState } from "react";
+import { api, assetRawUrl } from "../api/client";
+import { pollJob } from "../lib/jobs";
 import type { UseProduction } from "../lib/useProduction";
 import type {
   Character,
@@ -209,7 +212,10 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
             )}
           </div>
 
-          <div className="sr-section-head">Scene beats</div>
+          <div className="sr-section-head">
+            Scene beats
+            <TableRead productionId={p.id} />
+          </div>
           <div className="sr-cards">
             {p.scenes.map((s, i) => (
               <div className="sr-treat-card sr-beat" key={s.id}>
@@ -251,6 +257,87 @@ export function ScriptStage({ ctl, onAdvance }: StageProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+interface ReadLine {
+  scene: string;
+  character: string;
+  line: string;
+  asset_id: string;
+}
+
+/**
+ * TABLE READ — the script judged by ear before any video spend. One click
+ * synthesizes each written line in its character's voice (cheap voice tokens)
+ * and plays them back in order, karaoke-style.
+ */
+function TableRead({ productionId }: { productionId: string }) {
+  const [reading, setReading] = useState(false);
+  const [lines, setLines] = useState<ReadLine[] | null>(null);
+  const [playIdx, setPlayIdx] = useState<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; audioRef.current?.pause(); }, []);
+
+  function play(ls: ReadLine[], i: number) {
+    if (!alive.current || i >= ls.length) {
+      setPlayIdx(null);
+      return;
+    }
+    setPlayIdx(i);
+    const a = new Audio(assetRawUrl(ls[i].asset_id));
+    audioRef.current = a;
+    a.onended = () => play(ls, i + 1);
+    a.play().catch(() => play(ls, i + 1));
+  }
+
+  async function start() {
+    setReading(true);
+    try {
+      const { job_id } = await api.tableRead(productionId);
+      const job = await pollJob(job_id, { timeoutMs: 5 * 60 * 1000 });
+      const ls = (job.result?.lines ?? []) as ReadLine[];
+      if (alive.current && ls.length) {
+        setLines(ls);
+        play(ls, 0);
+      }
+    } catch {
+      /* voice is an enhancement; the button simply resets */
+    } finally {
+      if (alive.current) setReading(false);
+    }
+  }
+
+  const stop = () => {
+    audioRef.current?.pause();
+    setPlayIdx(null);
+  };
+
+  const now = playIdx != null && lines ? lines[playIdx] : null;
+  return (
+    <span className="sr-tableread" data-testid="table-read">
+      {now ? (
+        <>
+          <span className="sr-tr-now">
+            <b>{now.character || "—"}</b> “{now.line}”
+          </span>
+          <button className="sr-mini" onClick={stop} aria-label="Stop table read">
+            <Square size={12} /> Stop
+          </button>
+        </>
+      ) : (
+        <button
+          className="sr-mini"
+          disabled={reading}
+          onClick={() => void start()}
+          aria-label="Table read"
+        >
+          {reading ? <Loader2 size={13} className="rc-spin" /> : <Volume2 size={13} />}
+          Table read
+        </button>
+      )}
+    </span>
   );
 }
 

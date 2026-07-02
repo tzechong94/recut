@@ -15,6 +15,7 @@ import { pollJob } from "../lib/jobs";
 import type { UseProduction } from "../lib/useProduction";
 import type { ProductionEval, Scoreboard, Shot, Timeline } from "../types";
 import { PreviewPlayer } from "../preview/PreviewPlayer";
+import { OrchestrationMap } from "../components/OrchestrationMap";
 import { ScoreboardPanel } from "../components/Scoreboard";
 import { ProofPanel } from "../components/ProofPanel";
 import { DirectorLog } from "../components/DirectorLog";
@@ -279,6 +280,7 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
 
         <div className="sr-film-side">
           <ProofPanel ev={evalData} />
+          <OrchestrationMap production={p} scoreboard={scoreboard} />
           <ScoreboardPanel scoreboard={scoreboard} />
           <DirectorLog log={p.director_log} />
         </div>

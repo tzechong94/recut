@@ -34,12 +34,15 @@ describe("ProduceStage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows the action gate with the shot count before producing", () => {
+  it("shows the run-sheet gate — the human approves the exact plan", () => {
     const prod = makeProduction({ stage: "storyboard" });
     render(<ProduceStage ctl={ctlFor(prod)} onAdvance={vi.fn()} />);
-    expect(screen.getByText(/1 shots ready to generate/i)).toBeInTheDocument();
+    const sheet = screen.getByTestId("run-sheet");
+    expect(sheet).toHaveTextContent(/1 × Wan i2v/i);
+    expect(sheet).toHaveTextContent(/video tokens \(est\.\)/i);
+    expect(sheet).toHaveTextContent(/0 model tokens/i);
     expect(
-      screen.getByRole("button", { name: /Action — produce the film/i }),
+      screen.getByRole("button", { name: /Action — approve the plan/i }),
     ).toBeInTheDocument();
   });
 
