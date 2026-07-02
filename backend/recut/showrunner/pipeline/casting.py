@@ -31,9 +31,39 @@ def location_reference_prompt(loc: Location, style: StyleLock, instruction: str 
     )
 
 
-def generate_character_reference(models: ModelClients, char: Character, style: StyleLock, instruction: str = "") -> GenAsset:
+_ANCHOR_MATCH = (
+    "Match the EXACT art style, medium, rendering technique, line quality, level of "
+    "stylization and palette of this reference image — but create a COMPLETELY DIFFERENT subject."
+)
+
+
+def generate_character_reference(
+    models: ModelClients, char: Character, style: StyleLock, instruction: str = "",
+    anchor_url: str | None = None,
+) -> GenAsset:
+    """With `anchor_url`, the new reference is DERIVED from an existing image (the custom
+    style ref or the first cast member) via image-edit — same rendering, new subject —
+    so the whole bible shares one look instead of each t2i rolling its own style."""
+    if anchor_url:
+        extra = f" {instruction.strip()}." if instruction.strip() else ""
+        return models.image.edit(
+            anchor_url,
+            f"{_ANCHOR_MATCH} New subject: a full-body character reference of {char.name}: "
+            f"{char.description}.{extra} Standing against a plain neutral backdrop, even soft "
+            f"lighting, vertical composition.",
+        )
     return models.image.generate(character_reference_prompt(char, style, instruction), width=720, height=1280)
 
 
-def generate_location_reference(models: ModelClients, loc: Location, style: StyleLock, instruction: str = "") -> GenAsset:
+def generate_location_reference(
+    models: ModelClients, loc: Location, style: StyleLock, instruction: str = "",
+    anchor_url: str | None = None,
+) -> GenAsset:
+    if anchor_url:
+        extra = f" {instruction.strip()}." if instruction.strip() else ""
+        return models.image.edit(
+            anchor_url,
+            f"{_ANCHOR_MATCH} New subject: an establishing location plate, NO people: "
+            f"{loc.description}.{extra} Wide empty set, consistent art direction.",
+        )
     return models.image.generate(location_reference_prompt(loc, style, instruction), width=1280, height=720)
