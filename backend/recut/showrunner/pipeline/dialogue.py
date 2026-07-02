@@ -45,6 +45,21 @@ def write_dialogue(llm: TextLLM, prod: Production) -> Production:
             text, t = llm.complete(_WRITER_SYS, user, json_mode=True)
             tokens += t
             draft = _parse(text).get("lines", [])
+            # HARD pacing guard: live models drift past the 12-word instruction; one
+            # targeted revise brings long lines down (screen time is paid for)
+            if any(len((l.get("line") or "").split()) > 14 for l in draft):
+                short_text, t2 = llm.complete(
+                    _REVISER_SYS,
+                    f"LINES: {json.dumps(draft)}\nNOTES: every line MUST be at most 12 words — "
+                    "cut ruthlessly, keep the meaning and each character's voice.",
+                    json_mode=True,
+                )
+                tokens += t2
+                shortened = _parse(short_text).get("lines", [])
+                if shortened:
+                    draft = shortened
+                if any(len((l.get("line") or "").split()) > 18 for l in draft):
+                    prod.warnings.append(f"lines in '{scene.heading}' run long despite revision — pacing may stretch")
             crit_text, t = llm.complete(_CRITIC_SYS, json.dumps({"scene": scene.summary, "lines": draft}), json_mode=True)
             tokens += t
             crit = _parse(crit_text)

@@ -33,7 +33,10 @@ def location_reference_prompt(loc: Location, style: StyleLock, instruction: str 
 
 _ANCHOR_MATCH = (
     "Match the EXACT art style, medium, rendering technique, line quality, level of "
-    "stylization and palette of this reference image — but create a COMPLETELY DIFFERENT subject."
+    "stylization and palette of this reference image — but the SUBJECT MUST BE A "
+    "COMPLETELY DIFFERENT PERSON: different face shape, different hair color AND "
+    "hairstyle, different wardrobe colors and garments. Copy ONLY the art style, "
+    "never the person, outfit or accessories."
 )
 
 
