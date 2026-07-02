@@ -125,6 +125,9 @@ export interface Shot {
   keyframe_url?: string | null;
   /** Signature of the filmable fields when the still was made (staleness check). */
   keyframe_sig?: string;
+  /** Still-gate scores: identity vs character ref, setting vs location plate. */
+  keyframe_score?: number | null;
+  setting_score?: number | null;
   source: AssetSource;
   asset_id?: string | null;
   status: ShotStatus;

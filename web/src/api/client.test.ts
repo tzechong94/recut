@@ -103,6 +103,14 @@ describe("showrunner api client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE}/api/tones`);
   });
 
+  it("POST /table-read queues the read job", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j9" }));
+    await api.tableRead("prod_1");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/table-read`);
+    expect(opts.method).toBe("POST");
+  });
+
   it("POST /board queues the shot-board stills job", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j5" }));
     const res = await api.boardStills("prod_1");
