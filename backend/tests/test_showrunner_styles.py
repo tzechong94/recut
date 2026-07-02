@@ -31,13 +31,12 @@ def client() -> TestClient:
     return TestClient(create_app())
 
 
-def test_preset_gallery_grew_and_new_presets_use_online_thumbnails(client):
+def test_preset_gallery_grew_with_generated_thumbnails(client):
     styles = client.get("/api/styles").json()
     names = {s["name"] for s in styles}
     assert {"ink_wash", "comic", "pixel", "cyberpunk", "retro_film", "paper_craft"} <= names
-    by_name = {s["name"]: s for s in styles}
-    assert by_name["ink_wash"]["image"].startswith("https://")  # online, zero credits
-    assert by_name["noir"]["image"].startswith("/styles/")  # originals keep local stills
+    # every preset card is a pre-generated local still (same scene, twelve looks)
+    assert all(s["image"] == f"/styles/{s['name']}.jpg" for s in styles)
 
 
 def test_tones_endpoint_lists_registers(client):
