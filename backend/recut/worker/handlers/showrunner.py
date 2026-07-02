@@ -72,6 +72,13 @@ def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
     subject.reference_url = gen.url or ctx.storage.url(key)
     subject.source = AssetSource.generated
     subject.locked = True
+    if target == "character":
+        # identity anchors: what must NOT drift, named once at cast time and injected
+        # into every keyframe compose + critic corrective downstream
+        try:
+            subject.identity_notes = ctx.models.vision.describe_subject(subject.reference_url)
+        except Exception:  # noqa: BLE001 — anchors are an enhancement, never fatal
+            subject.identity_notes = ""
     prod.token_ledger.image_tokens += gen.tokens
     repo.save_production(prod)
     return {"target": target, "target_id": tid, "asset_id": asset["id"], "reference_url": subject.reference_url}
@@ -102,10 +109,9 @@ def handle_board_stills(job: Job, ctx: WorkerContext) -> dict:
         targets = [s for s in prod.shots if not s.keyframe_url]
     made, total = 0, len(targets) or 1
     for i, shot in enumerate(targets):
-        try:
-            gen = compose_shot_still(ctx.models, prod, shot, instruction=instruction)
-        except Exception as exc:  # noqa: BLE001 — one failed still must not sink the board
-            prod.warnings.append(f"board still failed for a shot ({type(exc).__name__})")
+        gen, id_score, set_score = _gated_still(prod, shot, ctx, instruction)
+        if gen is None:
+            prod.warnings.append("board still failed for a shot")
             repo.save_production(prod)
             continue
         key = f"productions/{prod.id}/stills/{shot.id}_{content_hash(gen.data)}.png"
@@ -114,11 +120,73 @@ def handle_board_stills(job: Job, ctx: WorkerContext) -> dict:
         shot.keyframe_asset_id = asset["id"]
         shot.keyframe_url = gen.url or ctx.storage.url(key)
         shot.keyframe_sig = still_signature(shot)  # staleness anchor for the board UI
-        prod.token_ledger.image_tokens += gen.tokens
+        shot.keyframe_score = id_score
+        shot.setting_score = set_score
         made += 1
         repo.save_production(prod)
         queue.update_progress(job.id, (i + 1) / total)
     return {"stills": made, "total": len(targets)}
+
+
+_STILL_GATE_ATTEMPTS = 2  # 1 compose + 1 bounded re-compose (image price, ~50× under video)
+
+
+def _gated_still(prod, shot, ctx: WorkerContext, instruction: str):
+    """Compose a still and GATE it: Qwen-VL scores identity (vs the character ref) and
+    setting (vs the location plate); a failing still is re-composed once with the
+    critic's note. Drift dies here at image price — never fake-pass: an unavailable
+    critic leaves scores None and the still ships ungated."""
+    import tempfile
+    from pathlib import Path
+
+    from recut.showrunner.pipeline.production import _identity_character
+
+    char = _identity_character(prod, shot)
+    loc = prod.location(shot.location_id) if shot.location_id else None
+    plate_url = loc.reference_url if (loc and loc.reference_url) else None
+    tmpdir = Path(tempfile.mkdtemp(prefix="recut-gate-"))
+
+    best = None  # (rank, gen, id_score, set_score)
+    corrective = ""
+    for attempt in range(_STILL_GATE_ATTEMPTS):
+        note = " ".join(x for x in (instruction, corrective) if x).strip()
+        try:
+            gen = compose_shot_still(ctx.models, prod, shot, instruction=note)
+        except Exception:  # noqa: BLE001 — one failed compose must not sink the board
+            break
+        prod.token_ledger.image_tokens += gen.tokens
+        cand = gen.url
+        if not cand:
+            p = tmpdir / f"still_{shot.id}_{attempt}.png"
+            p.write_bytes(gen.data)
+            cand = str(p)
+        id_score = set_score = None
+        reasons = []
+        try:
+            if char and char.reference_url:
+                v = ctx.models.vision.score_consistency(char.reference_url, cand)
+                id_score = v.score
+                if v.reason:
+                    reasons.append(v.reason)
+            if plate_url:
+                v = ctx.models.vision.score_consistency(plate_url, cand)
+                set_score = v.score
+                if v.reason:
+                    reasons.append(v.reason)
+        except Exception:  # noqa: BLE001 — critic down → ungated, never fake-pass
+            pass
+        scores = [s for s in (id_score, set_score) if s is not None]
+        worst = min(scores) if scores else None
+        rank = worst if worst is not None else -1.0
+        if best is None or rank > best[0]:
+            best = (rank, gen, id_score, set_score)
+        if worst is None or worst >= CONSISTENCY_THRESHOLD:
+            break  # passed (or critic unavailable) — don't burn budget
+        corrective = "; ".join(reasons) or "match the reference identity and set exactly"
+        prod.token_ledger.still_rerolls += 1
+    if best is None:
+        return None, None, None
+    return best[1], best[2], best[3]
 
 
 def _keyframe(video_path: str, mime: str) -> str | None:

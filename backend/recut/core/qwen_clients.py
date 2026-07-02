@@ -207,6 +207,36 @@ class QwenVision(VisionAnalyzer):
         except Exception:  # noqa: BLE001 — critic unavailable -> skip, do NOT fake-pass
             return ConsistencyVerdict(score=None, reason="critic unavailable")
 
+    def describe_subject(self, image_ref: str) -> str:
+        """Compact identity anchors from a locked reference still — fed into every
+        keyframe compose so the edit model knows exactly what must not drift."""
+        import os
+
+        import dashscope
+
+        u = image_ref if "://" in image_ref else "file://" + os.path.abspath(image_ref)
+        prompt = (
+            "List the visual identity anchors of the main subject as a SHORT comma-separated "
+            "phrase list (max 6): distinctive facial features, hair, wardrobe items and colors, "
+            "accessories. No sentences, no commentary."
+        )
+
+        def call() -> str:
+            resp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_vl_model,
+                messages=[{"role": "user", "content": [{"image": u}, {"text": prompt}]}],
+            )
+            if getattr(resp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-vl subject {getattr(resp,'code','?')}: {getattr(resp,'message',resp)}")
+            raw = resp["output"]["choices"][0]["message"]["content"]
+            text = raw if isinstance(raw, str) else " ".join(p.get("text", "") for p in raw if isinstance(p, dict))
+            return text.strip().strip(".")[:220]
+
+        try:
+            return _retry(call, attempts=2)
+        except Exception:  # noqa: BLE001 — anchors are an enhancement, never fatal
+            return ""
+
     def describe_style(self, image_refs: list[str], *, hint: str = "") -> dict:
         """Distill the VISUAL STYLE of the reference image(s) into StyleLock fields.
         Accepts hosted URLs or local paths (sent as file:// uploads)."""

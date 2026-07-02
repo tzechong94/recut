@@ -396,19 +396,27 @@ def scoreboard(pid: str) -> dict:
     n, dur = len(prod.shots), prod.duration_s
     ready = sum(1 for s in prod.shots if s.asset_id)
     scored = [s.critic_score for s in prod.shots if s.critic_score is not None]
+    setting = [s.setting_score for s in prod.shots if s.setting_score is not None]
+    identity = [s.keyframe_score for s in prod.shots if s.keyframe_score is not None]
     baseline = led.naive_baseline(n or 1, (dur / n) if n else 4.0)
+    avg_shot_s = (dur / n) if n else 4.0
     return {
         "tokens": {"text": led.text_tokens, "image": led.image_tokens, "video": led.video_tokens, "voice": led.voice_tokens, "total": led.total},
         # The DEFENSIBLE, true claims (not a circular % vs a strawman):
         "video_tokens_pre_approval": 0,  # true by construction — produce runs only after approval
         "approval_gated": True,
-        "rerolls": led.rerolls,  # only drifted shots were re-rolled, not everything
+        "rerolls": led.rerolls,  # drift that survived to the expensive (video) tier
+        "still_rerolls": led.still_rerolls,  # drift KILLED at image price by the still gate
+        # labeled estimate: each still re-roll replaced what would have been a video re-roll
+        "drift_caught_early_tokens_saved_estimate": int(led.still_rerolls * avg_shot_s * 1800),
         "shots_ready": ready,
         "shots_total": n,
         "avg_consistency": round(sum(scored) / len(scored), 3) if scored else None,
+        "avg_identity_gate": round(sum(identity) / len(identity), 3) if identity else None,
+        "avg_setting": round(sum(setting) / len(setting), 3) if setting else None,
         "duration_s": dur,
         # A clearly-labeled ESTIMATE vs regenerating everything without the plan-lock:
         "baseline_estimate_tokens": baseline,
         "estimated_tokens_saved": max(0, baseline - led.total),
-        "headline": "0 video tokens spent before you approved the plan; the critic re-rolled only the shots that drifted.",
+        "headline": "0 video tokens before approval; drift is caught on stills at image price, and only surviving drift costs a video re-roll.",
     }

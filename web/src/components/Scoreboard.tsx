@@ -79,6 +79,11 @@ export function ScoreboardPanel({
           icon={<RotateCw size={13} />}
           label="critic rerolls"
           value={String(v.rerolls)}
+          sub={
+            (scoreboard?.still_rerolls ?? 0) > 0
+              ? `+${scoreboard!.still_rerolls} caught on stills`
+              : undefined
+          }
         />
         <Stat
           icon={<Coins size={13} />}

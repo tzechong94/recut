@@ -43,7 +43,7 @@ def build_shot_prompt(prod: Production, shot: Shot) -> str:
 
 
 def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool = False,
-                               has_style_ref: bool = False) -> str:
+                               has_style_ref: bool = False, n_chars: int = 1) -> str:
     """Instruction for the image-edit model: keep the character's identity but place them
     INTO the shot's location, doing the shot's action, in the show's style. The result is
     the i2v first frame, so the video already has the right world + look. When `has_plate`,
@@ -58,12 +58,30 @@ def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool 
         " The FINAL input image is a STYLE reference — match its medium, texture, lighting "
         "and palette exactly (its subject does not matter)." if has_style_ref else ""
     )
+    # identity anchors: name exactly what must not drift, per character in frame
+    anchors = "; ".join(
+        f"{c.name}: {c.identity_notes}" for c in _identity_characters(prod, shot)[:2] if c.identity_notes
+    )
+    anchor_clause = f" Identity anchors that must not change — {anchors}." if anchors else ""
+    if n_chars >= 2 and has_plate:
+        return (
+            f"{prod.style.prompt_suffix()}. Images 1 and 2 are the CHARACTERS; image 3 is the SET. "
+            f"Place BOTH exact characters into the exact set — keep each one's SAME face, hair, "
+            f"wardrobe and art style, AND keep the SAME location layout, colors and props. "
+            f"The action: {action}. {framing}.{anchor_clause}{style_clause}"
+        )
+    if n_chars >= 2:
+        return (
+            f"{prod.style.prompt_suffix()}. The input images are the CHARACTERS. Place BOTH exact "
+            f"characters into one full scene with a detailed background — keep each one's SAME "
+            f"face, hair, wardrobe and art style. The action: {action}. {framing}.{anchor_clause}{style_clause}"
+        )
     if has_plate:
         return (
             f"{prod.style.prompt_suffix()}. Image 1 is the CHARACTER; image 2 is the SET. "
             f"Place the exact character from image 1 into the exact set from image 2 — keep the "
             f"SAME face, hair, wardrobe and art style, AND keep the SAME location layout, colors "
-            f"and props. The character is: {action}. {framing}.{style_clause}"
+            f"and props. The character is: {action}. {framing}.{anchor_clause}{style_clause}"
         )
     parts = [
         f"{prod.style.prompt_suffix()}.",
@@ -74,7 +92,7 @@ def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool 
         parts.append(f"Setting: {loc.name} — {loc.description}.")
     parts.append(f"The character is: {action}.")
     parts.append(f"Shot framing: {framing}.")
-    return " ".join(parts) + style_clause
+    return " ".join(parts) + anchor_clause + style_clause
 
 
 def still_signature(shot: Shot) -> str:
@@ -103,13 +121,17 @@ def compose_shot_still(models: ModelClients, prod: Production, shot: Shot, *, in
     text-to-image. A custom style's reference image rides along as the LAST input so the
     look is anchored to a real image. `instruction` is the human's steering note."""
     note = f" Note from the director: {instruction.strip()}." if instruction.strip() else ""
+    tod = _time_of_day(prod, shot)
+    if tod:
+        note += f" Time of day: {tod} — keep the lighting consistent with the scene."
     style_ref = style_anchor_url(prod)
-    char = _identity_character(prod, shot)
+    chars = _identity_characters(prod, shot)[:2]
     loc = prod.location(shot.location_id) if shot.location_id else None
     plate_url = loc.reference_url if (loc and loc.reference_url) else None
-    if char:
-        images = [char.reference_url] + ([plate_url] if plate_url else []) + ([style_ref] if style_ref else [])
-        instr = build_keyframe_instruction(prod, shot, has_plate=bool(plate_url), has_style_ref=bool(style_ref))
+    if chars:
+        images = [c.reference_url for c in chars] + ([plate_url] if plate_url else []) + ([style_ref] if style_ref else [])
+        instr = build_keyframe_instruction(prod, shot, has_plate=bool(plate_url),
+                                           has_style_ref=bool(style_ref), n_chars=len(chars))
         return models.image.edit(images if len(images) > 1 else images[0], instr + note)
     if plate_url:
         framing = _TYPE_CUES.get(shot.shot_type, "medium shot")
@@ -140,13 +162,32 @@ class ShotRender:
     keyframe: GenAsset | None = None  # the composed character-in-scene still fed to i2v
 
 
-def _identity_character(prod: Production, shot: Shot):
-    """The character whose locked reference anchors this shot's identity (first in frame)."""
+def _identity_characters(prod: Production, shot: Shot) -> list:
+    """The characters in frame with LOCKED references, in order (max 2 feed a compose)."""
+    out = []
     for cid in shot.character_ids:
         c = prod.character(cid)
         if c and c.reference_url:
-            return c
-    return None
+            out.append(c)
+    return out
+
+
+def _identity_character(prod: Production, shot: Shot):
+    """The character whose locked reference anchors this shot's identity (first in frame)."""
+    chars = _identity_characters(prod, shot)
+    return chars[0] if chars else None
+
+
+def _time_of_day(prod: Production, shot: Shot) -> str:
+    """Time-of-day from the shot's scene heading ('INT. KITCHEN - NIGHT' → 'night') so
+    every still in a scene keeps the same light."""
+    import re
+
+    for sc in prod.scenes:
+        if any(s.id == shot.id for s in sc.shots):
+            m = re.search(r"-\s*(NIGHT|DAY|DUSK|DAWN|EVENING|MORNING)\b", sc.heading.upper())
+            return m.group(1).lower() if m else ""
+    return ""
 
 
 def reference_for_shot(prod: Production, shot: Shot) -> tuple[str | None, bool]:
@@ -182,8 +223,12 @@ def generate_shot(
         try:
             asset = models.video.generate_from_image(shot.keyframe_url, prompt, duration_s=shot.duration_s, seed=seed)
             anchor = _identity_character(prod, shot)
-            return ShotRender(asset=asset, tool="generate_shot_board_i2v",
-                              reference_url=anchor.reference_url if anchor else shot.keyframe_url)
+            # A still that PASSED the gate already encodes identity+setting — the video
+            # critic then verifies FAITHFULNESS to that approved frame. An ungated still
+            # falls back to the identity reference.
+            gate_passed = shot.keyframe_score is not None and shot.keyframe_score >= 0.6
+            ref = shot.keyframe_url if gate_passed else (anchor.reference_url if anchor else shot.keyframe_url)
+            return ShotRender(asset=asset, tool="generate_shot_board_i2v", reference_url=ref)
         except Exception:  # noqa: BLE001 — provider still URLs expire (~24h); recompose below
             pass
 
