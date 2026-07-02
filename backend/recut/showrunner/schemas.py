@@ -139,6 +139,9 @@ class Character(BaseModel):
     role: str = ""  # protagonist / antagonist / supporting
     want: str = ""  # dramatic want (what they pursue) — gives the character an arc
     flaw: str = ""  # the flaw/obstacle that creates conflict
+    # VL-described visual anchors of the LOCKED reference ("red scarf, grey coat") —
+    # injected into every keyframe compose so the model knows what must not drift
+    identity_notes: str = ""
     reference_asset_id: str | None = None  # stored reference still (consistency anchor)
     reference_url: str | None = None  # direct URL usable by Wan i2v (e.g. DashScope/OSS)
     source: AssetSource = AssetSource.none
@@ -183,6 +186,10 @@ class Shot(BaseModel):
     keyframe_url: str | None = None
     # signature of the filmable fields at still time; a mismatch = the still is STALE
     keyframe_sig: str = ""
+    # still-gate scores: identity/setting drift is caught HERE at image price,
+    # before any video token is spent (min of the two gates the still)
+    keyframe_score: float | None = None
+    setting_score: float | None = None
 
     # production state
     source: AssetSource = AssetSource.standin
@@ -232,7 +239,8 @@ class TokenLedger(BaseModel):
     image_tokens: int = 0  # reference stills
     video_tokens: int = 0  # Wan shots (expensive)
     voice_tokens: int = 0
-    rerolls: int = 0  # consistency-critic re-generations
+    rerolls: int = 0  # VIDEO re-rolls (drift that survived to the expensive tier)
+    still_rerolls: int = 0  # drift caught at IMAGE price by the still gate (~50× cheaper)
 
     @property
     def total(self) -> int:

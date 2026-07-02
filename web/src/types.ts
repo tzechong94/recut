@@ -225,6 +225,11 @@ export interface Scoreboard {
     total: number;
   };
   rerolls: number;
+  /** Drift killed at IMAGE price by the still gate (before any video spend). */
+  still_rerolls?: number;
+  avg_setting?: number | null;
+  avg_identity_gate?: number | null;
+  drift_caught_early_tokens_saved_estimate?: number;
   naive_baseline_tokens: number;
   tokens_saved: number;
   savings_pct: number;

@@ -91,6 +91,12 @@ class VisionAnalyzer(ABC):
         {"descriptors": str, "palette": str} usable as a StyleLock. Default: unavailable."""
         raise NotImplementedError("style distillation not available on this backend")
 
+    def describe_subject(self, image_ref: str) -> str:
+        """Compact identity anchors of the subject in a locked reference still
+        ("red scarf, grey coat, round glasses") — what must NOT drift shot to shot.
+        Default: none (composes still work, just without the anchor line)."""
+        return ""
+
 
 class Transcriber(ABC):
     @abstractmethod
@@ -186,6 +192,14 @@ class StubVision(VisionAnalyzer):
         # candidate keyframe) score high — proving re-roll actually improves the shot.
         base = 0.55 if "_a0" in candidate or candidate.endswith("0.png") else 0.85
         return ConsistencyVerdict(score=base, reason="stub: minor wardrobe drift" if base < 0.6 else "stub: consistent")
+
+    def describe_subject(self, image_ref: str) -> str:
+        rng = _stub_rng("subject", image_ref)
+        return ", ".join([
+            rng.choice(["weathered face", "bright searching eyes", "soft round features", "sharp jawline"]),
+            rng.choice(["red scarf", "grey wool coat", "patched denim jacket", "flour-dusted apron"]),
+            rng.choice(["silver-streaked hair", "cropped dark hair", "loose braid", "wind-tousled curls"]),
+        ])
 
     def describe_style(self, image_refs: list[str], *, hint: str = "") -> dict:
         # Deterministic per reference set so custom styles are stable offline.
