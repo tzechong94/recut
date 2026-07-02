@@ -278,7 +278,11 @@ function TableRead({ productionId }: { productionId: string }) {
   const [playIdx, setPlayIdx] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; audioRef.current?.pause(); }, []);
+  // StrictMode remounts share the ref — reset to true on (re)mount (see Cast.tsx).
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; audioRef.current?.pause(); };
+  }, []);
 
   function play(ls: ReadLine[], i: number) {
     if (!alive.current || i >= ls.length) {

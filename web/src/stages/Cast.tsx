@@ -32,7 +32,12 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
   const [castingAll, setCastingAll] = useState(false);
   const [styleOptions, setStyleOptions] = useState<string[]>(FALLBACK_STYLE_OPTIONS);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  // StrictMode remounts share the ref — reset to true on (re)mount or the false
+  // from the simulated unmount sticks and busy spinners can never turn off.
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   useEffect(() => {
     api.listStyles()

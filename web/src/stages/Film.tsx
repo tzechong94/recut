@@ -41,7 +41,11 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
   const [epBusy, setEpBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  // StrictMode remounts share the ref — reset to true on (re)mount (see Cast.tsx).
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   useEffect(() => {
     void refreshPanels();

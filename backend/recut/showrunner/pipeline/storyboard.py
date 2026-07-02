@@ -94,9 +94,28 @@ def build_storyboard(llm: TextLLM, prod: Production) -> Production:
             continue
         _place_dialogue(scene)
     _enforce_budget(prod, budget)  # hard cap if the model over-produced
+    _fit_durations(prod)  # …and honor the TARGET RUNTIME, not just the shot count
     prod.token_ledger.text_tokens += total
     prod.stage = Stage.storyboard
     return Production.model_validate(prod.model_dump())
+
+
+def _fit_durations(prod: Production) -> None:
+    """Scale shot durations so the film lands near target_seconds — the shot budget
+    caps the COUNT, but the model can still assign 8s shots and blow a 30s target out
+    to 67s. Clamped to the settings floor/ceiling; small overshoot is left alone
+    (produce's audio-fit re-times spoken shots anyway)."""
+    from recut.core.config import get_settings
+
+    shots = prod.shots
+    total = sum(sh.duration_s for sh in shots)
+    target = float(prod.target_seconds or 0)
+    if not shots or total <= 0 or target <= 0 or total <= target * 1.15:
+        return
+    s = get_settings()
+    scale = target / total
+    for sh in shots:
+        sh.duration_s = round(min(s.max_shot_s, max(s.min_shot_s, sh.duration_s * scale)), 1)
 
 
 def _enforce_budget(prod: Production, budget: int) -> None:

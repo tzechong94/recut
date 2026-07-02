@@ -50,7 +50,11 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
   const [stillBusy, setStillBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  // StrictMode remounts share the ref — reset to true on (re)mount (see Cast.tsx).
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
   const hasShots = p.scenes.some((s) => s.shots.length > 0);
 
   useEffect(() => {

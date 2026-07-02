@@ -51,6 +51,29 @@ def test_enforce_budget_trims_silent_shots_first_and_keeps_a_shot_per_scene():
     assert all(p.scenes[0].shots)  # scene not emptied
 
 
+def test_fit_durations_scales_an_overlong_board_to_the_target():
+    from recut.showrunner.pipeline.storyboard import _fit_durations
+
+    p = _clay_prod(target_seconds=30)
+    p.scenes = [Scene(heading="INT. KITCHEN", summary="x",
+                      shots=[Shot(action=f"beat {i}", duration_s=8.0) for i in range(8)])]
+    assert sum(s.duration_s for s in p.shots) == 64.0  # the 67s-for-a-30s-target bug
+    _fit_durations(p)
+    total = sum(s.duration_s for s in p.shots)
+    assert total <= 30 * 1.15  # lands near the target…
+    assert all(s.duration_s >= 3.0 for s in p.shots)  # …without starving any shot
+
+
+def test_fit_durations_leaves_a_close_board_alone():
+    from recut.showrunner.pipeline.storyboard import _fit_durations
+
+    p = _clay_prod(target_seconds=30)
+    p.scenes = [Scene(heading="INT. KITCHEN", summary="x",
+                      shots=[Shot(action=f"beat {i}", duration_s=4.0) for i in range(8)])]
+    _fit_durations(p)
+    assert all(s.duration_s == 4.0 for s in p.shots)  # 32s vs 30s target: untouched
+
+
 def test_shot_prompt_leads_with_style():
     p = _clay_prod()
     shot = Shot(action="Eli stirs batter")
