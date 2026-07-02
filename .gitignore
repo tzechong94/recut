@@ -27,3 +27,4 @@ eval/report.json
 eval/report.md
 eval/showrunner_report.json
 eval/showrunner_report.md
+.claude/scheduled_tasks.lock
