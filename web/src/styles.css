@@ -394,11 +394,13 @@ html,body{background:#0b0a0f;}
 .sr-start:disabled{opacity:.4;cursor:not-allowed;}
 .sr-productions{margin-top:24px;}
 .sr-productions h2{font-family:var(--display);font-weight:700;font-size:16px;margin-bottom:10px;}
-.sr-prod-grid{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;}
-.sr-prod-grid .sr-prod-card{flex:0 0 236px;}
-.sr-prod-card{position:relative;display:flex;align-items:center;gap:9px;padding:9px 10px;background:var(--paper2);border:1px solid var(--line);border-radius:13px;transition:border-color .12s,transform .12s;}
+/* poster tiles, streaming-shelf style — cover on top, title under, fixed narrow width */
+.sr-prod-grid{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:thin;}
+.sr-prod-grid .sr-prod-card{flex:0 0 140px;}
+.sr-prod-card{position:relative;display:flex;flex-direction:column;gap:5px;padding:8px;background:var(--paper2);border:1px solid var(--line);border-radius:12px;transition:border-color .12s,transform .12s;}
 .sr-prod-card:hover{border-color:var(--violet);transform:translateY(-1px);}
-.sr-prod-thumb{position:relative;width:44px;height:66px;border-radius:9px;border:none;padding:0;cursor:pointer;background:linear-gradient(150deg,#2a2540,#15121f);display:grid;place-items:center;color:var(--violet);flex-shrink:0;overflow:hidden;}
+.sr-prod-thumb{position:relative;width:100%;aspect-ratio:2/3;height:auto;border-radius:9px;border:none;padding:0;cursor:pointer;background:linear-gradient(150deg,#2a2540,#15121f);display:grid;place-items:center;color:var(--violet);overflow:hidden;}
+.sr-prod-thumb img{object-position:center top;}
 .sr-prod-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
 .sr-ep-badge{position:absolute;bottom:4px;left:4px;font-family:var(--mono);font-size:8.5px;letter-spacing:.05em;color:#fff;background:rgba(123,92,255,.9);border-radius:5px;padding:1px 4px;}
 .sr-test-badge{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:8.5px;letter-spacing:.05em;color:#0f1408;background:#a3d977;border-radius:5px;padding:1px 5px;}
@@ -438,14 +440,14 @@ html,body{background:#0b0a0f;}
 .sr-testmode input{accent-color:#a3d977;}
 .sr-testmode b{color:var(--ink);font-weight:600;}
 .sr-prod-meta{min-width:0;flex:1;}
-.sr-prod-title{font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sr-prod-sub{display:flex;align-items:center;gap:8px;margin-top:6px;min-width:0;}
+.sr-prod-title{font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sr-prod-sub{display:flex;align-items:center;gap:6px;margin-top:0;min-width:0;}
 .sr-stage-chip{flex-shrink:0;font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--soft);background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:999px;padding:2px 7px;white-space:nowrap;}
 .sr-stage-chip.stage-export{color:#3fd9c8;background:rgba(15,181,166,.12);border-color:rgba(15,181,166,.3);}
 .sr-stage-chip.stage-production{color:var(--violet);background:rgba(123,92,255,.13);border-color:rgba(123,92,255,.3);}
 .sr-prod-time{font-family:var(--mono);font-size:10px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sr-prod-actions{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;}
-.sr-prod-resume{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--violet);border:1px solid transparent;border-radius:8px;padding:4px 7px;transition:background .12s,border-color .12s;}
+.sr-prod-actions{display:flex;align-items:center;justify-content:space-between;gap:4px;}
+.sr-prod-resume{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--violet);border:1px solid transparent;border-radius:8px;padding:3px 6px;margin-left:-6px;transition:background .12s,border-color .12s;}
 .sr-prod-resume:hover{background:rgba(123,92,255,.12);border-color:rgba(123,92,255,.3);}
 .sr-prod-del{color:var(--soft);opacity:.55;transition:opacity .12s,color .12s;}
 .sr-prod-card:hover .sr-prod-del{opacity:1;}
