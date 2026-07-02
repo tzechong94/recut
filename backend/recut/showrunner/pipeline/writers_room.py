@@ -33,6 +33,7 @@ _REGISTER = {
     "claymation": "Whimsical and warm, gentle humor, tactile world, a little melancholy.",
     "storybook": "Fable-like, simple and resonant, a clear moral, wonder.",
     "pixar": "Heartfelt and witty, a strong emotional core, a turn that earns its feeling.",
+    "ghibli": "Gentle wonder: quiet moments matter, nature breathes, kindness has weight, melancholy and warmth live together.",
     "cinematic": "Grounded, character-driven realism; restraint and subtext.",
 }
 
