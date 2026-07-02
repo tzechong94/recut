@@ -119,6 +119,8 @@ export interface Shot {
   /** Shot-board still: the approved first frame produce will animate. */
   keyframe_asset_id?: string | null;
   keyframe_url?: string | null;
+  /** Signature of the filmable fields when the still was made (staleness check). */
+  keyframe_sig?: string;
   source: AssetSource;
   asset_id?: string | null;
   status: ShotStatus;
@@ -184,6 +186,9 @@ export interface Production {
   warnings?: string[];
   /** The exported MP4 asset id, once production has rendered the final film. */
   export_asset_id?: string | null;
+  /** Serialized drama: which episode this is, and the film it continues. */
+  episode?: number;
+  previous_production_id?: string | null;
   version: number;
   created_at?: number;
 }

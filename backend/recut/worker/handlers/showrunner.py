@@ -20,7 +20,7 @@ from recut.pipeline.render import AssetMeta, render_timeline
 from recut.showrunner.compile import compile_to_timeline
 from recut.showrunner.pipeline.assemble import concat_voiceover, synth_shot_voice
 from recut.showrunner.pipeline.casting import generate_character_reference, generate_location_reference
-from recut.showrunner.pipeline.production import compose_shot_still, generate_shot, should_reroll
+from recut.showrunner.pipeline.production import compose_shot_still, generate_shot, should_reroll, still_signature
 from recut.showrunner.schemas import AssetSource, ShotStatus, Stage
 from recut.worker.registry import WorkerContext, register
 
@@ -99,6 +99,7 @@ def handle_board_stills(job: Job, ctx: WorkerContext) -> dict:
         asset = repo.create_asset(kind="still", storage_key=key, project_id=prod.project_id, mime="image/png", width=720, height=1280)
         shot.keyframe_asset_id = asset["id"]
         shot.keyframe_url = gen.url or ctx.storage.url(key)
+        shot.keyframe_sig = still_signature(shot)  # staleness anchor for the board UI
         prod.token_ledger.image_tokens += gen.tokens
         made += 1
         repo.save_production(prod)

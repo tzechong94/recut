@@ -240,6 +240,21 @@ def attach_character_reference(pid: str, cid: str, body: AttachReference) -> dic
     return prod.model_dump(mode="json")
 
 
+@router.post("/productions/{pid}/next-episode", status_code=201)
+def next_episode(pid: str) -> dict:
+    """Greenlight the next episode of the serial: the writers' room continues from this
+    film's cliffhanger, and the LOCKED cast + location references carry over by name —
+    identity consistency across episodes for zero extra image tokens."""
+    prev = repo.get_production(pid)
+    if not prev:
+        raise HTTPException(404, "production not found")
+    from recut.showrunner.series import continue_series
+
+    nxt = continue_series(models().text, prev)
+    repo.save_production(nxt)
+    return nxt.model_dump(mode="json")
+
+
 @router.post("/productions/{pid}/produce", status_code=202)
 def produce(pid: str) -> dict:
     """Approve the plan and let the agent autonomously generate + edit the film."""
@@ -248,6 +263,8 @@ def produce(pid: str) -> dict:
         raise HTTPException(404, "production not found")
     if not prod.shots:
         raise HTTPException(409, "no shots — run storyboard first")
+    if prod.export_asset_id:
+        prod.version += 1  # a recut/re-render gets a fresh film file, never overwrites
     prod.stage = Stage.production
     repo.save_production(prod)
     job_id = queue.enqueue("produce_film", {"production_id": pid}, project_id=prod.project_id)
@@ -265,6 +282,8 @@ def regenerate_shot(pid: str, sid: str) -> dict:
     shot.asset_id = None
     shot.source = AssetSource.standin
     shot.status = shot.status.__class__.planned
+    if prod.export_asset_id:
+        prod.version += 1  # the retake re-renders into a fresh film file
     repo.save_production(prod)
     job_id = queue.enqueue("produce_film", {"production_id": pid}, project_id=prod.project_id)
     return {"job_id": job_id, "status": "queued"}

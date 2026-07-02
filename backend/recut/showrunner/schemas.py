@@ -156,6 +156,8 @@ class Shot(BaseModel):
     # on the board, cheap image tokens; produce i2v's THIS frame, never a surprise)
     keyframe_asset_id: str | None = None
     keyframe_url: str | None = None
+    # signature of the filmable fields at still time; a mismatch = the still is STALE
+    keyframe_sig: str = ""
 
     # production state
     source: AssetSource = AssetSource.standin
@@ -241,6 +243,10 @@ class Production(BaseModel):
     director_log: list[dict] = Field(default_factory=list)  # [{shot, decision, reason}] — visible agent reasoning
     warnings: list[str] = Field(default_factory=list)  # surfaced non-fatal issues (dropped scene, etc.)
     export_asset_id: str | None = None  # the finished film (set on produce; for revisits)
+    # serialized micro-drama: episode N continues the previous production's cliffhanger,
+    # reusing its LOCKED cast + location references (identity is free across episodes)
+    episode: int = 1
+    previous_production_id: str | None = None
     version: int = 1
     created_at: float = Field(default_factory=_now)
 

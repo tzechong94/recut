@@ -26,6 +26,23 @@ interface StageProps {
 const SHOT_TYPES = ["wide", "medium", "close_up", "insert", "two_shot"];
 const CAMERAS = ["static", "pan", "push_in", "pull_out", "handheld", "aerial"];
 
+/** Mirror of the backend's still_signature — the fields a still is composed from.
+ *  A mismatch with shot.keyframe_sig means the still no longer shows what will be
+ *  filmed (stale). Keep the format in sync with production.py. */
+function stillSignature(sh: Shot): string {
+  return [
+    sh.action.trim(),
+    sh.shot_type,
+    [...sh.character_ids].sort().join(","),
+    sh.location_id || "",
+  ].join("|");
+}
+
+function isStale(sh: Shot): boolean {
+  const hasStill = Boolean(sh.keyframe_asset_id || sh.keyframe_url);
+  return hasStill && Boolean(sh.keyframe_sig) && sh.keyframe_sig !== stillSignature(sh);
+}
+
 export function StoryboardStage({ ctl, onAdvance }: StageProps) {
   const p = ctl.production!;
   const [building, setBuilding] = useState(false);
@@ -166,6 +183,7 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
   const missingStills = p.scenes
     .flatMap((s) => s.shots)
     .filter((s) => !s.keyframe_asset_id && !s.keyframe_url).length;
+  const staleStills = p.scenes.flatMap((s) => s.shots).filter(isStale).length;
 
   return (
     <div className="rc-stage">
@@ -181,7 +199,7 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
 
       {error && <div className="rc-err">{error}</div>}
 
-      {(stillsBusy || missingStills > 0) && (
+      {(stillsBusy || missingStills > 0 || staleStills > 0) && (
         <div className="sr-stills-bar">
           {stillsBusy ? (
             <>
@@ -192,11 +210,17 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
             <>
               <ImageIcon size={14} />
               <span>
-                {missingStills} shot{missingStills === 1 ? "" : "s"} without a still
+                {missingStills > 0 &&
+                  `${missingStills} shot${missingStills === 1 ? "" : "s"} without a still`}
+                {missingStills > 0 && staleStills > 0 && " · "}
+                {staleStills > 0 &&
+                  `${staleStills} still${staleStills === 1 ? "" : "s"} stale after edits — redo before approving`}
               </span>
-              <button className="sr-mini" onClick={() => void generateStills()}>
-                <ImageIcon size={13} /> Generate stills
-              </button>
+              {missingStills > 0 && (
+                <button className="sr-mini" onClick={() => void generateStills()}>
+                  <ImageIcon size={13} /> Generate stills
+                </button>
+              )}
             </>
           )}
         </div>
@@ -239,8 +263,9 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
       <div className="rc-foot">
         <div className="rc-footl">
           <span className="rc-note">
-            {totalShots} shots · ~{Math.round(totalDur)}s · video tokens spend
-            after you call action
+            {totalShots} shots · ~{Math.round(totalDur)}s film · est. ≈
+            {Math.round(totalDur * 1.8)}k video tokens when you call action
+            {staleStills > 0 && ` · ${staleStills} stale still${staleStills === 1 ? "" : "s"}`}
           </span>
         </div>
         <button
@@ -303,10 +328,15 @@ function ShotCard({
   onRemove,
 }: ShotCardProps) {
   const [note, setNote] = useState("");
-  const charNames = shot.character_ids
-    .map((id) => production.characters.find((c) => c.id === id)?.name)
-    .filter(Boolean) as string[];
   const hasStill = Boolean(shot.keyframe_asset_id || shot.keyframe_url);
+  const stale = isStale(shot);
+
+  const toggleChar = (cid: string) =>
+    onChange({
+      character_ids: shot.character_ids.includes(cid)
+        ? shot.character_ids.filter((x) => x !== cid)
+        : [...shot.character_ids, cid],
+    });
 
   const redo = () => {
     onRedoStill(note.trim());
@@ -317,7 +347,8 @@ function ShotCard({
     <div className="sr-shot">
       <div className="sr-shot-num">{index + 1}</div>
       <div className="sr-still">
-        <div className="sr-still-frame">
+        <div className={"sr-still-frame" + (stale ? " is-stale" : "")}>
+          {stale && <span className="sr-still-stale">stale</span>}
           {stillPending ? (
             <Loader2 size={18} className="rc-spin" />
           ) : shot.keyframe_asset_id ? (
@@ -380,12 +411,40 @@ function ShotCard({
             }
           />
           <span className="sr-dur-unit">s</span>
-          {charNames.length > 0 && (
-            <span className="sr-shot-chars">
-              <Users size={11} /> {charNames.join(", ")}
-            </span>
-          )}
           <ShotBadges shot={shot} />
+        </div>
+
+        <div className="sr-shot-cast">
+          <Users size={11} />
+          {production.characters.map((c) => (
+            <button
+              key={c.id}
+              className={
+                "sr-chip" + (shot.character_ids.includes(c.id) ? " is-on" : "")
+              }
+              aria-pressed={shot.character_ids.includes(c.id)}
+              aria-label={`${c.name} in shot`}
+              onClick={() => toggleChar(c.id)}
+            >
+              {c.name}
+            </button>
+          ))}
+          <label className="sr-select sr-loc-select">
+            <select
+              value={shot.location_id ?? ""}
+              aria-label="Shot location"
+              onChange={(e) =>
+                onChange({ location_id: e.target.value || null })
+              }
+            >
+              <option value="">no set</option>
+              {production.locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <Editable

@@ -28,9 +28,11 @@ const ORDER: Stage[] = [
 interface ShowrunnerProps {
   productionId: string;
   exit: () => void;
+  /** Jump to another production (the next episode of the serial). */
+  open?: (id: string) => void;
 }
 
-export function Showrunner({ productionId, exit }: ShowrunnerProps) {
+export function Showrunner({ productionId, exit, open }: ShowrunnerProps) {
   const ctl = useProduction(productionId);
   const { production, loading, error, saveStatus } = ctl;
 
@@ -117,7 +119,11 @@ export function Showrunner({ productionId, exit }: ShowrunnerProps) {
             />
           )}
           {activeStage === "export" && (
-            <FilmStage ctl={ctl} exportAssetId={exportAssetId} />
+            <FilmStage
+              ctl={ctl}
+              exportAssetId={exportAssetId}
+              onOpenProduction={open}
+            />
           )}
         </div>
       </div>
