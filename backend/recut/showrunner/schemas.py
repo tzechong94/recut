@@ -168,6 +168,34 @@ class DialogueLine(BaseModel):
     line: str = ""
 
 
+def caption_fingerprint(caption: str) -> str:
+    """Stable fingerprint of the spoken text a take was filmed with — an edited line
+    makes existing takes visibly STALE (never silently refilmed)."""
+    import hashlib
+
+    return hashlib.sha256(caption.strip().encode()).hexdigest()[:12]
+
+
+class Take(BaseModel):
+    """One generation of a shot — PERMANENT. The chosen take is the sole video source
+    for its slot; nothing ever replaces it implicitly (the fidelity contract).
+    model/seed are None for takes backfilled from pre-takes productions."""
+
+    id: str = Field(default_factory=lambda: _uid("take"))
+    asset_id: str
+    model: str | None = None
+    seed: int | None = None
+    duration_s: float = 5.0
+    audio_kind: str = "silent"  # native (speech in-clip) | tts (VO at render) | silent
+    # staleness anchors: what this take was filmed FROM
+    keyframe_asset_id: str | None = None  # identity — fires on still REGENERATION
+    keyframe_sig: str = ""  # filmable-field drift
+    caption_hash: str = ""  # edited line
+    critic_score: float | None = None
+    note: str = ""  # the retake instruction that produced this take ("" = plain)
+    created_at: float = Field(default_factory=_now)
+
+
 class Shot(BaseModel):
     id: str = Field(default_factory=lambda: _uid("shot"))
     index: int = 0
@@ -179,6 +207,11 @@ class Shot(BaseModel):
     character_ids: list[str] = Field(default_factory=list)
     location_id: str | None = None
     duration_s: float = Field(default=4.0, gt=0)
+
+    # THE FIDELITY CONTRACT: every generation appends a Take; the chosen take is the
+    # sole video source for this shot's slot and is never replaced implicitly.
+    takes: list[Take] = Field(default_factory=list)
+    chosen_take_id: str | None = None
 
     # shot-board still — the exact first frame the film animates (approved by the human
     # on the board, cheap image tokens; produce i2v's THIS frame, never a surprise)
@@ -283,10 +316,11 @@ class Production(BaseModel):
     # TEST MODE: the entire flow runs on deterministic stubs — walk every stage,
     # spend zero provider tokens. Set at creation, carried into next episodes.
     test_mode: bool = False
-    # Video tier: "draft" films with the cheap flash model (rehearsal), "final" with
-    # the plus model. Retakes honor the current setting, so you can draft the film
-    # and promote only the keepers.
-    video_quality: str = "final"
+    # MODE (per-shot routing underneath): "draft" routes silent shots to the cheap
+    # flash model, "ship" to the plus model; SPEAKING shots film on the dialogue
+    # model in BOTH modes (the pilot pass is the cheap dialogue rehearsal). Legacy
+    # values "final"/"happyhorse" upgrade to "ship" on read.
+    video_quality: str = "draft"
     version: int = 1
     created_at: float = Field(default_factory=_now)
 
@@ -312,4 +346,33 @@ class Production(BaseModel):
     def _reindex(self) -> "Production":
         for i, sc in enumerate(self.scenes):
             sc.index = i
+        return self
+
+    @model_validator(mode="after")
+    def _upgrade_legacy(self) -> "Production":
+        """Upgrade-on-read migration (JSON doc store, no Alembic): legacy quality tiers
+        map onto draft|ship, and a pre-takes shot's single asset becomes ONE chosen
+        take — WITHOUT the chosen flag, the new produce predicate would re-film every
+        legacy shot on day one. Idempotent: only fires when takes is empty."""
+        legacy_quality = self.video_quality
+        if legacy_quality in ("final", "happyhorse"):
+            self.video_quality = "ship"
+        for sc in self.scenes:
+            for sh in sc.shots:
+                if sh.asset_id and not sh.takes:
+                    if legacy_quality == "happyhorse" and sh.dialogue:
+                        audio = "native"
+                    elif sh.caption:
+                        audio = "tts"
+                    else:
+                        audio = "silent"
+                    take = Take(
+                        asset_id=sh.asset_id, model=None, seed=None,
+                        duration_s=sh.duration_s, audio_kind=audio,
+                        keyframe_asset_id=sh.keyframe_asset_id, keyframe_sig=sh.keyframe_sig,
+                        caption_hash=caption_fingerprint(sh.caption),
+                        critic_score=sh.critic_score,
+                    )
+                    sh.takes = [take]
+                    sh.chosen_take_id = take.id
         return self

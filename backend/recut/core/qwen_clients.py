@@ -350,10 +350,14 @@ class QwenVideoGen(VideoGen):
 
         return _retry(call, attempts=2, base_delay=3.0)
 
-    def _happyhorse_i2v(self, image_url: str, prompt: str, duration_s: float, seed: int) -> GenAsset:
-        """HappyHorse image-to-video: native joint audio+video (dialogue shots SPEAK
-        with lip-sync), 3-15s clips. Raw HTTP — the SDK doesn't map its `media`
-        (first_frame) input shape. Probe-verified on the intl endpoint."""
+    def _native_i2v(self, image_url: str, prompt: str, duration_s: float, seed: int,
+                    audio_url: str | None = None) -> GenAsset:
+        """Native-audio image-to-video (HappyHorse / wan2.5 / wan2.6): joint audio+video
+        — dialogue shots SPEAK with lip-sync; with `audio_url` the clip embeds OUR TTS
+        track exactly (verified: waveform xcorr 0.998), giving hard voice consistency.
+        Raw HTTP — the SDK doesn't map these input shapes. Probe-verified intl facts:
+        happyhorse wants media=[{type:first_frame}], wan2.5/2.6 want img_url; all are
+        landscape-locked at 720P/1080P (the worker blur-fills to 9:16)."""
         import time
 
         import httpx
@@ -362,20 +366,26 @@ class QwenVideoGen(VideoGen):
         headers = {"Authorization": f"Bearer {self.s.dashscope_api_key}",
                    "Content-Type": "application/json", "X-DashScope-Async": "enable"}
         dur = int(max(3, min(15, round(duration_s))))
-        params: dict = {"duration": dur, "resolution": self.s.happyhorse_resolution}
+        params: dict = {"duration": dur, "resolution": self.s.happyhorse_resolution,
+                        "watermark": False}
         if seed:
             params["seed"] = seed % 2147483647
+        model = self.s.wan_i2v_model
+        if model.startswith("happyhorse"):
+            inp: dict = {"prompt": prompt, "media": [{"type": "first_frame", "url": image_url}]}
+        else:  # wan2.5 / wan2.6
+            inp = {"prompt": prompt, "img_url": image_url}
+        if audio_url:
+            inp["audio_url"] = audio_url
 
         def call() -> GenAsset:
-            body = {"model": self.s.wan_i2v_model,
-                    "input": {"prompt": prompt, "media": [{"type": "first_frame", "url": image_url}]},
-                    "parameters": params}
+            body = {"model": model, "input": inp, "parameters": params}
             r = httpx.post(f"{base}/services/aigc/video-generation/video-synthesis",
                            headers=headers, json=body, timeout=60)
             d = r.json()
             task_id = d.get("output", {}).get("task_id")
             if r.status_code != 200 or not task_id:
-                raise RuntimeError(f"happyhorse create {r.status_code}: {str(d)[:200]}")
+                raise RuntimeError(f"native-i2v create {r.status_code}: {str(d)[:200]}")
             for _ in range(240):  # ≤20 min
                 time.sleep(5)
                 q = httpx.get(f"{base}/tasks/{task_id}",
@@ -384,22 +394,23 @@ class QwenVideoGen(VideoGen):
                 if st == "SUCCEEDED":
                     url = q["output"].get("video_url", "")
                     if not url:
-                        raise RuntimeError("happyhorse succeeded but no video_url")
+                        raise RuntimeError("native-i2v succeeded but no video_url")
                     data = httpx.get(url, timeout=180).content
                     return GenAsset(data=data, mime="video/mp4", duration_s=float(dur),
                                     tokens=int(dur * 1800), url=url)
                 if st in ("FAILED", "CANCELED"):
-                    raise RuntimeError(f"happyhorse task {st}: {str(q.get('output', {}).get('message', ''))[:200]}")
-            raise RuntimeError("happyhorse task timed out")
+                    raise RuntimeError(f"native-i2v task {st}: {str(q.get('output', {}).get('message', ''))[:200]}")
+            raise RuntimeError("native-i2v task timed out")
 
         return _retry(call, attempts=2, base_delay=3.0)
 
-    def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset:
+    def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0,
+                            audio_url: str | None = None) -> GenAsset:
         import dashscope
         import httpx
 
-        if self.s.wan_i2v_model.startswith("happyhorse"):
-            return self._happyhorse_i2v(image_url, prompt, duration_s, seed)
+        if self.s.wan_i2v_model.startswith(("happyhorse", "wan2.5", "wan2.6")):
+            return self._native_i2v(image_url, prompt, duration_s, seed, audio_url=audio_url)
 
         kwargs = {"seed": seed} if seed else {}
 
@@ -497,7 +508,9 @@ class QwenVoiceGen(VoiceGen):
             url = rsp.output.audio["url"]
             data = httpx.get(url, timeout=60).content
             mime = "audio/wav" if data[:4] == b"RIFF" else "audio/mp3"
-            return GenAsset(data=data, mime=mime, duration_s=max(1.0, len(text) * 0.06), tokens=len(text))
+            # keep the HOSTED url: native-audio i2v embeds this exact track (lip-sync
+            # to our own voice); the url is short-lived, so callers use it immediately
+            return GenAsset(data=data, mime=mime, duration_s=max(1.0, len(text) * 0.06), tokens=len(text), url=url)
 
         return _retry(call)
 

@@ -226,7 +226,12 @@ def _merge_generated(stored: Production, incoming: Production) -> None:
             if o.keyframe_url and not sh.keyframe_url:
                 sh.keyframe_asset_id, sh.keyframe_url, sh.keyframe_sig = o.keyframe_asset_id, o.keyframe_url, o.keyframe_sig
                 sh.keyframe_score, sh.setting_score = o.keyframe_score, o.setting_score
-            if o.asset_id and not sh.asset_id:
+            # TAKES + THE CHOICE are fully SERVER-owned: a stale browser doc can
+            # neither wipe them NOR roll the choice back to an older non-null value.
+            # Only the choose endpoint and the worker write these.
+            sh.takes = o.takes
+            sh.chosen_take_id = o.chosen_take_id
+            if o.asset_id:
                 sh.asset_id, sh.source, sh.status = o.asset_id, o.source, o.status
                 sh.gen_prompt, sh.gen_tool, sh.tokens = o.gen_prompt, o.gen_tool, o.tokens
                 sh.critic_score, sh.reroll_count = o.critic_score, o.reroll_count
@@ -417,25 +422,87 @@ def next_episode(pid: str) -> dict:
 
 
 class ProduceRequest(BaseModel):
-    shot_ids: list[str] = []  # non-empty = PILOT: film only these, no final render
+    shot_ids: list[str] = []  # legacy: non-empty = PILOT scope (no render)
+    scope_ids: list[str] = []  # film only these (pilot)
+    force_ids: list[str] = []  # re-film shots that HAVE a chosen take (retake/master)
+    master: bool = False  # route forced shots to the master models; takes append UNCHOSEN
+    render: bool | None = None  # None = render iff full produce (no scope)
 
 
 @router.post("/productions/{pid}/produce", status_code=202)
 def produce(pid: str, body: ProduceRequest | None = None) -> dict:
     """Approve the plan and let the agent autonomously generate + edit the film.
-    With shot_ids, it's a PILOT pass: film only those shots for review, no render."""
+    Scope limits which shots may film; force re-films chosen takes (explicit only);
+    render=False reviews takes without cutting a film."""
     prod = repo.get_production(pid)
     if not prod:
         raise HTTPException(404, "production not found")
     if not prod.shots:
         raise HTTPException(409, "no shots — run storyboard first")
-    shot_ids = [s for s in (body.shot_ids if body else []) if prod.find_shot(s)]
-    if prod.export_asset_id and not shot_ids:
+    body = body or ProduceRequest()
+    scope = [s for s in (body.scope_ids or body.shot_ids) if prod.find_shot(s)]
+    force = [s for s in body.force_ids if prod.find_shot(s)]
+    render = body.render if body.render is not None else not scope
+    if prod.export_asset_id and render:
         prod.version += 1  # a recut/re-render gets a fresh film file, never overwrites
     prod.stage = Stage.production
     repo.save_production(prod)
-    job_id = queue.enqueue("produce_film", {"production_id": pid, "shot_ids": shot_ids},
-                           project_id=prod.project_id)
+    job_id = queue.enqueue("produce_film", {
+        "production_id": pid, "scope_ids": scope, "force_ids": force,
+        "master": body.master, "render": render,
+    }, project_id=prod.project_id)
+    return {"job_id": job_id, "status": "queued"}
+
+
+class ChooseTakeRequest(BaseModel):
+    take_id: str
+
+
+@router.post("/productions/{pid}/shots/{sid}/take")
+def choose_take(pid: str, sid: str, body: ChooseTakeRequest) -> dict:
+    """THE PICKER: make this take the shot's video source. Re-derives the slot's
+    duration + dual-written fields from the take; export re-render is ≈free."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    shot = prod.find_shot(sid)
+    if not shot:
+        raise HTTPException(404, "shot not found")
+    take = next((t for t in shot.takes if t.id == body.take_id), None)
+    if not take:
+        raise HTTPException(404, "take not found on this shot")
+    if not repo.get_asset(take.asset_id):
+        raise HTTPException(409, "take asset lost from storage")
+    shot.chosen_take_id = take.id
+    shot.asset_id = take.asset_id  # dual-written for compat
+    shot.duration_s = take.duration_s
+    shot.critic_score = take.critic_score
+    shot.gen_tool = f"chosen_take:{take.model or 'legacy'}"
+    shot.source = AssetSource.generated
+    shot.status = shot.status.__class__.ready
+    repo.save_production(prod)
+    return prod.model_dump(mode="json")
+
+
+class MasterCutRequest(BaseModel):
+    shot_ids: list[str]
+
+
+@router.post("/productions/{pid}/master-cut", status_code=202)
+def master_cut(pid: str, body: MasterCutRequest) -> dict:
+    """MASTER PROMOTION: re-film the selected shots on the strongest models (speaking
+    shots keep their voice — master_dialogue model). New takes append UNCHOSEN; the
+    picker compares and chooses. No render until you choose."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    ids = [s for s in body.shot_ids if prod.find_shot(s)]
+    if not ids:
+        raise HTTPException(400, "no valid shots selected")
+    job_id = queue.enqueue("produce_film", {
+        "production_id": pid, "scope_ids": ids, "force_ids": ids,
+        "master": True, "render": False,
+    }, project_id=prod.project_id)
     return {"job_id": job_id, "status": "queued"}
 
 
@@ -445,24 +512,22 @@ class RetakeRequest(BaseModel):
 
 @router.post("/productions/{pid}/shots/{sid}/regenerate", status_code=202)
 def regenerate_shot(pid: str, sid: str, body: RetakeRequest | None = None) -> dict:
-    """Retake ONE shot, optionally steered by a note. Before the film has rendered
-    (pilot phase) only that shot is re-filmed — no render; after, the film re-renders."""
+    """Retake ONE shot, optionally steered by a note. NOTHING is cleared — the new
+    take appends (and auto-chooses, since a retake is an explicit action); the old
+    take stays in the picker. Pre-render: no film cut; post-export: re-renders."""
     prod = repo.get_production(pid)
     if not prod:
         raise HTTPException(404, "production not found")
-    shot = prod.find_shot(sid)
-    if not shot:
+    if not prod.find_shot(sid):
         raise HTTPException(404, "shot not found")
-    shot.asset_id = None
-    shot.source = AssetSource.standin
-    shot.status = shot.status.__class__.planned
-    pilot_phase = prod.export_asset_id is None
-    if not pilot_phase:
+    render = prod.export_asset_id is not None
+    if render:
         prod.version += 1  # the retake re-renders into a fresh film file
-    repo.save_production(prod)
+        repo.save_production(prod)
     note = (body.instruction.strip() if body else "")
-    payload = {"production_id": pid, "notes": ({sid: note} if note else {}),
-               "shot_ids": ([sid] if pilot_phase else [])}
+    payload = {"production_id": pid, "force_ids": [sid], "render": render,
+               "scope_ids": ([] if render else [sid]),
+               "notes": ({sid: note} if note else {})}
     job_id = queue.enqueue("produce_film", payload, project_id=prod.project_id)
     return {"job_id": job_id, "status": "queued"}
 
@@ -501,9 +566,20 @@ def _est_cost_usd(prod: Production) -> dict:
 
     s = get_settings()
     led = prod.token_ledger
-    vid_rate = {"draft": s.price_video_second_draft,
-                "happyhorse": s.price_video_second_happyhorse}.get(prod.video_quality, s.price_video_second)
-    video = (led.video_tokens / 1800.0) * vid_rate
+
+    def take_rate(model: str | None) -> float:
+        if not model:  # legacy backfilled takes — priced at the standard tier
+            return s.price_video_second
+        if model.startswith(("happyhorse", "wan2.5", "wan2.6")):
+            return s.price_video_second_happyhorse
+        if "flash" in model:
+            return s.price_video_second_draft
+        return s.price_video_second
+
+    # honest ACTUAL spend: every take ever filmed, priced at its own model's rate
+    video = sum(t.duration_s * take_rate(t.model) for sh in prod.shots for t in sh.takes)
+    if video == 0 and led.video_tokens:  # productions with spend but no take records
+        video = (led.video_tokens / 1800.0) * s.price_video_second
     image = (led.image_tokens / 300.0) * s.price_image
     text = (led.text_tokens / 1000.0) * s.price_text_1k
     voice = (led.voice_tokens / 1000.0) * s.price_voice_1k

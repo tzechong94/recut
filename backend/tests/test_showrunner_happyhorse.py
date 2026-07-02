@@ -29,30 +29,32 @@ def _prod(quality: str = "happyhorse") -> Production:
     return p
 
 
-def test_happyhorse_prompt_carries_the_exact_spoken_line():
-    p = _prod("happyhorse")
-    prompt = build_shot_prompt(p, p.shots[0])
+def test_speaking_prompt_carries_the_exact_spoken_line():
+    p = _prod("ship")
+    prompt = build_shot_prompt(p, p.shots[0], speak=True)
     assert 'Eliot speaks these exact words aloud' in prompt
     assert '"Lena, where are you?"' in prompt
-    # other tiers do NOT ask the video model to speak
-    p2 = _prod("final")
-    assert "speaks these exact words" not in build_shot_prompt(p2, p2.shots[0])
+    # non-speaking renders do NOT ask the video model to speak
+    assert "speaks these exact words" not in build_shot_prompt(p, p.shots[0])
 
 
-def test_happyhorse_skips_tts_and_estimates_duration():
+def test_speaking_shot_gets_fresh_tts_and_native_duration_fit():
+    """Input-audio dialogue (bake-off verified: the clip embeds OUR TTS, xcorr 0.998):
+    speaking shots synth FRESH tts (hosted url is short-lived) and fit an int duration
+    in the native model's 3-15s range that covers the whole line."""
+    import tempfile
+
     from recut.worker.handlers.showrunner import _fit_durations_to_voice
     from recut.worker.registry import build_context
 
-    import tempfile
-
-    p = _prod("happyhorse")
+    p = _prod("ship")
     ctx = build_context()
     with tempfile.TemporaryDirectory() as d:
-        vo = _fit_durations_to_voice(p, ctx, d)
+        vo_paths, vo_urls = _fit_durations_to_voice(p, ctx, d)
     shot = p.shots[0]
-    assert shot.id not in vo  # no TTS file — the clip speaks for itself
+    assert shot.id in vo_paths  # the tts IS the voice track (and the lip-sync input)
     assert 3 <= shot.duration_s <= 15 and float(shot.duration_s).is_integer()
-    assert p.token_ledger.voice_tokens == 0  # no TTS spend for spoken shots
+    assert p.token_ledger.voice_tokens > 0  # honest tts spend
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

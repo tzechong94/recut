@@ -115,9 +115,12 @@ class VideoGen(ABC):
 
     @abstractmethod
     def generate_from_image(
-        self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0
+        self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0,
+        audio_url: str | None = None,
     ) -> GenAsset:
-        """Image-to-video: animate a reference still (character/location consistency)."""
+        """Image-to-video: animate a reference still (character/location consistency).
+        `audio_url` (native-audio models only): the clip embeds and LIP-SYNCS to this
+        exact track — hard voice consistency from our own TTS."""
 
 
 class ImageGen(ABC):
@@ -280,7 +283,8 @@ class StubVideoGen(VideoGen):
         s = seed or _seed_from("broll", prompt)
         return GenAsset(data=_color_clip_png(1080, 1920, s), mime="image/png", duration_s=duration_s, tokens=int(duration_s * 1800))
 
-    def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset:
+    def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0,
+                            audio_url: str | None = None) -> GenAsset:
         # Deterministic: tint derives from the reference url so the "same character" looks
         # stable across shots in stub mode (consistency demo without a key).
         s = seed or _seed_from("i2v", image_url)

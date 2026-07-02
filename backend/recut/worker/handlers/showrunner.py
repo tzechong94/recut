@@ -20,7 +20,15 @@ from recut.pipeline.render import AssetMeta, render_timeline
 from recut.showrunner.compile import compile_to_timeline
 from recut.showrunner.pipeline.assemble import concat_voiceover, synth_shot_voice
 from recut.showrunner.pipeline.casting import generate_character_reference, generate_location_reference
-from recut.showrunner.pipeline.production import compose_shot_still, generate_shot, should_reroll, still_signature
+from recut.showrunner.pipeline.production import (
+    compose_shot_still,
+    generate_shot,
+    is_native_audio_model,
+    route_shot_model,
+    should_reroll,
+    speaking,
+    still_signature,
+)
 from recut.showrunner.schemas import AssetSource, ShotStatus, Stage
 from recut.worker.registry import WorkerContext, register
 
@@ -314,6 +322,36 @@ def _mux_voice_into_clip(data: bytes, vo_path: str, src_dir, shot_id: str, durat
         return data
 
 
+def _vertical_blur_fill(data: bytes, src_dir, shot_id: str) -> bytes:
+    """Native-audio models are landscape-locked (probed); a landscape clip in a 9:16
+    film would letterbox. Composite it the way vertical platforms do: blurred
+    self-background fill + centered foreground. Audio is preserved. Portrait/square
+    input returns unchanged; failure returns the original bytes."""
+    import subprocess
+    from pathlib import Path
+
+    vin = Path(src_dir) / f"{shot_id}_vfill_in.mp4"
+    out = Path(src_dir) / f"{shot_id}_vfill_out.mp4"
+    try:
+        vin.write_bytes(data)
+        pr = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v",
+                             "-show_entries", "stream=width,height", "-of", "csv=p=0", str(vin)],
+                            capture_output=True, text=True, check=True)
+        w, h = (int(x) for x in pr.stdout.strip().split(",")[:2])
+        if h >= w:
+            return data  # already portrait/square
+        vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+              "crop=1080:1920,boxblur=24:4[bg];"
+              "[0:v]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(vin),
+                        "-filter_complex", vf, "-map", "0:a?", "-c:a", "copy",
+                        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", str(out)],
+                       check=True, capture_output=True)
+        return out.read_bytes()
+    except Exception:  # noqa: BLE001 — compositing is an enhancement; render letterboxes as fallback
+        return data
+
+
 def _extract_clip_audio(data: bytes, src_dir, shot_id: str) -> str | None:
     """Pull the native audio out of a clip (HappyHorse speaks in-video) so the render's
     voiceover track carries the performance. Best-effort."""
@@ -347,44 +385,84 @@ def _keyframe(video_path: str, mime: str) -> str | None:
 _MIN_SHOT_S, _MAX_SHOT_S = 2.5, 6.0  # legacy fallback; real clamps come from settings
 
 
-def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
+def _fit_durations_to_voice(prod, ctx, src_dir, force: frozenset = frozenset()) -> tuple[dict[str, str], dict[str, str]]:
     """Synthesize each shot's voiceover FIRST and set the shot duration to fit the spoken
     line (clamped), so dialogue is never truncated mid-word. Returns shot_id -> vo path."""
     from recut.pipeline.shots import probe_duration
 
+    from recut.showrunner.pipeline.production import is_native_audio_model, route_shot_model, speaking
+
     vo_paths: dict[str, str] = {}
-    hh = prod.video_quality == "happyhorse"
+    vo_urls: dict[str, str] = {}  # HOSTED tts urls — native i2v embeds this exact track
     for shot in prod.shots:
-        if hh and shot.dialogue and shot.caption:
-            # HappyHorse SPEAKS the line natively inside the clip — no TTS. Duration
-            # is estimated from the text (int, 3-15s) and the clip audio is extracted
-            # into the VO track after generation.
-            shot.duration_s = float(max(3, min(15, round(len(shot.caption) * 0.07 + 1.2))))
+        chosen = next((t for t in shot.takes if t.id == shot.chosen_take_id), None)
+        if shot.id in force:
+            chosen = None  # a forced retake re-fits like an unfilmed shot (fresh audio)
+        if chosen:
+            # THE CONTRACT: a chosen take drives its slot — never re-fit, never clobber
+            shot.duration_s = chosen.duration_s
+            if chosen.audio_kind == "native":
+                continue  # speech lives in/with the take; PASS 3 derives it
+            if chosen.audio_kind == "silent" or not shot.caption:
+                continue
+            # tts take: ensure the VO exists (cache hit, else tiny re-synth below)
+        route = route_shot_model(shot, prod, ctx.settings)
+        native_speaker = chosen is None and speaking(shot) and is_native_audio_model(route)
+        lo, hi = ctx.settings.min_shot_s, ctx.settings.max_shot_s
+        chash = content_hash(shot.caption.encode())[:8] if shot.caption else "silent"
+        if native_speaker:
+            # input-audio dialogue: synth FRESH (the hosted url is short-lived and the
+            # clip must embed this exact waveform); the local copy doubles as the VO
+            try:
+                va = synth_shot_voice(ctx.models, prod, shot)
+            except Exception as exc:  # noqa: BLE001 — fall back to prompt-spoken dialogue
+                prod.warnings.append(f"tts failed for a speaking shot ({type(exc).__name__}); the model voices it")
+                va = None
+            if va:
+                ext = "wav" if va.mime.endswith("wav") else "mp3"
+                sp = Path(src_dir) / f"vo_{shot.id}_{chash}.{ext}"
+                sp.write_bytes(va.data)
+                vo_paths[shot.id] = str(sp)
+                if va.url:
+                    vo_urls[shot.id] = va.url
+                prod.token_ledger.voice_tokens += va.tokens
+                dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
+                # the clip embeds this exact wav — duration must cover the full line
+                shot.duration_s = float(max(3, min(15, int(dur + 1.0))))
+            else:
+                shot.duration_s = float(max(3, min(15, round(len(shot.caption) * 0.07 + 1.2))))
             continue
         # Cache keyed on the caption's CONTENT so re-runs reuse (idempotent, no double
         # token count) but an EDITED line re-synthesizes (correct audio).
-        chash = content_hash(shot.caption.encode())[:8] if shot.caption else "silent"
         existing = next((p for ext in ("wav", "mp3") if (p := Path(src_dir) / f"vo_{shot.id}_{chash}.{ext}").exists()), None)
         if existing:
             vo_paths[shot.id] = str(existing)
+            if chosen is None:
+                dur = probe_duration(str(existing)) or shot.duration_s
+                shot.duration_s = round(max(lo, min(hi, dur + 0.4)), 2)
             continue
-        lo, hi = ctx.settings.min_shot_s, ctx.settings.max_shot_s
+        if not shot.caption:
+            if chosen is None:
+                shot.duration_s = max(lo, min(hi, shot.duration_s))
+            continue
         try:
             va = synth_shot_voice(ctx.models, prod, shot)
         except Exception as exc:  # noqa: BLE001 — voice is enhancement; a flaky TTS socket must never kill the film
             prod.warnings.append(f"voiceover failed for a shot ({type(exc).__name__}); rendered silent")
             va = None
         if not va:
-            shot.duration_s = max(lo, min(hi, shot.duration_s))
+            if chosen is None:
+                shot.duration_s = max(lo, min(hi, shot.duration_s))
             continue
         ext = "wav" if va.mime.endswith("wav") else "mp3"
         sp = Path(src_dir) / f"vo_{shot.id}_{chash}.{ext}"
         sp.write_bytes(va.data)
         vo_paths[shot.id] = str(sp)
         prod.token_ledger.voice_tokens += va.tokens
-        dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
-        shot.duration_s = round(max(lo, min(hi, dur + 0.4)), 2)  # small tail pad
-    return vo_paths
+        if chosen is None:
+            dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
+            shot.duration_s = round(max(lo, min(hi, dur + 0.4)), 2)  # small tail pad
+    return vo_paths, vo_urls
 
 
 def _ensure_location_plates(prod, ctx) -> None:
@@ -422,23 +500,27 @@ def _project_cap(prod, ctx) -> int:
 MAX_ATTEMPTS = 3  # 1 initial + up to 2 re-rolls (bounded so the critic can't blow the budget)
 
 
-def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None, user_note: str = "") -> tuple[bytes, str, str, int, float | None, int, int]:
+def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None, user_note: str = "",
+                           speak: bool = False, audio_url: str | None = None) -> tuple[bytes, str, str, int, float | None, int, int, int]:
     """Generate a shot, scoring each attempt against its reference and re-rolling drift
     with a NEW seed + the critic's corrective note. `user_note` is the director's retake
-    comment — it rides EVERY attempt's prompt. Returns the BEST attempt
-    (bytes, mime, tool, video_tokens, best_score, rerolls, keyframe_image_tokens)."""
+    comment — it rides EVERY attempt's prompt. `speak` = a native-audio model films this
+    shot performing its line. Returns the BEST attempt
+    (bytes, mime, tool, video_tokens, best_score, rerolls, keyframe_image_tokens, seed)."""
     import hashlib
 
-    best = None  # (score, bytes, mime, tool, tokens)
+    best = None  # (score, bytes, mime, tool, tokens, seed)
     corrective = user_note.strip()
     rerolls = 0
     kf_tokens = 0  # keyframe image-gen tokens spent across attempts (honest accounting)
     for attempt in range(MAX_ATTEMPTS):
-        seed = int(hashlib.sha256(f"{shot.id}:{attempt}".encode()).hexdigest()[:7], 16)
+        seed = int(hashlib.sha256(f"{shot.id}:{attempt}:{user_note}".encode()).hexdigest()[:7], 16)
         try:
-            render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective, prev_frame_url=prev_frame_url)
+            render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective,
+                                   prev_frame_url=prev_frame_url, speak=speak, audio_url=audio_url)
         except Exception:  # noqa: BLE001 — continuity i2v can fail (unhosted frame); fall back to t2v
-            render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective)
+            render = generate_shot(ctx.models, prod, shot, seed=seed, corrective=corrective,
+                                   speak=speak, audio_url=audio_url)
         if render.keyframe:
             kf_tokens += render.keyframe.tokens
         data, mime = render.asset.data, render.asset.mime
@@ -455,12 +537,27 @@ def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None, user_n
         # keep the best-scoring attempt (None score sorts low so a scored attempt wins)
         rank = score if score is not None else -1.0
         if best is None or rank > best[0]:
-            best = (rank, data, mime, render.tool, render.asset.tokens)
+            best = (rank, data, mime, render.tool, render.asset.tokens, seed)
         if score is None or score >= CONSISTENCY_THRESHOLD:
             break  # good enough (or critic unavailable -> don't burn budget re-rolling)
         rerolls += 1
     score_val = best[0] if best[0] >= 0 else None
-    return best[1], best[2], best[3], best[4], score_val, rerolls, kf_tokens
+    return best[1], best[2], best[3], best[4], score_val, rerolls, kf_tokens, best[5]
+
+
+def _ctx_for_route(ctx: WorkerContext, model_name: str, cache: dict) -> WorkerContext:
+    """Per-shot routed context: the same tier-swap mechanism, cached per model name.
+    (Stub backend ignores the name, so test mode is harmlessly degenerate.)"""
+    if model_name == ctx.settings.wan_i2v_model:
+        return ctx
+    if model_name not in cache:
+        from dataclasses import replace
+
+        from recut.core.models import get_models
+
+        s2 = ctx.settings.model_copy(update={"wan_i2v_model": model_name})
+        cache[model_name] = replace(ctx, settings=s2, models=get_models(s2))
+    return cache[model_name]
 
 
 @register("produce_film")
@@ -469,20 +566,20 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     if not prod:
         raise ValueError("production not found")
     ctx = _ctx_for(prod, ctx)
-    tier_model = {"draft": ctx.settings.wan_i2v_draft_model,
-                  "happyhorse": ctx.settings.happyhorse_i2v_model}.get(prod.video_quality)
-    if tier_model and not prod.test_mode:
-        # Quality tiers swap the i2v model: DRAFT films the cheap flash rehearsal,
-        # HAPPYHORSE films dialogue with native audio + lip-sync. Retakes/promotes
-        # re-run through the same path when video_quality changes.
-        from dataclasses import replace
-
-        from recut.core.models import get_models
-
-        s2 = ctx.settings.model_copy(update={"wan_i2v_model": tier_model})
-        ctx = replace(ctx, settings=s2, models=get_models(s2))
-    pilot = set(job.payload.get("shot_ids") or [])  # non-empty = film ONLY these
-    notes = job.payload.get("notes") or {}  # director's retake comments, per shot id
+    # Payload: SCOPE limits which shots this job may touch; FORCE re-films shots that
+    # already have a chosen take (retake/master-cut); RENDER controls the final pass.
+    # Legacy compat: a payload carrying only shot_ids means pilot (scope, no render)
+    # when non-empty, plain full produce when empty.
+    p = job.payload
+    legacy = not any(k in p for k in ("scope_ids", "force_ids", "master", "render"))
+    scope = set(p.get("scope_ids") or (p.get("shot_ids") if legacy else []) or [])
+    force = set(p.get("force_ids") or [])
+    master = bool(p.get("master"))
+    render = p.get("render")
+    if render is None:
+        render = not scope
+    notes = p.get("notes") or {}  # director's retake comments, per shot id
+    route_cache: dict = {}
     shots = prod.shots
     total = len(shots) or 1
     cap = _project_cap(prod, ctx)
@@ -494,7 +591,7 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     _ensure_location_plates(prod, ctx)
 
     # PASS 1 — audio-fit: synth each line, set shot duration to fit it (no truncation)
-    vo_paths = _fit_durations_to_voice(prod, ctx, src_dir)
+    vo_paths, vo_urls = _fit_durations_to_voice(prod, ctx, src_dir, force=frozenset(force))
     # PASS 1.5 — editor: pace the silent shots and LOG the cut decisions (the "edit" stage)
     from recut.showrunner.pipeline.editor import edit_pass
 
@@ -517,40 +614,76 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         if shot_scene.get(shot.id) != prev_scene:
             prev_frame_url, prev_scene = None, shot_scene.get(shot.id)  # reset at scene cut
         done += 1
-        if pilot and shot.id not in pilot:
-            continue  # pilot pass films only the selected shots
-        if shot.source in (AssetSource.generated, AssetSource.uploaded) and shot.asset_id:
-            continue  # resumable
+        # THE CONTRACT PREDICATE: film iff in scope AND (no chosen take, or forced)
+        if scope and shot.id not in scope:
+            continue
+        if shot.chosen_take_id and shot.id not in force:
+            continue  # a chosen take is permanent; only explicit force re-films
         if prod.token_ledger.video_tokens >= cap:
             shot.status = ShotStatus.failed
             continue
         shot.status = ShotStatus.generating
         repo.save_production(prod)
 
-        data, mime, tool, tokens, score, rerolls, kf_tokens = _generate_shot_best_of(
-            prod, shot, ctx, src_dir, prev_frame_url, user_note=notes.get(shot.id, ""))
+        route = route_shot_model(shot, prod, ctx.settings, master=master)
+        speak = speaking(shot) and is_native_audio_model(route)
+        shot_ctx = _ctx_for_route(ctx, route, route_cache)
+        data, mime, tool, tokens, score, rerolls, kf_tokens, used_seed = _generate_shot_best_of(
+            prod, shot, shot_ctx, src_dir, prev_frame_url,
+            user_note=notes.get(shot.id, ""), speak=speak,
+            audio_url=vo_urls.get(shot.id))
         prod.token_ledger.image_tokens += kf_tokens  # keyframe composition is real spend
+        # audio semantics of the take: stub/image clips still carry their line as a
+        # VO-at-render (tts) — only real video from a speaking model is 'native'
+        audio_kind = "tts" if shot.caption else "silent"
         if not mime.startswith("image"):
-            if prod.video_quality == "happyhorse" and shot.dialogue and shot.caption:
-                # native speech lives IN the clip; extract it into the VO track so the
-                # final render (which strips clip audio) keeps the performance
-                vo = _extract_clip_audio(data, src_dir, shot.id)
-                if vo:
-                    vo_paths[shot.id] = vo
+            if speak and shot.caption:
+                audio_kind = "native"
+                data = _vertical_blur_fill(data, src_dir, shot.id)  # natives are landscape-locked
+                if vo_paths.get(shot.id):
+                    # input-audio path: the clip embeds OUR TTS — the cached wav IS the
+                    # VO track already, perfectly aligned. Nothing to extract.
+                    pass
+                else:
+                    # model-generated speech: pull it into the VO track so the final
+                    # render (which strips clip audio) keeps the performance
+                    vo = _extract_clip_audio(data, src_dir, shot.id)
+                    if vo:
+                        vo_paths[shot.id] = vo
             elif vo_paths.get(shot.id):
+                audio_kind = "tts"
                 # the clip carries its own spoken line for review; render re-mixes cleanly
                 data = _mux_voice_into_clip(data, vo_paths[shot.id], src_dir, shot.id, shot.duration_s)
+            elif shot.caption:
+                audio_kind = "tts"
         ext = "png" if mime.startswith("image") else "mp4"
         key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(data)}.{ext}"
         _store_bytes(ctx, key, data, mime)
         asset = repo.create_asset(kind="generated", storage_key=key, project_id=prod.project_id, mime=mime, duration_s=shot.duration_s, width=1080, height=1920)
-        shot.asset_id = asset["id"]
-        shot.source = AssetSource.generated
-        shot.status = ShotStatus.ready
-        shot.gen_tool = tool
-        shot.tokens = tokens
-        shot.critic_score = round(score, 3) if score is not None else None
-        shot.reroll_count = rerolls
+
+        # APPEND the take (permanent); choose it only when the contract allows
+        from recut.showrunner.schemas import Take, caption_fingerprint
+
+        take = Take(
+            asset_id=asset["id"], model=route, seed=used_seed, duration_s=shot.duration_s,
+            audio_kind=audio_kind, keyframe_asset_id=shot.keyframe_asset_id,
+            keyframe_sig=shot.keyframe_sig, caption_hash=caption_fingerprint(shot.caption),
+            critic_score=round(score, 3) if score is not None else None,
+            note=notes.get(shot.id, ""),
+        )
+        shot.takes.append(take)
+        choose = (shot.chosen_take_id is None) or (shot.id in force and not master)
+        if choose:
+            shot.chosen_take_id = take.id
+            shot.asset_id = take.asset_id  # dual-written for compat
+            shot.source = AssetSource.generated
+            shot.status = ShotStatus.ready
+            shot.gen_tool = tool
+            shot.tokens = tokens
+            shot.critic_score = take.critic_score
+            shot.reroll_count = rerolls
+        else:
+            shot.status = ShotStatus.ready  # master take appended UNCHOSEN — picker decides
         prod.token_ledger.video_tokens += tokens
         prod.token_ledger.rerolls += rerolls
         # visible agent reasoning — why this shot was made the way it was
@@ -559,10 +692,13 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
                     "generate_shot_i2v": "image-to-video from locked reference",
                     "generate_shot_i2v_continuity": "image-to-video chained from previous frame",
                     "generate_shot_t2v": "text-to-video (establishing / no character)"}.get(tool, tool)
+        decision = f"{decision} · {route}" + (" · SPEAKS" if speak else "")
         if score is not None:
             reason = f"consistency {score:.2f}" + (f"; re-rolled ×{rerolls} to fix drift" if rerolls else "; passed first try")
         else:
             reason = "no identity reference to verify"
+        if not choose:
+            reason += " · master take appended unchosen (picker decides)"
         # Replace (not duplicate) this shot's prior generation entry on a re-run/regenerate
         # (dedupe by the unique shot id; shot.index is per-scene so labels can collide).
         # Editor entries have no "id" and are left intact.
@@ -583,20 +719,39 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
                 ctx.storage.put_file(lf_key, lf, content_type="image/jpeg")
                 prev_frame_url = ctx.storage.url(lf_key)
 
-    ready_now = sum(1 for s in shots if s.asset_id)
+    ready_now = sum(1 for s in shots if s.chosen_take_id or s.asset_id)
     if cancelled:
         prod.stage = Stage.production
         repo.save_production(prod)
         return {"cancelled": True, "shots_ready": ready_now, "shots_total": len(shots),
                 "note": "stopped by the user; finished shots kept — press Action to resume"}
-    if pilot:
-        # a pilot pass reviews the selected shots BEFORE committing the rest — no render
+    if not render:
+        # a no-render pass (pilot / master-cut) reviews takes BEFORE committing a film
         prod.stage = Stage.production
         repo.save_production(prod)
-        return {"pilot": True, "shots_ready": ready_now, "shots_total": len(shots),
-                "note": "pilot shots ready — review them, then press Action for the rest"}
+        return {"pilot": True, "master": master, "shots_ready": ready_now, "shots_total": len(shots),
+                "note": "takes ready — review them, then press Action to render"}
 
-    # PASS 3 — assemble: per-shot VO concat (already synthesized in pass 1), then render
+    # PASS 3 — assemble: per-shot VO concat (already synthesized in pass 1), then render.
+    # Chosen NATIVE takes on a re-render may have no VO in the work dir — re-extract the
+    # performance from the take's STORED asset (permanent), never lose the speech.
+    for shot in shots:
+        if shot.id in vo_paths:
+            continue
+        chosen = next((t for t in shot.takes if t.id == shot.chosen_take_id), None)
+        if not chosen or chosen.audio_kind != "native":
+            continue
+        a = repo.get_asset(chosen.asset_id)
+        if not a or not a["mime"].startswith("video"):
+            continue
+        try:
+            clip = ctx.storage.get(a["storage_key"])
+        except Exception:  # noqa: BLE001 — asset unreadable → shot renders silent + warned
+            prod.warnings.append("could not reload a chosen take's audio; that shot renders silent")
+            continue
+        vo = _extract_clip_audio(clip, src_dir, shot.id)
+        if vo:
+            vo_paths[shot.id] = vo
     vo_segments = [(vo_paths.get(shot.id, ""), shot.duration_s) for shot in shots]
     timeline = compile_to_timeline(prod)
     assets = {a_id: AssetMeta(storage_key=r["storage_key"], mime=r["mime"], duration_s=r["duration_s"], width=r["width"], height=r["height"])

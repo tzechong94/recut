@@ -26,13 +26,10 @@ def test_regenerate_is_idempotent_on_tokens_and_log():
     log1 = len(after1.director_log)
     nshots = len(after1.shots)
 
-    # regenerate ONE shot -> re-enqueue produce_film
-    shot = after1.shots[0]
-    shot_obj = after1.find_shot(shot.id)
-    shot_obj.asset_id = None
-    shot_obj.source = AssetSource.standin
-    repo.save_production(after1)
-    queue.enqueue("produce_film", {"production_id": p.id})
+    # retake ONE silent shot (contract: re-filming is an explicit FORCE, never a clear)
+    target = next((s for s in after1.shots if not s.dialogue), after1.shots[0])
+    queue.enqueue("produce_film", {"production_id": p.id, "force_ids": [target.id],
+                                   "render": True})
     process_once(build_context())
     after2 = repo.get_production(p.id)
 
@@ -41,4 +38,7 @@ def test_regenerate_is_idempotent_on_tokens_and_log():
     # one generation log entry per shot (no stale duplicates)
     gen_entries = [e for e in after2.director_log if not e["decision"].startswith("Editor:")]
     assert len(gen_entries) == nshots
-    assert all(s.asset_id for s in after2.shots)  # regenerated shot resolved again
+    assert all(s.asset_id for s in after2.shots)  # every shot still resolved
+    tgt = after2.find_shot(target.id)
+    assert len(tgt.takes) == 2  # the old take survived the retake
+    assert tgt.chosen_take_id == tgt.takes[-1].id  # retake auto-chose its result

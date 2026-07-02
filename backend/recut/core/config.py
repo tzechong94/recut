@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     # dialogue shots SPEAK with lip-sync, clips up to 15s (no loop artifact).
     happyhorse_i2v_model: str = "happyhorse-1.0-i2v"
     happyhorse_resolution: str = "720P"  # 720P | 1080P
+    # --- per-shot ROUTING (the fidelity contract; bake-off tunes these) ---
+    # speaking shots film here in BOTH modes (pilot is the cheap dialogue rehearsal):
+    dialogue_i2v_model: str = "happyhorse-1.0-i2v"
+    # master-cut promotion targets ("strongest"): silent shots / speaking shots
+    master_i2v_model: str = "wan2.2-i2v-plus"
+    master_dialogue_i2v_model: str = "happyhorse-1.1-i2v"
 
     # --- price table (USD, EDITABLE estimates — correct against your DashScope bill) ---
     price_video_second: float = 0.10  # wan2.2-i2v-plus per output second (est.)

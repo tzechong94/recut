@@ -63,12 +63,14 @@ def test_editing_a_line_resynths_only_that_shot():
     queue.enqueue("produce_film", {"production_id": p.id}); process_once(build_context())
     v1 = repo.get_production(p.id).token_ledger.voice_tokens
 
-    # edit one shot's dialogue line, regenerate that shot, re-produce
+    # edit one shot's dialogue line, then RETAKE it (the contract: chosen takes are
+    # permanent — re-filming is an explicit force, never a field-clear)
     cur = repo.get_production(p.id)
     target = next(s for s in cur.shots if s.dialogue)
     target.dialogue[0].line = "A completely different line now."
-    target.asset_id = None; target.source = AssetSource.standin
     repo.save_production(cur)
-    queue.enqueue("produce_film", {"production_id": p.id}); process_once(build_context())
+    queue.enqueue("produce_film", {"production_id": p.id, "scope_ids": [target.id],
+                                   "force_ids": [target.id], "render": False})
+    process_once(build_context())
     v2 = repo.get_production(p.id).token_ledger.voice_tokens
     assert v2 > v1  # the edited line was re-synthesized (changed caption hash); others reused

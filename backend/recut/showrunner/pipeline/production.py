@@ -31,7 +31,44 @@ _TYPE_CUES = {
 }
 
 
-def build_shot_prompt(prod: Production, shot: Shot) -> str:
+def speaking(shot: Shot) -> bool:
+    """A SPEAKING shot has at least one non-blank dialogue line — it routes to the
+    dialogue (native audio + lip-sync) model. Narration-only shots are VO-on-Wan."""
+    return any(d.line.strip() for d in shot.dialogue)
+
+
+def is_native_audio_model(model: str) -> bool:
+    """Models that generate speech IN the clip (joint audio+video)."""
+    return model.startswith(("happyhorse", "wan2.5", "wan2.6"))
+
+
+def route_shot_model(shot: Shot, prod: Production, settings, *, master: bool = False) -> str:
+    """THE ROUTING RULE (fidelity contract §1): speaking → dialogue model in both
+    modes; silent → flash (draft) / plus (ship). Master models are reachable ONLY via
+    the master-cut action — and a master cut can never silence dialogue."""
+    if master:
+        return settings.master_dialogue_i2v_model if speaking(shot) else settings.master_i2v_model
+    if speaking(shot):
+        return settings.dialogue_i2v_model
+    return settings.wan_i2v_draft_model if prod.video_quality == "draft" else settings.wan_i2v_model
+
+
+def take_is_stale(shot: Shot, take) -> bool:
+    """A take is STALE when what it was filmed FROM no longer matches the shot: the
+    still was regenerated (identity), the filmable fields drifted, or the line was
+    edited. Stale is a badge, never an auto-refilm."""
+    from recut.showrunner.schemas import caption_fingerprint
+
+    if take.keyframe_asset_id and shot.keyframe_asset_id and take.keyframe_asset_id != shot.keyframe_asset_id:
+        return True
+    if take.keyframe_sig and take.keyframe_sig != still_signature(shot):
+        return True
+    if take.caption_hash and take.caption_hash != caption_fingerprint(shot.caption):
+        return True
+    return False
+
+
+def build_shot_prompt(prod: Production, shot: Shot, *, speak: bool = False) -> str:
     # LEAD with the medium/style so it dominates the render (image/video models weight the
     # first tokens heavily — burying "claymation" mid-prompt is why the look didn't land).
     bits = [prod.style.prompt_suffix()]
@@ -40,9 +77,9 @@ def build_shot_prompt(prod: Production, shot: Shot) -> str:
     bits.append(_CAMERA_CUES.get(shot.camera.value, "locked-off camera"))
     bits.append("vertical 9:16, high quality")
     prompt = ", ".join(b for b in bits if b)
-    if prod.video_quality == "happyhorse" and shot.dialogue:
-        # HappyHorse generates joint audio+video: the character actually SPEAKS the
-        # written line with lip-sync (the film keeps this audio via the VO track).
+    if speak and shot.dialogue:
+        # a native-audio model films this shot: the character actually SPEAKS the
+        # written line with lip-sync (the film keeps this audio via the VO track)
         lines = " ".join(d.line for d in shot.dialogue if d.line)
         speaker = next((d.character_name for d in shot.dialogue if d.character_name), "The character")
         prompt += f'. {speaker} speaks these exact words aloud, lips syncing naturally: "{lines}"'
@@ -213,14 +250,14 @@ def reference_for_shot(prod: Production, shot: Shot) -> tuple[str | None, bool]:
 
 def generate_shot(
     models: ModelClients, prod: Production, shot: Shot, *, seed: int = 0, corrective: str = "",
-    prev_frame_url: str | None = None,
+    prev_frame_url: str | None = None, speak: bool = False, audio_url: str | None = None,
 ) -> ShotRender:
     """Generate one shot via KEYFRAME-FIRST: for a character shot, compose a still that puts
     the locked character into the scene/location/action (qwen-image-edit), then animate THAT
     with image-to-video. `seed` varies per attempt so a re-roll is a real redraw; `corrective`
     is the critic's drift note fed back in. A location-only shot animates its plate; a pure
     establishing shot chains the previous frame, else text-to-video."""
-    prompt = build_shot_prompt(prod, shot)
+    prompt = build_shot_prompt(prod, shot, speak=speak)
     if corrective:
         prompt += f". IMPORTANT continuity correction: {corrective}"
 
@@ -228,7 +265,7 @@ def generate_shot(
         # The human approved this exact still on the shot board — animate IT, never
         # recompose. Re-rolls vary the seed/prompt only; the approved frame is sacred.
         try:
-            asset = models.video.generate_from_image(shot.keyframe_url, prompt, duration_s=shot.duration_s, seed=seed)
+            asset = models.video.generate_from_image(shot.keyframe_url, prompt, duration_s=shot.duration_s, seed=seed, audio_url=audio_url)
             anchor = _identity_character(prod, shot)
             # A still that PASSED the gate already encodes identity+setting — the video
             # critic then verifies FAITHFULNESS to that approved frame. An ungated still
@@ -251,11 +288,11 @@ def generate_shot(
             )
             kf_url = keyframe.url or char.reference_url  # stub has no hosted url → i2v ignores it
             # 2) animate the composed keyframe; critic still checks identity vs the LOCKED ref
-            asset = models.video.generate_from_image(kf_url, prompt, duration_s=shot.duration_s, seed=seed)
+            asset = models.video.generate_from_image(kf_url, prompt, duration_s=shot.duration_s, seed=seed, audio_url=audio_url)
             return ShotRender(asset=asset, tool="generate_shot_keyframe_i2v",
                               reference_url=char.reference_url, keyframe=keyframe)
         except Exception:  # noqa: BLE001 — edit model hiccup → fall back to plain i2v from the ref
-            asset = models.video.generate_from_image(char.reference_url, prompt, duration_s=shot.duration_s, seed=seed)
+            asset = models.video.generate_from_image(char.reference_url, prompt, duration_s=shot.duration_s, seed=seed, audio_url=audio_url)
             return ShotRender(asset=asset, tool="generate_shot_i2v", reference_url=char.reference_url)
 
     ref_url, is_identity = reference_for_shot(prod, shot)  # location plate (no character)

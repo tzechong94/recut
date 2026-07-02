@@ -94,24 +94,34 @@ def test_retake_with_note_refilms_only_that_shot_and_carries_the_note(client, mo
     process_once(build_context())
     assert repo.get_production(p.id).find_shot(first).asset_id
 
-    # the director retakes it with a note; capture the prompt the video model sees
+    # the director retakes it with a note; capture the prompt the video model sees.
+    # (record at the CLASS level — per-shot routing builds fresh stub clients)
+    from recut.core.models import StubVideoGen
+
     ctx = build_context()
     prompts: list[str] = []
-    orig = ctx.models.video.generate_from_image
+    orig = StubVideoGen.generate_from_image
 
-    def rec(url, prompt, **kw):
+    def rec(self, url, prompt, **kw):
         prompts.append(prompt)
-        return orig(url, prompt, **kw)
+        return orig(self, url, prompt, **kw)
 
-    ctx.models.video.generate_from_image = rec
-    r = client.post(f"/api/productions/{p.id}/shots/{first}/regenerate",
-                    json={"instruction": "slower, hold on her face"})
-    assert r.status_code == 202
-    process_once(ctx)
+    StubVideoGen.generate_from_image = rec
+    try:
+        r = client.post(f"/api/productions/{p.id}/shots/{first}/regenerate",
+                        json={"instruction": "slower, hold on her face"})
+        assert r.status_code == 202
+        process_once(ctx)
+    finally:
+        StubVideoGen.generate_from_image = orig
     job = client.get(f"/api/jobs/{r.json()['job_id']}").json()
     assert job["status"] == "done" and job["result"].get("pilot") is True  # no render pre-export
     updated = repo.get_production(p.id)
-    assert updated.find_shot(first).asset_id  # re-filmed
+    tgt = updated.find_shot(first)
+    assert tgt.asset_id  # re-filmed
+    assert len(tgt.takes) == 2  # the OLD take is still there — nothing is ever lost
+    assert tgt.chosen_take_id == tgt.takes[-1].id  # a retake auto-chooses its result
+    assert tgt.takes[-1].note == "slower, hold on her face"
     assert sum(1 for s in updated.shots if s.asset_id) == 1  # ONLY that shot
     assert any("hold on her face" in pr for pr in prompts)  # the note rode the prompt
 
