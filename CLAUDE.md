@@ -54,10 +54,14 @@ backend/recut/
 - Live: `RECUT_MODEL_BACKEND=qwen` + `RECUT_DASHSCOPE_API_KEY` in backend/.env; `recut-doctor` first.
 
 ## Live model facts (validated on the Singapore/intl key)
-Wan t2v `wan2.2-t2v-plus` (size 1080*1920), Wan i2v `wan2.2-i2v-plus` (img_url + seed),
-image `wan2.2-t2i-flash` (sizes 1024*1024/720*1280/1280*720, NOT 1080*1920), Qwen-VL,
-Qwen-Max, CosyVoice v2 (needs `dashscope.base_websocket_api_url` for intl). certifi CA
-bundle set for the websocket.
+Wan t2v `wan2.2-t2v-plus` (size 1080*1920), Wan i2v `wan2.2-i2v-plus` (img_url + seed)
++ draft tier `wan2.2-i2v-flash`, HappyHorse `happyhorse-1.0-i2v` (raw HTTP async;
+input.media=[{"type":"first_frame","url":…}], parameters duration 3-15 / resolution
+720P|1080P; native joint audio+video → dialogue lip-sync; render strips clip audio so
+the native speech is extracted into the VO track), image `wan2.2-t2i-flash` (sizes
+1024*1024/720*1280/1280*720, NOT 1080*1920), `qwen-image-edit` (multi-image compose,
+hosted OSS output), Qwen-VL, Qwen-Max, TTS `qwen3-tts-flash` (HTTP; voices Cherry/
+Serena/Ethan/Chelsie — CosyVoice v2 is China-region-only on intl).
 
 ## Style
 Typed, pydantic v2, explicit over clever, named exceptions (no bare except outside the

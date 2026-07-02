@@ -314,6 +314,26 @@ def _mux_voice_into_clip(data: bytes, vo_path: str, src_dir, shot_id: str, durat
         return data
 
 
+def _extract_clip_audio(data: bytes, src_dir, shot_id: str) -> str | None:
+    """Pull the native audio out of a clip (HappyHorse speaks in-video) so the render's
+    voiceover track carries the performance. Best-effort."""
+    import subprocess
+    from pathlib import Path
+
+    vin = Path(src_dir) / f"{shot_id}_aud_in.mp4"
+    out = Path(src_dir) / f"{shot_id}_native.wav"
+    try:
+        vin.write_bytes(data)
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(vin), "-vn",
+             "-acodec", "pcm_s16le", "-ar", "44100", str(out)],
+            check=True, capture_output=True,
+        )
+        return str(out)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _keyframe(video_path: str, mime: str) -> str | None:
     if mime.startswith("image"):
         return video_path  # stub "video" is already a still
@@ -333,7 +353,14 @@ def _fit_durations_to_voice(prod, ctx, src_dir) -> dict[str, str]:
     from recut.pipeline.shots import probe_duration
 
     vo_paths: dict[str, str] = {}
+    hh = prod.video_quality == "happyhorse"
     for shot in prod.shots:
+        if hh and shot.dialogue and shot.caption:
+            # HappyHorse SPEAKS the line natively inside the clip — no TTS. Duration
+            # is estimated from the text (int, 3-15s) and the clip audio is extracted
+            # into the VO track after generation.
+            shot.duration_s = float(max(3, min(15, round(len(shot.caption) * 0.07 + 1.2))))
+            continue
         # Cache keyed on the caption's CONTENT so re-runs reuse (idempotent, no double
         # token count) but an EDITED line re-synthesizes (correct audio).
         chash = content_hash(shot.caption.encode())[:8] if shot.caption else "silent"
@@ -442,14 +469,17 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     if not prod:
         raise ValueError("production not found")
     ctx = _ctx_for(prod, ctx)
-    if prod.video_quality == "draft" and not prod.test_mode:
-        # DRAFT tier: film the rehearsal on the cheap flash model; retakes/promotes
-        # re-run through the same path once video_quality flips back to final.
+    tier_model = {"draft": ctx.settings.wan_i2v_draft_model,
+                  "happyhorse": ctx.settings.happyhorse_i2v_model}.get(prod.video_quality)
+    if tier_model and not prod.test_mode:
+        # Quality tiers swap the i2v model: DRAFT films the cheap flash rehearsal,
+        # HAPPYHORSE films dialogue with native audio + lip-sync. Retakes/promotes
+        # re-run through the same path when video_quality changes.
         from dataclasses import replace
 
         from recut.core.models import get_models
 
-        s2 = ctx.settings.model_copy(update={"wan_i2v_model": ctx.settings.wan_i2v_draft_model})
+        s2 = ctx.settings.model_copy(update={"wan_i2v_model": tier_model})
         ctx = replace(ctx, settings=s2, models=get_models(s2))
     pilot = set(job.payload.get("shot_ids") or [])  # non-empty = film ONLY these
     notes = job.payload.get("notes") or {}  # director's retake comments, per shot id
@@ -500,9 +530,16 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         data, mime, tool, tokens, score, rerolls, kf_tokens = _generate_shot_best_of(
             prod, shot, ctx, src_dir, prev_frame_url, user_note=notes.get(shot.id, ""))
         prod.token_ledger.image_tokens += kf_tokens  # keyframe composition is real spend
-        if not mime.startswith("image") and vo_paths.get(shot.id):
-            # the clip carries its own spoken line for review; render re-mixes cleanly
-            data = _mux_voice_into_clip(data, vo_paths[shot.id], src_dir, shot.id, shot.duration_s)
+        if not mime.startswith("image"):
+            if prod.video_quality == "happyhorse" and shot.dialogue and shot.caption:
+                # native speech lives IN the clip; extract it into the VO track so the
+                # final render (which strips clip audio) keeps the performance
+                vo = _extract_clip_audio(data, src_dir, shot.id)
+                if vo:
+                    vo_paths[shot.id] = vo
+            elif vo_paths.get(shot.id):
+                # the clip carries its own spoken line for review; render re-mixes cleanly
+                data = _mux_voice_into_clip(data, vo_paths[shot.id], src_dir, shot.id, shot.duration_s)
         ext = "png" if mime.startswith("image") else "mp4"
         key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(data)}.{ext}"
         _store_bytes(ctx, key, data, mime)

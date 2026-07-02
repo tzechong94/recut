@@ -39,7 +39,14 @@ def build_shot_prompt(prod: Production, shot: Shot) -> str:
     bits.append(_TYPE_CUES.get(shot.shot_type, "medium shot"))
     bits.append(_CAMERA_CUES.get(shot.camera.value, "locked-off camera"))
     bits.append("vertical 9:16, high quality")
-    return ", ".join(b for b in bits if b)
+    prompt = ", ".join(b for b in bits if b)
+    if prod.video_quality == "happyhorse" and shot.dialogue:
+        # HappyHorse generates joint audio+video: the character actually SPEAKS the
+        # written line with lip-sync (the film keeps this audio via the VO track).
+        lines = " ".join(d.line for d in shot.dialogue if d.line)
+        speaker = next((d.character_name for d in shot.dialogue if d.character_name), "The character")
+        prompt += f'. {speaker} speaks these exact words aloud, lips syncing naturally: "{lines}"'
+    return prompt
 
 
 def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool = False,

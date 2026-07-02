@@ -55,6 +55,7 @@ def pricing() -> dict:
     return {
         "video_second_final": s.price_video_second,
         "video_second_draft": s.price_video_second_draft,
+        "video_second_happyhorse": s.price_video_second_happyhorse,
         "image": s.price_image,
         "text_1k": s.price_text_1k,
         "voice_1k": s.price_voice_1k,
@@ -500,7 +501,8 @@ def _est_cost_usd(prod: Production) -> dict:
 
     s = get_settings()
     led = prod.token_ledger
-    vid_rate = s.price_video_second_draft if prod.video_quality == "draft" else s.price_video_second
+    vid_rate = {"draft": s.price_video_second_draft,
+                "happyhorse": s.price_video_second_happyhorse}.get(prod.video_quality, s.price_video_second)
     video = (led.video_tokens / 1800.0) * vid_rate
     image = (led.image_tokens / 300.0) * s.price_image
     text = (led.text_tokens / 1000.0) * s.price_text_1k

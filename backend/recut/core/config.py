@@ -42,10 +42,15 @@ class Settings(BaseSettings):
     # DRAFT tier: cheap rehearsal video (probe-verified on the intl key). A draft
     # production films with this, then promotes only the keepers to the plus model.
     wan_i2v_draft_model: str = "wan2.2-i2v-flash"
+    # HAPPYHORSE tier (probe-verified on the intl key): native joint audio+video —
+    # dialogue shots SPEAK with lip-sync, clips up to 15s (no loop artifact).
+    happyhorse_i2v_model: str = "happyhorse-1.0-i2v"
+    happyhorse_resolution: str = "720P"  # 720P | 1080P
 
     # --- price table (USD, EDITABLE estimates — correct against your DashScope bill) ---
     price_video_second: float = 0.10  # wan2.2-i2v-plus per output second (est.)
     price_video_second_draft: float = 0.02  # wan2.2-i2v-flash per output second (est.)
+    price_video_second_happyhorse: float = 0.15  # happyhorse-1.0-i2v per second (est.)
     price_image: float = 0.03  # t2i / qwen-image-edit per image (est.)
     price_text_1k: float = 0.004  # qwen-max per 1k tokens, blended in/out (est.)
     price_voice_1k: float = 0.015  # qwen3-tts per 1k characters (est.)

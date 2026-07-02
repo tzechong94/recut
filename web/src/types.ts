@@ -250,6 +250,7 @@ export interface Scoreboard {
 export interface Pricing {
   video_second_final: number;
   video_second_draft: number;
+  video_second_happyhorse?: number;
   image: number;
   text_1k: number;
   voice_1k: number;

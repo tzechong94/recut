@@ -200,8 +200,9 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
                 aria-label="Video quality"
                 onChange={(e) => ctl.update({ ...p, video_quality: e.target.value })}
               >
-                <option value="final">Final — wan i2v plus</option>
-                <option value="draft">Draft — flash, ~5× cheaper rehearsal</option>
+                <option value="final">Final — Wan i2v plus</option>
+                <option value="draft">Draft — Wan flash, ~5× cheaper rehearsal</option>
+                <option value="happyhorse">HappyHorse — speaks with lip-sync, 15s shots</option>
               </select>
             </label>
             <label className="sr-gate-control">
@@ -362,8 +363,15 @@ function RunSheet({
   const gated = all.filter((s) => s.keyframe_score != null).length;
   const spoken = all.filter((s) => s.dialogue.length > 0 || s.narration).length;
   const seconds = toFilm.reduce((a, s) => a + s.duration_s, 0);
-  const draft = (p.video_quality ?? "final") === "draft";
-  const rate = pricing ? (draft ? pricing.video_second_draft : pricing.video_second_final) : null;
+  const quality = p.video_quality ?? "final";
+  const draft = quality === "draft";
+  const rate = pricing
+    ? quality === "draft"
+      ? pricing.video_second_draft
+      : quality === "happyhorse"
+        ? (pricing.video_second_happyhorse ?? pricing.video_second_final)
+        : pricing.video_second_final
+    : null;
   const videoUsd = rate != null ? seconds * rate : null;
   const voiceUsd = pricing ? (spoken * 60 * pricing.voice_1k) / 1000 : null;
   const minutes = Math.max(2, Math.ceil(toFilm.length * (draft ? 1.5 : 3)));
@@ -377,7 +385,7 @@ function RunSheet({
       <div className="sr-rs-line" aria-hidden="true" />
       <div className="sr-rs-row">
         <span>
-          {toFilm.length} × Wan i2v ({draft ? "DRAFT — flash" : "FINAL — plus"}) — animate your approved frames
+          {toFilm.length} × {quality === "happyhorse" ? "HappyHorse i2v (SPEAKS with lip-sync)" : `Wan i2v (${draft ? "DRAFT — flash" : "FINAL — plus"})`} — animate your approved frames
         </span>
         <b>{usd(videoUsd)}{Math.round(seconds * 1.8)}k video tokens (est.)</b>
       </div>

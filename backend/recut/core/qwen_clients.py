@@ -350,9 +350,56 @@ class QwenVideoGen(VideoGen):
 
         return _retry(call, attempts=2, base_delay=3.0)
 
+    def _happyhorse_i2v(self, image_url: str, prompt: str, duration_s: float, seed: int) -> GenAsset:
+        """HappyHorse image-to-video: native joint audio+video (dialogue shots SPEAK
+        with lip-sync), 3-15s clips. Raw HTTP — the SDK doesn't map its `media`
+        (first_frame) input shape. Probe-verified on the intl endpoint."""
+        import time
+
+        import httpx
+
+        base = (self.s.dashscope_base_url or "https://dashscope-intl.aliyuncs.com/api/v1").rstrip("/")
+        headers = {"Authorization": f"Bearer {self.s.dashscope_api_key}",
+                   "Content-Type": "application/json", "X-DashScope-Async": "enable"}
+        dur = int(max(3, min(15, round(duration_s))))
+        params: dict = {"duration": dur, "resolution": self.s.happyhorse_resolution}
+        if seed:
+            params["seed"] = seed % 2147483647
+
+        def call() -> GenAsset:
+            body = {"model": self.s.wan_i2v_model,
+                    "input": {"prompt": prompt, "media": [{"type": "first_frame", "url": image_url}]},
+                    "parameters": params}
+            r = httpx.post(f"{base}/services/aigc/video-generation/video-synthesis",
+                           headers=headers, json=body, timeout=60)
+            d = r.json()
+            task_id = d.get("output", {}).get("task_id")
+            if r.status_code != 200 or not task_id:
+                raise RuntimeError(f"happyhorse create {r.status_code}: {str(d)[:200]}")
+            for _ in range(240):  # ≤20 min
+                time.sleep(5)
+                q = httpx.get(f"{base}/tasks/{task_id}",
+                              headers={"Authorization": headers["Authorization"]}, timeout=30).json()
+                st = q.get("output", {}).get("task_status")
+                if st == "SUCCEEDED":
+                    url = q["output"].get("video_url", "")
+                    if not url:
+                        raise RuntimeError("happyhorse succeeded but no video_url")
+                    data = httpx.get(url, timeout=180).content
+                    return GenAsset(data=data, mime="video/mp4", duration_s=float(dur),
+                                    tokens=int(dur * 1800), url=url)
+                if st in ("FAILED", "CANCELED"):
+                    raise RuntimeError(f"happyhorse task {st}: {str(q.get('output', {}).get('message', ''))[:200]}")
+            raise RuntimeError("happyhorse task timed out")
+
+        return _retry(call, attempts=2, base_delay=3.0)
+
     def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset:
         import dashscope
         import httpx
+
+        if self.s.wan_i2v_model.startswith("happyhorse"):
+            return self._happyhorse_i2v(image_url, prompt, duration_s, seed)
 
         kwargs = {"seed": seed} if seed else {}
 
