@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # 1248*1632, 480*832, 832*480, 624*624. Use 1080*1920 for 9:16 (480*832 = cheaper/faster).
     wan_size: str = "1080*1920"
     wan_i2v_model: str = "wan2.2-i2v-plus"  # image-to-video (character consistency)
+    # DRAFT tier: cheap rehearsal video (probe-verified on the intl key). A draft
+    # production films with this, then promotes only the keepers to the plus model.
+    wan_i2v_draft_model: str = "wan2.2-i2v-flash"
+
+    # --- price table (USD, EDITABLE estimates — correct against your DashScope bill) ---
+    price_video_second: float = 0.10  # wan2.2-i2v-plus per output second (est.)
+    price_video_second_draft: float = 0.02  # wan2.2-i2v-flash per output second (est.)
+    price_image: float = 0.03  # t2i / qwen-image-edit per image (est.)
+    price_text_1k: float = 0.004  # qwen-max per 1k tokens, blended in/out (est.)
+    price_voice_1k: float = 0.015  # qwen3-tts per 1k characters (est.)
     qwen_image_model: str = "wanx2.1-t2i-turbo"
     # qwen-image-edit composes the per-shot keyframe: same character, new location + style.
     qwen_image_edit_model: str = "qwen-image-edit"

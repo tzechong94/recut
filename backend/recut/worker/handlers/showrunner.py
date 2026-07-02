@@ -414,6 +414,16 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
     if not prod:
         raise ValueError("production not found")
     ctx = _ctx_for(prod, ctx)
+    if prod.video_quality == "draft" and not prod.test_mode:
+        # DRAFT tier: film the rehearsal on the cheap flash model; retakes/promotes
+        # re-run through the same path once video_quality flips back to final.
+        from dataclasses import replace
+
+        from recut.core.models import get_models
+
+        s2 = ctx.settings.model_copy(update={"wan_i2v_model": ctx.settings.wan_i2v_draft_model})
+        ctx = replace(ctx, settings=s2, models=get_models(s2))
+    pilot = set(job.payload.get("shot_ids") or [])  # non-empty = film ONLY these
     shots = prod.shots
     total = len(shots) or 1
     cap = _project_cap(prod, ctx)
@@ -438,10 +448,18 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
 
     shot_scene = {sh.id: sc.index for sc in prod.scenes for sh in sc.shots}
     prev_frame_url, prev_scene, done = None, None, 0
+    cancelled = False
     for shot in shots:
+        if queue.is_cancelling(job.id):
+            # cooperative stop: keep every finished shot, spend nothing more
+            cancelled = True
+            prod.warnings.append("production stopped by you — finished shots kept")
+            break
         if shot_scene.get(shot.id) != prev_scene:
             prev_frame_url, prev_scene = None, shot_scene.get(shot.id)  # reset at scene cut
         done += 1
+        if pilot and shot.id not in pilot:
+            continue  # pilot pass films only the selected shots
         if shot.source in (AssetSource.generated, AssetSource.uploaded) and shot.asset_id:
             continue  # resumable
         if prod.token_ledger.video_tokens >= cap:
@@ -494,6 +512,19 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
                 lf_key = f"productions/{prod.id}/frames/{shot.id}_last.jpg"
                 ctx.storage.put_file(lf_key, lf, content_type="image/jpeg")
                 prev_frame_url = ctx.storage.url(lf_key)
+
+    ready_now = sum(1 for s in shots if s.asset_id)
+    if cancelled:
+        prod.stage = Stage.production
+        repo.save_production(prod)
+        return {"cancelled": True, "shots_ready": ready_now, "shots_total": len(shots),
+                "note": "stopped by the user; finished shots kept — press Action to resume"}
+    if pilot:
+        # a pilot pass reviews the selected shots BEFORE committing the rest — no render
+        prod.stage = Stage.production
+        repo.save_production(prod)
+        return {"pilot": True, "shots_ready": ready_now, "shots_total": len(shots),
+                "note": "pilot shots ready — review them, then press Action for the rest"}
 
     # PASS 3 — assemble: per-shot VO concat (already synthesized in pass 1), then render
     vo_segments = [(vo_paths.get(shot.id, ""), shot.duration_s) for shot in shots]

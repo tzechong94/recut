@@ -45,6 +45,23 @@ def list_styles() -> list[dict]:
     ]
 
 
+@router.get("/pricing")
+def pricing() -> dict:
+    """The EDITABLE price table (USD estimates — correct them in settings against your
+    actual DashScope bill). The UI turns run-sheet tokens into money with these."""
+    from recut.core.config import get_settings
+
+    s = get_settings()
+    return {
+        "video_second_final": s.price_video_second,
+        "video_second_draft": s.price_video_second_draft,
+        "image": s.price_image,
+        "text_1k": s.price_text_1k,
+        "voice_1k": s.price_voice_1k,
+        "note": "editable estimates, not a bill",
+    }
+
+
 @router.get("/tones")
 def list_tones() -> list[dict]:
     """Writing registers, decoupled from the visual style ('' = match the style)."""
@@ -398,19 +415,26 @@ def next_episode(pid: str) -> dict:
     return nxt.model_dump(mode="json")
 
 
+class ProduceRequest(BaseModel):
+    shot_ids: list[str] = []  # non-empty = PILOT: film only these, no final render
+
+
 @router.post("/productions/{pid}/produce", status_code=202)
-def produce(pid: str) -> dict:
-    """Approve the plan and let the agent autonomously generate + edit the film."""
+def produce(pid: str, body: ProduceRequest | None = None) -> dict:
+    """Approve the plan and let the agent autonomously generate + edit the film.
+    With shot_ids, it's a PILOT pass: film only those shots for review, no render."""
     prod = repo.get_production(pid)
     if not prod:
         raise HTTPException(404, "production not found")
     if not prod.shots:
         raise HTTPException(409, "no shots — run storyboard first")
-    if prod.export_asset_id:
+    shot_ids = [s for s in (body.shot_ids if body else []) if prod.find_shot(s)]
+    if prod.export_asset_id and not shot_ids:
         prod.version += 1  # a recut/re-render gets a fresh film file, never overwrites
     prod.stage = Stage.production
     repo.save_production(prod)
-    job_id = queue.enqueue("produce_film", {"production_id": pid}, project_id=prod.project_id)
+    job_id = queue.enqueue("produce_film", {"production_id": pid, "shot_ids": shot_ids},
+                           project_id=prod.project_id)
     return {"job_id": job_id, "status": "queued"}
 
 
@@ -459,6 +483,23 @@ def production_eval(pid: str) -> dict:
     }
 
 
+def _est_cost_usd(prod: Production) -> dict:
+    """Ledger tokens → dollars via the editable price table. ~1800 video tokens ≈ 1s,
+    ~300 image tokens ≈ 1 image, voice tokens ≈ characters. Estimates, not a bill."""
+    from recut.core.config import get_settings
+
+    s = get_settings()
+    led = prod.token_ledger
+    vid_rate = s.price_video_second_draft if prod.video_quality == "draft" else s.price_video_second
+    video = (led.video_tokens / 1800.0) * vid_rate
+    image = (led.image_tokens / 300.0) * s.price_image
+    text = (led.text_tokens / 1000.0) * s.price_text_1k
+    voice = (led.voice_tokens / 1000.0) * s.price_voice_1k
+    total = video + image + text + voice
+    return {"video": round(video, 2), "image": round(image, 2), "text": round(text, 3),
+            "voice": round(voice, 3), "total": round(total, 2)}
+
+
 @router.get("/productions/{pid}/scoreboard")
 def scoreboard(pid: str) -> dict:
     prod = repo.get_production(pid)
@@ -487,6 +528,8 @@ def scoreboard(pid: str) -> dict:
         "avg_identity_gate": round(sum(identity) / len(identity), 3) if identity else None,
         "avg_setting": round(sum(setting) / len(setting), 3) if setting else None,
         "duration_s": dur,
+        # money view (EDITABLE price table; labeled estimate, not a bill)
+        "est_cost_usd": _est_cost_usd(prod),
         # A clearly-labeled ESTIMATE vs regenerating everything without the plan-lock:
         "baseline_estimate_tokens": baseline,
         "estimated_tokens_saved": max(0, baseline - led.total),

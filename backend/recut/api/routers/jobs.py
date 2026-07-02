@@ -18,6 +18,16 @@ def export_timeline(timeline_id: str) -> dict:
     return {"job_id": job_id, "status": "queued"}
 
 
+@router.post("/jobs/{job_id}/cancel", status_code=202)
+def cancel_job(job_id: str) -> dict:
+    """Cooperative stop: the handler finishes its current unit of work, keeps
+    everything done so far, and returns a partial result."""
+    if not queue.get_job(job_id):
+        raise HTTPException(404, "job not found")
+    accepted = queue.request_cancel(job_id)
+    return {"job_id": job_id, "cancelling": accepted}
+
+
 @router.get("/jobs/{job_id}")
 def get_job(job_id: str) -> dict:
     job = queue.get_job(job_id)

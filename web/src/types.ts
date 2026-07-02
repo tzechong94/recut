@@ -198,6 +198,8 @@ export interface Production {
   previous_production_id?: string | null;
   /** Test mode: the whole flow runs on stubs — zero provider tokens. */
   test_mode?: boolean;
+  /** Video tier: "draft" (cheap flash rehearsal) or "final" (plus quality). */
+  video_quality?: string;
   version: number;
   created_at?: number;
 }
@@ -233,6 +235,8 @@ export interface Scoreboard {
   avg_setting?: number | null;
   avg_identity_gate?: number | null;
   drift_caught_early_tokens_saved_estimate?: number;
+  /** Money view (editable price table; estimates, not a bill). */
+  est_cost_usd?: { video: number; image: number; text: number; voice: number; total: number };
   naive_baseline_tokens: number;
   tokens_saved: number;
   savings_pct: number;
@@ -240,6 +244,16 @@ export interface Scoreboard {
   shots_total: number;
   avg_consistency: number | null;
   duration_s: number;
+}
+
+/** Editable price table (USD estimates) returned by GET /pricing. */
+export interface Pricing {
+  video_second_final: number;
+  video_second_draft: number;
+  image: number;
+  text_1k: number;
+  voice_1k: number;
+  note: string;
 }
 
 /** Narrative rubric returned by GET /productions/{id}/eval. */

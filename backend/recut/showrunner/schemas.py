@@ -283,6 +283,10 @@ class Production(BaseModel):
     # TEST MODE: the entire flow runs on deterministic stubs — walk every stage,
     # spend zero provider tokens. Set at creation, carried into next episodes.
     test_mode: bool = False
+    # Video tier: "draft" films with the cheap flash model (rehearsal), "final" with
+    # the plus model. Retakes honor the current setting, so you can draft the film
+    # and promote only the keepers.
+    video_quality: str = "final"
     version: int = 1
     created_at: float = Field(default_factory=_now)
 

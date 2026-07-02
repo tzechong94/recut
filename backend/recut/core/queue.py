@@ -98,6 +98,28 @@ def fail(job_id: str, error: str) -> str:
         return "failed"
 
 
+def request_cancel(job_id: str) -> bool:
+    """Ask a RUNNING job to stop at its next checkpoint (cooperative — the handler
+    checks is_cancelling between units of work and keeps everything finished so far)."""
+    with session_scope() as s:
+        job = s.get(Job, job_id)
+        if not job or job.status not in ("running", "queued"):
+            return False
+        if job.status == "queued":  # never started — just fail it out cleanly
+            job.status = "failed"
+            job.error = "cancelled before start"
+            return True
+        job.status = "cancelling"
+        job.updated_at = time.time()
+        return True
+
+
+def is_cancelling(job_id: str) -> bool:
+    with session_scope() as s:
+        job = s.get(Job, job_id)
+        return bool(job and job.status == "cancelling")
+
+
 def get_job(job_id: str) -> Job | None:
     with session_scope() as s:
         job = s.get(Job, job_id)

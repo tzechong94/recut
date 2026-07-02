@@ -5,6 +5,7 @@ import {
   Clapperboard,
   Film,
   Loader2,
+  Square,
   XCircle,
 } from "lucide-react";
 import { api } from "../api/client";
@@ -12,6 +13,7 @@ import { pollJob } from "../lib/jobs";
 import type { UseProduction } from "../lib/useProduction";
 import type {
   Job,
+  Pricing,
   Production,
   Scoreboard,
   Shot,
@@ -40,10 +42,19 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
   );
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [scoreboard, setScoreboard] = useState<Scoreboard | null>(null);
+  const [pricing, setPricing] = useState<Pricing | null>(null);
+  const [pilotN, setPilotN] = useState(0); // 0 = film everything
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
   const startedRef = useRef(false);
   const stopRef = useRef(false);
+
+  useEffect(() => {
+    api.getPricing().then(setPricing).catch(() => {});
+  }, []);
 
   // Poll production + scoreboard + timeline while producing, so per-shot status
   // and the live scoreboard fill in independently of the job's coarse progress.
@@ -79,32 +90,76 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function start() {
+  /** Fire a browser notification if the user has walked away from the tab. */
+  function notify(title: string, body: string) {
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+        new Notification(title, { body });
+      }
+    } catch {
+      /* notifications are a nicety, never an error */
+    }
+  }
+
+  async function start(shotIds: string[] = []) {
     if (startedRef.current) return;
     startedRef.current = true;
     setRun("running");
     setError(null);
+    setNotice(null);
     setProgress(0);
     try {
-      const { job_id } = await api.produce(p.id);
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        void Notification.requestPermission();
+      }
+      const { job_id } = await api.produce(p.id, shotIds);
+      setJobId(job_id);
       const finalJob = await pollJob(job_id, {
         onProgress: (j: Job) => setProgress(j.progress ?? 0),
-        timeoutMs: 20 * 60 * 1000,
+        timeoutMs: 30 * 60 * 1000,
       });
-      const exportId = finalJob.result?.export_asset_id;
-      if (exportId) onExport?.(exportId);
       stopRef.current = true;
       await Promise.allSettled([
         ctl.refetch(),
         api.getScoreboard(p.id).then(setScoreboard).catch(() => {}),
         api.getTimeline(p.id).then(setTimeline).catch(() => {}),
       ]);
-      setRun("done");
+      if (finalJob.result?.cancelled) {
+        setNotice("Stopped — every finished shot was kept. Press Action to resume where it left off.");
+        notify("Production stopped", "Finished shots kept; press Action to resume.");
+        setRun("idle");
+        startedRef.current = false;
+      } else if (finalJob.result?.pilot) {
+        setNotice("Pilot shots ready — review them below, then press Action to film the rest.");
+        notify("Pilot shots ready", "Review the pilot, then film the rest.");
+        setPilotN(0);
+        setRun("idle");
+        startedRef.current = false;
+      } else {
+        const exportId = finalJob.result?.export_asset_id;
+        if (exportId) onExport?.(exportId);
+        notify("Your film is ready", `${p.title} finished rendering.`);
+        setRun("done");
+      }
     } catch (e) {
       stopRef.current = true;
       setError(e instanceof Error ? e.message : "Production failed");
+      notify("Production failed", "Open Recut to see what happened.");
       setRun("failed");
       startedRef.current = false;
+    } finally {
+      setStopping(false);
+      setJobId(null);
+    }
+  }
+
+  async function stop() {
+    if (!jobId || stopping) return;
+    setStopping(true);
+    try {
+      await api.cancelJob(jobId);
+    } catch {
+      setStopping(false);
     }
   }
 
@@ -135,13 +190,58 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
         <div className="sr-action-gate">
           <Clapperboard size={40} />
           <h3>The run sheet — what happens when you call action</h3>
-          <RunSheet production={p} />
+          {notice && <div className="sr-gate-notice">{notice}</div>}
+
+          <div className="sr-gate-controls">
+            <label className="sr-gate-control">
+              Video quality
+              <select
+                value={p.video_quality ?? "final"}
+                aria-label="Video quality"
+                onChange={(e) => ctl.update({ ...p, video_quality: e.target.value })}
+              >
+                <option value="final">Final — wan i2v plus</option>
+                <option value="draft">Draft — flash, ~5× cheaper rehearsal</option>
+              </select>
+            </label>
+            <label className="sr-gate-control">
+              Pilot
+              <select
+                value={pilotN}
+                aria-label="Pilot shots"
+                onChange={(e) => setPilotN(Number(e.target.value))}
+              >
+                <option value={0}>film everything</option>
+                <option value={2}>first 2 shots only</option>
+                <option value={3}>first 3 shots only</option>
+              </select>
+            </label>
+          </div>
+
+          <RunSheet production={p} pricing={pricing} pilotN={pilotN} />
+
+          {ready > 0 && (
+            <div className="sr-shotlist sr-pilot-list" data-testid="pilot-shots">
+              {shots.filter((s) => s.asset_id).map((sh, i) => (
+                <ShotStatusRow key={sh.id} shot={sh} index={i} production={p} />
+              ))}
+            </div>
+          )}
+
           <p>
             You're approving this exact plan. Everything above the line is
             already paid (cheap text &amp; stills); video spend starts below it.
           </p>
-          <button className="rc-cta sr-action-btn" onClick={start}>
-            <Clapperboard size={17} /> Action — approve the plan &amp; roll
+          <button
+            className="rc-cta sr-action-btn"
+            onClick={() => void start(pilotN > 0 ? shots.slice(0, pilotN).map((s) => s.id) : [])}
+          >
+            <Clapperboard size={17} />
+            {pilotN > 0
+              ? `Action — film the ${pilotN}-shot pilot`
+              : ready > 0
+                ? "Action — film the rest"
+                : "Action — approve the plan & roll"}
           </button>
         </div>
       ) : (
@@ -164,6 +264,21 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
                 <span className="sr-produce-pct">
                   {Math.round((run === "done" ? 1 : progress) * 100)}%
                 </span>
+                {run === "running" && (
+                  <button
+                    className="sr-mini sr-stop"
+                    disabled={stopping || !jobId}
+                    onClick={() => void stop()}
+                    data-testid="stop-production"
+                  >
+                    {stopping ? (
+                      <Loader2 size={13} className="rc-spin" />
+                    ) : (
+                      <Square size={13} />
+                    )}
+                    {stopping ? "Stopping after this shot…" : "Stop"}
+                  </button>
+                )}
               </div>
               <div className="rc-exportbar">
                 <i
@@ -217,24 +332,42 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
   );
 }
 
-/** The approval artifact: every call the agent will make, with the estimated spend.
- *  The human approves THIS, not a vibe. Estimates labeled; ~1800 video tokens/s. */
-function RunSheet({ production: p }: { production: Production }) {
-  const shots = p.scenes.flatMap((s) => s.shots);
-  const stills = shots.filter((s) => s.keyframe_asset_id || s.keyframe_url).length;
-  const gated = shots.filter((s) => s.keyframe_score != null).length;
-  const spoken = shots.filter((s) => s.dialogue.length > 0 || s.narration).length;
-  const estVideo = Math.round(shots.reduce((a, s) => a + s.duration_s * 1800, 0) / 1000);
+/** The approval artifact: every call the agent will make, with the estimated spend in
+ *  DOLLARS (editable price table) and wall-clock. The human approves THIS, not a vibe. */
+function RunSheet({
+  production: p,
+  pricing,
+  pilotN,
+}: {
+  production: Production;
+  pricing: Pricing | null;
+  pilotN: number;
+}) {
+  const all = p.scenes.flatMap((s) => s.shots);
+  const target = pilotN > 0 ? all.slice(0, pilotN) : all;
+  const toFilm = target.filter((s) => !s.asset_id);
+  const stills = all.filter((s) => s.keyframe_asset_id || s.keyframe_url).length;
+  const gated = all.filter((s) => s.keyframe_score != null).length;
+  const spoken = all.filter((s) => s.dialogue.length > 0 || s.narration).length;
+  const seconds = toFilm.reduce((a, s) => a + s.duration_s, 0);
+  const draft = (p.video_quality ?? "final") === "draft";
+  const rate = pricing ? (draft ? pricing.video_second_draft : pricing.video_second_final) : null;
+  const videoUsd = rate != null ? seconds * rate : null;
+  const voiceUsd = pricing ? (spoken * 60 * pricing.voice_1k) / 1000 : null;
+  const minutes = Math.max(2, Math.ceil(toFilm.length * (draft ? 1.5 : 3)));
+  const usd = (v: number | null) => (v == null ? "" : `≈$${v.toFixed(2)} · `);
   return (
     <div className="sr-runsheet" data-testid="run-sheet">
       <div className="sr-rs-row is-done">
-        <span>{stills}/{shots.length} board stills composed{gated ? ` · ${gated} gated by the critic` : ""}</span>
+        <span>{stills}/{all.length} board stills composed{gated ? ` · ${gated} gated by the critic` : ""}</span>
         <b>already spent (image)</b>
       </div>
       <div className="sr-rs-line" aria-hidden="true" />
       <div className="sr-rs-row">
-        <span>{shots.length} × Wan i2v — animate your approved frames</span>
-        <b>≈{estVideo}k video tokens (est.)</b>
+        <span>
+          {toFilm.length} × Wan i2v ({draft ? "DRAFT — flash" : "FINAL — plus"}) — animate your approved frames
+        </span>
+        <b>{usd(videoUsd)}{Math.round(seconds * 1.8)}k video tokens (est.)</b>
       </div>
       <div className="sr-rs-row">
         <span>Qwen-VL critic verifies every shot against its approved still</span>
@@ -242,11 +375,17 @@ function RunSheet({ production: p }: { production: Production }) {
       </div>
       <div className="sr-rs-row">
         <span>{spoken} spoken shot{spoken === 1 ? "" : "s"} — qwen3-tts in character voices</span>
-        <b>voice tokens (tiny)</b>
+        <b>{usd(voiceUsd)}voice (tiny)</b>
       </div>
       <div className="sr-rs-row">
         <span>Assemble: music bed, captions, title cards, ffmpeg render</span>
-        <b>0 model tokens</b>
+        <b>$0 · 0 model tokens</b>
+      </div>
+      <div className="sr-rs-total">
+        {videoUsd != null && (
+          <b>total ≈${(videoUsd + (voiceUsd ?? 0)).toFixed(2)}</b>
+        )}
+        <span> · ≈{minutes} min{pilotN > 0 ? ` · pilot: first ${pilotN} shots only` : ""} · prices editable in settings</span>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@
 import type {
   Asset,
   Job,
+  Pricing,
   Production,
   ProductionEval,
   ProductionSummary,
@@ -231,10 +232,19 @@ export const api = {
   nextEpisode: (id: string) =>
     request<Production>(`/productions/${id}/next-episode`, { method: "POST" }),
 
-  produce: (id: string) =>
+  /** Approve the plan. With shotIds it's a PILOT: film only those, no final render. */
+  produce: (id: string, shotIds: string[] = []) =>
     request<{ job_id: string }>(`/productions/${id}/produce`, {
       method: "POST",
+      body: { shot_ids: shotIds },
     }),
+
+  /** Editable price table (USD estimates) for the run sheet's money view. */
+  getPricing: () => request<Pricing>("/pricing"),
+
+  /** Cooperative stop: the worker keeps everything finished so far. */
+  cancelJob: (jobId: string) =>
+    request<{ cancelling: boolean }>(`/jobs/${jobId}/cancel`, { method: "POST" }),
   regenerateShot: (id: string, sid: string) =>
     request<{ job_id: string }>(
       `/productions/${id}/shots/${sid}/regenerate`,
