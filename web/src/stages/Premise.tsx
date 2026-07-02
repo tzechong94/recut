@@ -386,6 +386,7 @@ export function Premise({ open }: PremiseProps) {
                     className="sr-prod-thumb"
                     onClick={() => open(p.id)}
                     aria-label={`Open ${p.title || "Untitled"}`}
+                    title={p.logline || p.title || "Untitled"}
                     type="button"
                   >
                     {p.cover_asset_id ? (
@@ -406,29 +407,21 @@ export function Premise({ open }: PremiseProps) {
                       </span>
                     )}
                   </button>
-                  <div className="sr-prod-meta">
-                    <div className="sr-prod-title" title={p.title || "Untitled"}>
-                      {p.title || "Untitled"}
-                    </div>
-                    {p.logline && (
-                      <div className="sr-prod-logline" title={p.logline}>
-                        {p.logline}
-                      </div>
-                    )}
-                    <div className="sr-prod-sub">
-                      <span
-                        className={"sr-stage-chip stage-" + p.stage}
-                        data-testid="stage-chip"
-                      >
-                        {stageLabel(p.stage)}
+                  <div className="sr-prod-title" title={p.title || "Untitled"}>
+                    {p.title || "Untitled"}
+                  </div>
+                  <div className="sr-prod-sub">
+                    <span
+                      className={"sr-stage-chip stage-" + p.stage}
+                      data-testid="stage-chip"
+                    >
+                      {stageLabel(p.stage)}
+                    </span>
+                    {relativeTime(p.updated_at) && (
+                      <span className="sr-prod-time">
+                        {relativeTime(p.updated_at)}
                       </span>
-                      {p.style && <span className="sr-prod-time">{p.style}</span>}
-                      {relativeTime(p.updated_at) && (
-                        <span className="sr-prod-time">
-                          {relativeTime(p.updated_at)}
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </div>
                   <div className="sr-prod-actions">
                     <button
@@ -438,11 +431,11 @@ export function Premise({ open }: PremiseProps) {
                     >
                       {p.stage === "export" ? (
                         <>
-                          <Play size={13} /> Watch
+                          <Play size={12} /> Watch
                         </>
                       ) : (
                         <>
-                          Resume <ArrowRight size={13} />
+                          Resume <ArrowRight size={12} />
                         </>
                       )}
                     </button>
@@ -453,7 +446,7 @@ export function Premise({ open }: PremiseProps) {
                       onClick={() => remove(p.id)}
                       type="button"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
