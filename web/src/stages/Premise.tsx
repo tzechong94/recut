@@ -4,13 +4,15 @@ import {
   Clapperboard,
   Film,
   FlaskConical,
+  ImagePlus,
   Loader2,
+  Palette,
   Play,
   Sparkles,
   Trash2,
 } from "lucide-react";
 import { api, assetRawUrl } from "../api/client";
-import type { ProductionSummary, StyleSummary } from "../types";
+import type { ProductionSummary, StyleLock, StyleSummary } from "../types";
 
 const FALLBACK_STYLES: StyleSummary[] = [
   { name: "noir", descriptors: "film noir, high-contrast B&W, hard shadows", palette: "monochrome" },
@@ -28,7 +30,15 @@ const STYLE_SWATCH: Record<string, string> = {
   storybook: "linear-gradient(150deg,#f6d5e0,#a8c0e8)",
   cinematic: "linear-gradient(150deg,#3a4a5a,#11161c)",
   pixar: "linear-gradient(150deg,#4dc3ff,#9b6bff)",
+  ink_wash: "linear-gradient(150deg,#e8e4da,#42403a)",
+  comic: "linear-gradient(150deg,#ffd23f,#ee4266)",
+  pixel: "linear-gradient(150deg,#5efc8d,#233d4d)",
+  cyberpunk: "linear-gradient(150deg,#00e5ff,#d400ff)",
+  retro_film: "linear-gradient(150deg,#e0a458,#6b4226)",
+  paper_craft: "linear-gradient(150deg,#f4e8c1,#a0c1b8)",
 };
+
+const TONES = ["", "thriller", "heartfelt", "comedy", "tragic", "hopeful", "romance"];
 
 /** A premise needs at least a sentence's worth to give the writers' room something. */
 const MIN_PREMISE_CHARS = 12;
@@ -41,7 +51,14 @@ export function Premise({ open }: PremiseProps) {
   const [premise, setPremise] = useState("");
   const [seconds, setSeconds] = useState(45);
   const [style, setStyle] = useState("cinematic");
+  const [tone, setTone] = useState("");
   const [testMode, setTestMode] = useState(false);
+  // Custom style (LTX-style "style element"): built from a description and/or refs.
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customDesc, setCustomDesc] = useState("");
+  const [customRefs, setCustomRefs] = useState<{ url: string; display: string }[]>([]);
+  const [customStyle, setCustomStyle] = useState<StyleLock | null>(null);
+  const [customBusy, setCustomBusy] = useState(false);
   const [styles, setStyles] = useState<StyleSummary[]>(FALLBACK_STYLES);
   const [productions, setProductions] = useState<ProductionSummary[]>([]);
   const [starting, setStarting] = useState(false);
@@ -87,6 +104,8 @@ export function Premise({ open }: PremiseProps) {
         premise: trimmed,
         target_seconds: seconds,
         style,
+        tone,
+        custom_style: style === "custom" ? customStyle : null,
         test_mode: testMode,
       });
       open(prod.id);
@@ -97,6 +116,34 @@ export function Premise({ open }: PremiseProps) {
           : "Something went wrong.",
       );
       setStarting(false);
+    }
+  }
+
+  async function addRefFile(file: File) {
+    try {
+      const up = await api.uploadReference(file);
+      setCustomRefs((r) => [...r, { url: up.url, display: assetRawUrl(up.asset_id) }]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't upload the reference");
+    }
+  }
+
+  async function createCustomStyle() {
+    if (!customDesc.trim() && customRefs.length === 0) return;
+    setCustomBusy(true);
+    setError(null);
+    try {
+      const s = await api.customStyle({
+        description: customDesc.trim(),
+        image_urls: customRefs.map((r) => r.url),
+        test_mode: testMode,
+      });
+      setCustomStyle(s);
+      setStyle("custom");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't create the style");
+    } finally {
+      setCustomBusy(false);
     }
   }
 
@@ -200,9 +247,95 @@ export function Premise({ open }: PremiseProps) {
                     />
                   )}
                 </span>
-                <span className="sr-style-name">{s.name}</span>
+                <span className="sr-style-name">{s.name.replace("_", " ")}</span>
               </button>
             ))}
+            <button
+              className={"sr-style" + (style === "custom" ? " on" : "")}
+              onClick={() => {
+                setCustomOpen(true);
+                if (customStyle) setStyle("custom");
+              }}
+              title="Build your own look from a description or reference images"
+              type="button"
+              data-testid="custom-style-card"
+            >
+              <span
+                className="sr-style-swatch sr-style-custom"
+                style={{
+                  background: "linear-gradient(150deg,#5B3DF5,#241a55)",
+                }}
+              >
+                {customRefs[0] ? (
+                  <img className="sr-style-img" src={customRefs[0].display} alt="your style" />
+                ) : (
+                  <Palette size={18} />
+                )}
+              </span>
+              <span className="sr-style-name">your style</span>
+            </button>
+          </div>
+
+          {customOpen && (
+            <div className="sr-custom-style" data-testid="custom-style-panel">
+              <textarea
+                className="sr-premise-input sr-custom-desc"
+                placeholder="Describe the look — “1970s Kodachrome road movie, dust and lens flare”"
+                value={customDesc}
+                rows={2}
+                onChange={(e) => setCustomDesc(e.target.value)}
+              />
+              <div className="sr-custom-row">
+                <label className="sr-custom-upload">
+                  <ImagePlus size={14} />
+                  {customRefs.length ? `${customRefs.length} reference${customRefs.length > 1 ? "s" : ""}` : "Add reference image(s)"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      for (const f of Array.from(e.target.files ?? [])) void addRefFile(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {customRefs.map((r, i) => (
+                  <img key={i} className="sr-custom-thumb" src={r.display} alt="" />
+                ))}
+                <button
+                  className="sr-mini"
+                  disabled={customBusy || (!customDesc.trim() && customRefs.length === 0)}
+                  onClick={() => void createCustomStyle()}
+                  type="button"
+                >
+                  {customBusy ? <Loader2 size={13} className="rc-spin" /> : <Palette size={13} />}
+                  {customStyle ? "Update style" : "Create style"}
+                </button>
+              </div>
+              {customStyle && (
+                <div className="sr-custom-locked">
+                  ✓ locked: {customStyle.descriptors}
+                  {customStyle.palette ? ` · ${customStyle.palette}` : ""}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="sr-tone-row">
+            <label className="sr-field-label">Tone</label>
+            <select
+              className="sr-tone-select"
+              value={tone}
+              aria-label="Writing tone"
+              onChange={(e) => setTone(e.target.value)}
+            >
+              {TONES.map((t) => (
+                <option key={t} value={t}>
+                  {t === "" ? "match the style" : t}
+                </option>
+              ))}
+            </select>
           </div>
 
           <label className="sr-testmode" data-testid="test-mode-toggle">
@@ -229,7 +362,7 @@ export function Premise({ open }: PremiseProps) {
           <button
             className="sr-start"
             onClick={start}
-            disabled={tooShort || starting}
+            disabled={tooShort || starting || (style === "custom" && !customStyle)}
             type="button"
           >
             {starting ? (

@@ -86,6 +86,11 @@ class VisionAnalyzer(ABC):
         character/location still)? Default = unavailable (skip); overridden where it counts."""
         return ConsistencyVerdict(score=None, reason="critic not available")
 
+    def describe_style(self, image_refs: list[str], *, hint: str = "") -> dict:
+        """Distill a VISUAL STYLE from reference image(s) (URLs or local paths) into
+        {"descriptors": str, "palette": str} usable as a StyleLock. Default: unavailable."""
+        raise NotImplementedError("style distillation not available on this backend")
+
 
 class Transcriber(ABC):
     @abstractmethod
@@ -182,6 +187,18 @@ class StubVision(VisionAnalyzer):
         base = 0.55 if "_a0" in candidate or candidate.endswith("0.png") else 0.85
         return ConsistencyVerdict(score=base, reason="stub: minor wardrobe drift" if base < 0.6 else "stub: consistent")
 
+    def describe_style(self, image_refs: list[str], *, hint: str = "") -> dict:
+        # Deterministic per reference set so custom styles are stable offline.
+        rng = _stub_rng("style", *image_refs, hint)
+        descriptors = ", ".join([
+            rng.choice(["hand-painted gouache", "grainy 16mm film", "soft cel animation",
+                        "chalk pastel illustration", "moody photographic realism"]),
+            rng.choice(["diffuse window light", "hard rim lighting", "golden-hour glow", "overcast softness"]),
+            rng.choice(["shallow depth of field", "flat graphic composition", "layered depth"]),
+        ])
+        palette = rng.choice(["muted earth tones", "teal and amber", "washed pastels", "bold primaries", "smoke and neon"])
+        return {"descriptors": descriptors, "palette": palette}
+
 
 class StubTranscriber(Transcriber):
     def transcribe(self, media_path: str) -> TranscriptResult:
@@ -225,6 +242,8 @@ class StubTextLLM(TextLLM):
             payload = {"scores": {"dialogue_quality": 0.82, "subtext": 0.78, "distinct_voices": 0.8}, "overall": 0.8, "notes": "Lines carry subtext; voices distinct."}
         elif "showrunner:dialogue" in marker:
             payload = _stub_dialogue(user)
+        elif "showrunner:style" in marker:
+            payload = _stub_style_from_text(user)
         elif "showrunner:rubric" in marker:
             payload = _stub_rubric()
         elif "showrunner:storyboard" in marker:
@@ -522,6 +541,19 @@ def _stub_storyboard(user: str) -> dict:
     if n <= 1:
         shots = [beat]  # a single-shot scene keeps the character beat, not the establishing
     return {"shots": shots}
+
+
+def _stub_style_from_text(user: str) -> dict:
+    """Expand a user's style description into StyleLock fields — the description leads,
+    deterministic embellishment follows."""
+    import re
+
+    m = re.search(r"DESCRIPTION:\s*(.+)", user, re.S)
+    desc = (m.group(1).strip() if m else user.strip()) or "cinematic"
+    rng = _stub_rng("style-text", desc)
+    extra = rng.choice(["textured light", "considered composition", "tactile surfaces", "quiet color discipline"])
+    palette = rng.choice(["muted earth tones", "teal and amber", "washed pastels", "high-contrast monochrome", "smoke and neon"])
+    return {"name": "custom", "descriptors": f"{desc}, {extra}", "palette": palette}
 
 
 def _stub_rubric() -> dict:

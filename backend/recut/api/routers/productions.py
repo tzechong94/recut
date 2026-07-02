@@ -29,19 +29,84 @@ def _text_for(prod: Production):
 from recut.showrunner.compile import compile_to_timeline
 from recut.showrunner.pipeline.storyboard import build_storyboard
 from recut.showrunner.pipeline.writers_room import develop_treatment
-from recut.showrunner.schemas import AssetSource, Production, STYLE_PRESETS, Stage
+from recut.showrunner.schemas import AssetSource, Production, STYLE_PRESETS, Stage, StyleLock, TONE_REGISTERS
 
 router = APIRouter(prefix="/api", tags=["showrunner"])
 
 
+# Newer presets use free online reference images (CC via loremflickr) — zero image-gen
+# credits spent on the picker. The original six keep their local pre-generated stills.
+_PRESET_IMAGES = {
+    "ink_wash": "https://loremflickr.com/320/480/ink,painting",
+    "comic": "https://loremflickr.com/320/480/comic,art",
+    "pixel": "https://loremflickr.com/320/480/pixel,art",
+    "cyberpunk": "https://loremflickr.com/320/480/neon,night,city",
+    "retro_film": "https://loremflickr.com/320/480/vintage,analog,film",
+    "paper_craft": "https://loremflickr.com/320/480/papercraft,origami",
+}
+
+
 @router.get("/styles")
 def list_styles() -> list[dict]:
-    # `image` is a fixed, pre-generated reference still per style (served by the web app
-    # from /public/styles/), so the picker shows the actual look, not just a word.
+    # `image` shows the actual look, not just a word: local pre-generated stills for the
+    # original presets, free online references for the newer ones.
     return [
-        {"name": s.name, "descriptors": s.descriptors, "palette": s.palette, "image": f"/styles/{s.name}.jpg"}
+        {"name": s.name, "descriptors": s.descriptors, "palette": s.palette,
+         "image": _PRESET_IMAGES.get(s.name, f"/styles/{s.name}.jpg")}
         for s in STYLE_PRESETS.values()
     ]
+
+
+@router.get("/tones")
+def list_tones() -> list[dict]:
+    """Writing registers, decoupled from the visual style ('' = match the style)."""
+    return [{"name": k, "register": v} for k, v in TONE_REGISTERS.items()]
+
+
+class CustomStyleRequest(BaseModel):
+    description: str = ""  # "1970s Kodachrome road movie, dust and lens flare"
+    image_urls: list[str] = []  # hosted URLs or our storage (file://) refs
+    test_mode: bool = False
+
+
+@router.post("/styles/custom")
+def custom_style(body: CustomStyleRequest) -> dict:
+    """LTX-style custom look: distill the user's reference image(s) (Qwen-VL) and/or
+    description (Qwen-Max) into a locked StyleLock. The reference image also anchors
+    every keyframe composition downstream — the film inherits the actual look."""
+    import json as _json
+
+    desc = body.description.strip()
+    refs = [u.strip() for u in body.image_urls if u.strip()]
+    if not desc and not refs:
+        raise HTTPException(400, "describe the style or add a reference image")
+    m = stub_models() if body.test_mode else models()
+    if refs:
+        paths = [u[len("file://"):] if u.startswith("file://") else u for u in refs]
+        try:
+            d = m.vision.describe_style(paths, hint=desc)
+        except Exception as exc:  # noqa: BLE001 — distillation down → words still work
+            if not desc:
+                raise HTTPException(502, f"couldn't read the style reference ({type(exc).__name__})")
+            d = {}
+    else:
+        sys = (
+            "showrunner:style — You turn a user's style description into image-model style cues. "
+            "Return STRICT JSON {\"descriptors\": str (comma-separated medium, technique, lighting "
+            "and texture cues), \"palette\": str (dominant color language)}."
+        )
+        try:
+            text, _ = m.text.complete(sys, f"DESCRIPTION: {desc}", json_mode=True)
+            d = _json.loads(text)
+        except Exception:  # noqa: BLE001 — the raw description is a fine style on its own
+            d = {}
+    style = StyleLock(
+        name="custom",
+        descriptors=(d.get("descriptors") or desc or "cinematic").strip(),
+        palette=str(d.get("palette", "")).strip(),
+        reference_urls=refs,
+    )
+    return style.model_dump(mode="json")
 
 
 class SuggestPremise(BaseModel):
@@ -74,6 +139,8 @@ class CreateProduction(BaseModel):
     premise: str
     target_seconds: int = 60
     style: str = "cinematic"
+    tone: str = ""  # writing register, decoupled from the look ("" = match style)
+    custom_style: dict | None = None  # a StyleLock from POST /styles/custom
     test_mode: bool = False  # walk the whole flow on stubs — zero provider tokens
 
 
@@ -85,8 +152,14 @@ def create_production(body: CreateProduction) -> dict:
     llm = stub_models().text if body.test_mode else models().text
     prod = develop_treatment(
         llm, body.premise.strip(), target_seconds=body.target_seconds,
-        style_name=body.style, project_id=project["id"],
+        style_name=("custom" if body.custom_style else body.style),
+        project_id=project["id"], tone=body.tone.strip(),
     )
+    if body.custom_style:
+        try:
+            prod.style = StyleLock.model_validate({**body.custom_style, "name": "custom", "tone": body.tone.strip()})
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(422, f"invalid custom style: {exc}")
     prod.test_mode = body.test_mode
     repo.save_production(prod)
     return prod.model_dump(mode="json")

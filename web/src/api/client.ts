@@ -10,6 +10,7 @@ import type {
   ProductionEval,
   ProductionSummary,
   Scoreboard,
+  StyleLock,
   StyleSummary,
   Timeline,
 } from "../types";
@@ -88,6 +89,30 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 export const api = {
   /* ------------------------------- Styles ------------------------------- */
   listStyles: () => request<StyleSummary[]>("/styles"),
+  /** Writing registers, decoupled from the visual style. */
+  listTones: () => request<{ name: string; register: string }[]>("/tones"),
+
+  /**
+   * Create a CUSTOM style (LTX-style 'style element'): from your own description
+   * and/or reference images. The returned StyleLock is passed to createProduction;
+   * a hosted reference image also anchors every keyframe composition.
+   */
+  customStyle: (body: {
+    description?: string;
+    image_urls?: string[];
+    test_mode?: boolean;
+  }) => request<StyleLock>("/styles/custom", { method: "POST", body }),
+
+  /** Project-less upload (custom-style reference images on the premise screen). */
+  uploadReference: (file: File, kind = "style_ref") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ asset_id: string; url: string }>("/uploads", {
+      method: "POST",
+      body: fd,
+      query: { kind },
+    });
+  },
 
   /* ------------------------------ Premise ------------------------------- */
   suggestPremise: (premise = "") =>
@@ -98,6 +123,10 @@ export const api = {
     premise: string;
     target_seconds: number;
     style: string;
+    /** Writing register, decoupled from the look ("" = match style). */
+    tone?: string;
+    /** A StyleLock from customStyle() — overrides the preset name. */
+    custom_style?: StyleLock | null;
     /** Test drive: run the whole flow on stubs — zero provider tokens. */
     test_mode?: boolean;
   }) => request<Production>("/productions", { method: "POST", body }),
