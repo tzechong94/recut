@@ -19,6 +19,7 @@ from recut.showrunner.schemas import (
     Scene,
     Stage,
     STYLE_PRESETS,
+    TONE_REGISTERS,
 )
 
 QUALITY_BAR = 0.8
@@ -65,9 +66,12 @@ _REVISER_SYS = (
 
 
 def develop_treatment(
-    llm: TextLLM, premise: str, *, target_seconds: int = 60, style_name: str = "cinematic", project_id: str | None = None
+    llm: TextLLM, premise: str, *, target_seconds: int = 60, style_name: str = "cinematic",
+    project_id: str | None = None, tone: str = "",
 ) -> Production:
-    register = _REGISTER.get(style_name, _REGISTER["cinematic"])
+    # tone (thriller/heartfelt/…) overrides the style's default register, so the LOOK
+    # and the WRITING are independent choices (a claymation thriller stays tense)
+    register = TONE_REGISTERS.get(tone) or _REGISTER.get(style_name, _REGISTER["cinematic"])
     transcript: list[dict] = []
     tokens = 0
 
@@ -107,6 +111,7 @@ def develop_treatment(
             break
 
     prod = _build_production(draft, premise, target_seconds, style_name, project_id)
+    prod.style.tone = tone
     prod.writers_room = transcript
     prod.token_ledger.text_tokens += tokens
     return prod

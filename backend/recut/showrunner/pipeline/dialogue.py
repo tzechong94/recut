@@ -14,7 +14,7 @@ import json
 
 from recut.core.models import TextLLM
 from recut.showrunner.pipeline.writers_room import _REGISTER
-from recut.showrunner.schemas import DialogueLine, Production
+from recut.showrunner.schemas import DialogueLine, Production, TONE_REGISTERS
 
 QUALITY_BAR = 0.78
 
@@ -33,7 +33,7 @@ _REVISER_SYS = "showrunner:dialogue reviser — Rewrite the lines to address the
 
 
 def write_dialogue(llm: TextLLM, prod: Production) -> Production:
-    register = _REGISTER.get(prod.style.name, _REGISTER["cinematic"])
+    register = TONE_REGISTERS.get(prod.style.tone) or _REGISTER.get(prod.style.name, _REGISTER["cinematic"])
     cast = "; ".join(f"{c.name} (wants: {c.want or '?'}; flaw: {c.flaw or '?'})" for c in prod.characters)
     tokens = 0
     best_overall: list[float] = []

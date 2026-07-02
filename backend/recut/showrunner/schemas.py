@@ -80,11 +80,19 @@ class CameraMove(str, Enum):
 # --------------------------------------------------------------------------- #
 class StyleLock(BaseModel):
     """The locked visual style applied to EVERY reference + shot. Stylization is both a
-    differentiator and a consistency aid (stylized looks hide model drift)."""
+    differentiator and a consistency aid (stylized looks hide model drift).
 
-    name: str = "cinematic"  # noir | anime | claymation | storybook | cinematic | ...
+    A style is either a PRESET (name from STYLE_PRESETS) or CUSTOM — distilled from the
+    user's own description and/or reference images (LTX-style 'style element'). When
+    `reference_urls` holds a hosted image, it also ANCHORS every keyframe composition,
+    so the film inherits the actual look, not a text paraphrase of it. `tone` decouples
+    the writing register from the visuals (a claymation thriller stays a thriller)."""
+
+    name: str = "cinematic"  # preset name, or "custom"
     descriptors: str = "cinematic, filmic lighting, shallow depth of field"
     palette: str = ""  # optional color guidance
+    tone: str = ""  # writing register override: thriller | heartfelt | comedy | ... ("" = match style)
+    reference_urls: list[str] = Field(default_factory=list)  # custom-style anchor images
     locked: bool = False
 
     def prompt_suffix(self) -> str:
@@ -95,12 +103,28 @@ class StyleLock(BaseModel):
 
 
 STYLE_PRESETS: dict[str, StyleLock] = {
+    "cinematic": StyleLock(name="cinematic", descriptors="cinematic live-action, filmic lighting, shallow depth of field, anamorphic", palette=""),
     "noir": StyleLock(name="noir", descriptors="film noir, high-contrast black and white, hard shadows, 1940s detective film, dramatic chiaroscuro", palette="monochrome"),
     "anime": StyleLock(name="anime", descriptors="anime cel-shaded, vibrant, expressive, studio-quality 2D animation", palette="saturated"),
     "claymation": StyleLock(name="claymation", descriptors="claymation stop-motion, handmade clay figures, tactile, soft studio light", palette="warm earthy"),
     "storybook": StyleLock(name="storybook", descriptors="painterly children's storybook illustration, soft watercolor, whimsical", palette="pastel"),
-    "cinematic": StyleLock(name="cinematic", descriptors="cinematic live-action, filmic lighting, shallow depth of field, anamorphic", palette=""),
     "pixar": StyleLock(name="pixar", descriptors="3D animated feature film, expressive characters, polished lighting", palette="vivid"),
+    "ink_wash": StyleLock(name="ink_wash", descriptors="traditional Chinese ink wash painting (shuimo), flowing brushstrokes, negative space, misty gradients", palette="black ink on rice paper, sparse red accents"),
+    "comic": StyleLock(name="comic", descriptors="graphic novel panel art, bold ink outlines, halftone shading, dramatic panel lighting", palette="high-contrast primaries"),
+    "pixel": StyleLock(name="pixel", descriptors="detailed pixel art, 32-bit era, dithered gradients, crisp sprite work", palette="limited retro palette"),
+    "cyberpunk": StyleLock(name="cyberpunk", descriptors="neon-drenched cyberpunk, rain-slick streets, holographic signage, cinematic haze", palette="teal, magenta and sodium orange"),
+    "retro_film": StyleLock(name="retro_film", descriptors="1970s film stock, warm halation, visible grain, sun-faded Kodachrome road movie", palette="amber, avocado, dust"),
+    "paper_craft": StyleLock(name="paper_craft", descriptors="layered paper-cut diorama, visible card edges, soft shadow depth, handmade texture", palette="muted construction-paper tones"),
+}
+
+# Writing-register TONES, decoupled from the visual style ("" = match the style's default).
+TONE_REGISTERS: dict[str, str] = {
+    "thriller": "Tense and propulsive: short lines, rising dread, information used as a weapon.",
+    "heartfelt": "Warm and sincere: small human details, earned feeling, no cynicism.",
+    "comedy": "Dry, quick, character-driven humor; jokes come from want vs flaw, never puns.",
+    "tragic": "Weighty and inevitable: choices cost, silences speak, no rescue arrives.",
+    "hopeful": "Against-the-odds warmth: hard circumstances, stubborn light, an ending that lifts.",
+    "romance": "Charged subtext, near-misses, what's unsaid matters more than what's said.",
 }
 
 

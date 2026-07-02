@@ -207,6 +207,41 @@ class QwenVision(VisionAnalyzer):
         except Exception:  # noqa: BLE001 — critic unavailable -> skip, do NOT fake-pass
             return ConsistencyVerdict(score=None, reason="critic unavailable")
 
+    def describe_style(self, image_refs: list[str], *, hint: str = "") -> dict:
+        """Distill the VISUAL STYLE of the reference image(s) into StyleLock fields.
+        Accepts hosted URLs or local paths (sent as file:// uploads)."""
+        import os
+
+        import dashscope
+
+        def uri(p: str) -> str:
+            return p if "://" in p else "file://" + os.path.abspath(p)
+
+        prompt = (
+            "Study these reference image(s) and distill their VISUAL STYLE (not their "
+            "subject matter) so an image model can reproduce the look. Return STRICT JSON "
+            '{"descriptors": str, "palette": str}. descriptors = comma-separated medium, '
+            "technique, lighting and texture cues (e.g. 'grainy 16mm film, warm halation, "
+            "handheld'); palette = the dominant color language. "
+            + (f"The user adds: {hint}" if hint else "")
+        )
+        content = [{"image": uri(p)} for p in image_refs] + [{"text": prompt}]
+
+        def call() -> dict:
+            resp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_vl_model,
+                messages=[{"role": "user", "content": content}],
+            )
+            if getattr(resp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-vl style {getattr(resp,'code','?')}: {getattr(resp,'message',resp)}")
+            raw = resp["output"]["choices"][0]["message"]["content"]
+            text = raw if isinstance(raw, str) else " ".join(p.get("text", "") for p in raw if isinstance(p, dict))
+            data = _extract_json(text)
+            return {"descriptors": str(data.get("descriptors", "")).strip(),
+                    "palette": str(data.get("palette", "")).strip()}
+
+        return _retry(call, attempts=2)
+
 
 class QwenTranscriber(Transcriber):
     def __init__(self, s: Settings):

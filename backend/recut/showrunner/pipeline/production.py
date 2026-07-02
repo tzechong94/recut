@@ -42,21 +42,28 @@ def build_shot_prompt(prod: Production, shot: Shot) -> str:
     return ", ".join(b for b in bits if b)
 
 
-def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool = False) -> str:
+def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool = False,
+                               has_style_ref: bool = False) -> str:
     """Instruction for the image-edit model: keep the character's identity but place them
     INTO the shot's location, doing the shot's action, in the show's style. The result is
     the i2v first frame, so the video already has the right world + look. When `has_plate`,
     a SECOND input image is the locked location plate, so we tell the model to reuse that
-    exact set — that's what keeps the location consistent shot-to-shot."""
+    exact set — that's what keeps the location consistent shot-to-shot. When
+    `has_style_ref`, the LAST input image is a custom-style reference: the look comes from
+    that image itself, not just words."""
     loc = prod.location(shot.location_id) if shot.location_id else None
     action = shot.action.strip() or "present in the scene"
     framing = _TYPE_CUES.get(shot.shot_type, "medium shot")
+    style_clause = (
+        " The FINAL input image is a STYLE reference — match its medium, texture, lighting "
+        "and palette exactly (its subject does not matter)." if has_style_ref else ""
+    )
     if has_plate:
         return (
             f"{prod.style.prompt_suffix()}. Image 1 is the CHARACTER; image 2 is the SET. "
             f"Place the exact character from image 1 into the exact set from image 2 — keep the "
             f"SAME face, hair, wardrobe and art style, AND keep the SAME location layout, colors "
-            f"and props. The character is: {action}. {framing}."
+            f"and props. The character is: {action}. {framing}.{style_clause}"
         )
     parts = [
         f"{prod.style.prompt_suffix()}.",
@@ -67,7 +74,7 @@ def build_keyframe_instruction(prod: Production, shot: Shot, *, has_plate: bool 
         parts.append(f"Setting: {loc.name} — {loc.description}.")
     parts.append(f"The character is: {action}.")
     parts.append(f"Shot framing: {framing}.")
-    return " ".join(parts)
+    return " ".join(parts) + style_clause
 
 
 def still_signature(shot: Shot) -> str:
@@ -83,24 +90,44 @@ def still_signature(shot: Shot) -> str:
     ])
 
 
+def style_anchor_url(prod: Production) -> str | None:
+    """A hosted custom-style reference image, if the production has one. Only http(s)
+    URLs can be fetched by the edit model; a local-only ref still styles via words."""
+    return next((u for u in prod.style.reference_urls if u.startswith("http")), None)
+
+
 def compose_shot_still(models: ModelClients, prod: Production, shot: Shot, *, instruction: str = "") -> GenAsset:
     """The BOARD STILL: the exact first frame the film will animate for this shot.
     A character shot composes the locked reference into the (locked) location; a
     location-only shot redresses the plate for the action; a shot with neither is plain
-    text-to-image. `instruction` is the human's steering note from the shot board."""
+    text-to-image. A custom style's reference image rides along as the LAST input so the
+    look is anchored to a real image. `instruction` is the human's steering note."""
     note = f" Note from the director: {instruction.strip()}." if instruction.strip() else ""
+    style_ref = style_anchor_url(prod)
     char = _identity_character(prod, shot)
     loc = prod.location(shot.location_id) if shot.location_id else None
     plate_url = loc.reference_url if (loc and loc.reference_url) else None
     if char:
-        images = [char.reference_url, plate_url] if plate_url else char.reference_url
-        return models.image.edit(images, build_keyframe_instruction(prod, shot, has_plate=bool(plate_url)) + note)
+        images = [char.reference_url] + ([plate_url] if plate_url else []) + ([style_ref] if style_ref else [])
+        instr = build_keyframe_instruction(prod, shot, has_plate=bool(plate_url), has_style_ref=bool(style_ref))
+        return models.image.edit(images if len(images) > 1 else images[0], instr + note)
     if plate_url:
         framing = _TYPE_CUES.get(shot.shot_type, "medium shot")
+        style_clause = (" The FINAL input image is a STYLE reference — match its medium, texture "
+                        "and palette exactly." if style_ref else "")
+        images = [plate_url] + ([style_ref] if style_ref else [])
         return models.image.edit(
-            plate_url,
+            images if len(images) > 1 else images[0],
             f"{prod.style.prompt_suffix()}. Keep this EXACT location — same layout, colors and "
-            f"props. Show: {shot.action.strip() or 'the empty set'}. {framing}.{note}",
+            f"props. Show: {shot.action.strip() or 'the empty set'}. {framing}.{style_clause}{note}",
+        )
+    if style_ref:
+        return models.image.edit(
+            style_ref,
+            f"{prod.style.prompt_suffix()}. This image is a STYLE reference — keep its medium, "
+            f"texture and palette but replace the subject entirely with: "
+            f"{shot.action.strip() or 'an establishing scene'}. "
+            f"{_TYPE_CUES.get(shot.shot_type, 'medium shot')}, vertical 9:16.{note}",
         )
     return models.image.generate(build_shot_prompt(prod, shot) + note, width=720, height=1280)
 
@@ -162,17 +189,14 @@ def generate_shot(
 
     char = _identity_character(prod, shot)
     if char:
-        # 1) keyframe: same character, now IN the location + action + style. If the shot's
-        # location has a locked plate, feed it as a 2nd image so the SAME set carries across
-        # every shot (cross-shot consistency).
-        loc = prod.location(shot.location_id) if shot.location_id else None
-        plate_url = loc.reference_url if (loc and loc.reference_url) else None
-        images = [char.reference_url, plate_url] if plate_url else char.reference_url
-        instruction = build_keyframe_instruction(prod, shot, has_plate=bool(plate_url))
-        if corrective:
-            instruction += f" Correction from the consistency critic: {corrective}."
+        # 1) keyframe: same character, now IN the location + action + style (and anchored
+        # to the custom-style reference image when there is one) — compose_shot_still is
+        # the single composition path for board AND produce time.
         try:
-            keyframe = models.image.edit(images, instruction)
+            keyframe = compose_shot_still(
+                models, prod, shot,
+                instruction=(f"Correction from the consistency critic: {corrective}" if corrective else ""),
+            )
             kf_url = keyframe.url or char.reference_url  # stub has no hosted url → i2v ignores it
             # 2) animate the composed keyframe; critic still checks identity vs the LOCKED ref
             asset = models.video.generate_from_image(kf_url, prompt, duration_s=shot.duration_s, seed=seed)

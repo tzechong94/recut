@@ -85,6 +85,24 @@ describe("showrunner api client", () => {
     });
   });
 
+  it("POST /styles/custom sends description + refs and returns a StyleLock", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ name: "custom", descriptors: "gouache", palette: "pastel", reference_urls: [] }),
+    );
+    const s = await api.customStyle({ description: "gouache storybook", test_mode: true });
+    expect(s.name).toBe("custom");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/styles/custom`);
+    expect(JSON.parse(opts.body)).toEqual({ description: "gouache storybook", test_mode: true });
+  });
+
+  it("GET /tones lists the writing registers", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse([{ name: "thriller", register: "x" }]));
+    const tones = await api.listTones();
+    expect(tones[0].name).toBe("thriller");
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE}/api/tones`);
+  });
+
   it("POST /board queues the shot-board stills job", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j5" }));
     const res = await api.boardStills("prod_1");

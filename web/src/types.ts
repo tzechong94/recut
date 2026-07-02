@@ -75,6 +75,10 @@ export interface StyleSummary {
 
 export interface StyleLock extends StyleSummary {
   locked: boolean;
+  /** Writing register, decoupled from the look ("" = match the style). */
+  tone?: string;
+  /** Custom-style anchor images (hosted refs also steer every keyframe). */
+  reference_urls?: string[];
 }
 
 export interface Character {
