@@ -22,7 +22,9 @@ _WRITER_SYS = (
     "showrunner:dialogue — You are a screenwriter writing the spoken lines for ONE scene. "
     "Return STRICT JSON {\"lines\":[{\"character\":str,\"line\":str}]}. Use ONLY the given "
     "characters. Subtext over on-the-nose; each character must sound distinct (per their "
-    "want/flaw); keep it to 2-5 short lines that play the scene's beat."
+    "want/flaw); keep it to 2-4 short lines that play the scene's beat. SCREEN TIME IS "
+    "PAID FOR: every line must be speakable in under 4 seconds (≈12 words max) — cut a "
+    "word before you add one. Total spoken time across the scene ≤ its share of the film."
 )
 _CRITIC_SYS = (
     "showrunner:dialogue-critic — Score this scene's dialogue as STRICT JSON "
