@@ -172,16 +172,62 @@ def delete_production(pid: str) -> None:
         raise HTTPException(404, "production not found")
 
 
+def _merge_generated(stored: Production, incoming: Production) -> None:
+    """PUT carries HUMAN edits; generation-owned state is server-owned. A stale browser
+    doc (fetched before a worker landed stills/refs/shots) must never regress them to
+    empty — this was silently wiping freshly generated boards. Explicit clears happen
+    only via dedicated endpoints, so empty-incoming + present-stored ⇒ keep stored."""
+    incoming.token_ledger = stored.token_ledger
+    if len(stored.director_log) > len(incoming.director_log):
+        incoming.director_log = stored.director_log
+    if len(stored.warnings) > len(incoming.warnings):
+        incoming.warnings = stored.warnings
+    incoming.export_asset_id = incoming.export_asset_id or stored.export_asset_id
+
+    old_chars = {c.id: c for c in stored.characters}
+    for c in incoming.characters:
+        o = old_chars.get(c.id)
+        if o and o.reference_url and not c.reference_url:
+            c.reference_asset_id, c.reference_url = o.reference_asset_id, o.reference_url
+            c.source, c.locked = o.source, o.locked
+        if o and not c.identity_notes:
+            c.identity_notes = o.identity_notes
+    old_locs = {l.id: l for l in stored.locations}
+    for l in incoming.locations:
+        o = old_locs.get(l.id)
+        if o and o.reference_url and not l.reference_url:
+            l.reference_asset_id, l.reference_url = o.reference_asset_id, o.reference_url
+            l.source, l.locked = o.source, o.locked
+
+    old_shots = {sh.id: sh for sc in stored.scenes for sh in sc.shots}
+    for sc in incoming.scenes:
+        for sh in sc.shots:
+            o = old_shots.get(sh.id)
+            if not o:
+                continue
+            if o.keyframe_url and not sh.keyframe_url:
+                sh.keyframe_asset_id, sh.keyframe_url, sh.keyframe_sig = o.keyframe_asset_id, o.keyframe_url, o.keyframe_sig
+                sh.keyframe_score, sh.setting_score = o.keyframe_score, o.setting_score
+            if o.asset_id and not sh.asset_id:
+                sh.asset_id, sh.source, sh.status = o.asset_id, o.source, o.status
+                sh.gen_prompt, sh.gen_tool, sh.tokens = o.gen_prompt, o.gen_tool, o.tokens
+                sh.critic_score, sh.reroll_count = o.critic_score, o.reroll_count
+
+
 @router.put("/productions/{pid}")
 def save_production(pid: str, body: dict) -> dict:
     """Persist human edits (logline, style, scenes, shots, cast). Validated through the
-    schema so a bad edit can't corrupt the production."""
+    schema so a bad edit can't corrupt the production; generation-owned fields are
+    merged from the stored copy so a stale autosave can't wipe them."""
     body["id"] = pid
     try:
         prod = Production.model_validate(body)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(422, f"invalid production: {exc}")
     prod.version = body.get("version", prod.version)
+    stored = repo.get_production(pid)
+    if stored:
+        _merge_generated(stored, prod)
     repo.save_production(prod)
     return prod.model_dump(mode="json")
 

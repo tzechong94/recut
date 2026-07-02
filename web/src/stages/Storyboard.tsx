@@ -359,6 +359,8 @@ function ShotCard({
             <img
               src={assetRawUrl(shot.keyframe_asset_id)}
               alt={`Still for shot ${index + 1}`}
+              title="This exact frame is what the film animates — click to view full size"
+              onClick={() => window.open(assetRawUrl(shot.keyframe_asset_id!), "_blank")}
             />
           ) : shot.keyframe_url ? (
             <img src={shot.keyframe_url} alt={`Still for shot ${index + 1}`} />
@@ -370,7 +372,11 @@ function ShotCard({
           <input
             className="sr-edit"
             value={note}
-            placeholder={hasStill ? "fix this still…" : "note for the still…"}
+            placeholder={
+              hasStill
+                ? "Redo note — e.g. “closer, add rain”"
+                : "Note for the still — optional"
+            }
             aria-label={`Still note for shot ${index + 1}`}
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => {
