@@ -129,12 +129,17 @@ def test_mux_voice_into_clip_adds_an_audio_stream(tmp_path):
                     "color=c=black:s=64x64:d=1", str(video)], check=True)
     wav = tmp_path / "line.wav"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
-                    "sine=frequency=440:duration=1", str(wav)], check=True)
-    out = _mux_voice_into_clip(video.read_bytes(), str(wav), tmp_path, "shot_x")
-    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a",
-                            "-show_entries", "stream=codec_type", "-of", "csv=p=0", "-"],
-                           input=out, capture_output=True)
-    assert b"audio" in probe.stdout  # the clip now carries its spoken line
+                    "sine=frequency=440:duration=2", str(wav)], check=True)
+    # the line (2s) is LONGER than the clip (1s): the video must loop, never cut the word
+    out = _mux_voice_into_clip(video.read_bytes(), str(wav), tmp_path, "shot_x", duration_s=2.0)
+    outp = tmp_path / "muxed.mp4"
+    outp.write_bytes(out)
+    probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                            "stream=codec_type,duration", "-of", "csv=p=0", str(outp)],
+                           capture_output=True, text=True)
+    assert "audio" in probe.stdout  # the clip now carries its spoken line
+    durs = [float(x.split(",")[1]) for x in probe.stdout.strip().splitlines() if "," in x and x.split(",")[1] != "N/A"]
+    assert durs and max(durs) >= 1.9  # looped out to the voice-fitted duration
 
 
 def test_cancel_endpoint_flags_a_running_job(client):

@@ -288,11 +288,13 @@ def _gated_still(prod, shot, ctx: WorkerContext, instruction: str):
     return best[1], best[2], best[3]
 
 
-def _mux_voice_into_clip(data: bytes, vo_path: str, src_dir, shot_id: str) -> bytes:
+def _mux_voice_into_clip(data: bytes, vo_path: str, src_dir, shot_id: str, duration_s: float) -> bytes:
     """Give the raw shot clip its spoken line, so reviewing a shot (pilot pass, film
-    view) plays WITH voice. Safe: the final render strips clip audio (-an) and mixes
-    the voiceover track itself, so dialogue is never doubled. Best-effort — a mux
-    failure returns the silent clip unchanged."""
+    view) plays WITH voice. The video LOOPS to the shot's (voice-fitted) duration —
+    Wan clips are ~5s fixed, so a longer line must never be cut mid-word (same looping
+    the final render does). Safe: the render strips clip audio (-an) and mixes the VO
+    track itself, so dialogue is never doubled. Best-effort — a mux failure returns
+    the silent clip unchanged."""
     import subprocess
     from pathlib import Path
 
@@ -301,8 +303,10 @@ def _mux_voice_into_clip(data: bytes, vo_path: str, src_dir, shot_id: str) -> by
     try:
         vin.write_bytes(data)
         subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(vin), "-i", vo_path,
-             "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-shortest", str(out)],
+            ["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(vin),
+             "-i", vo_path, "-map", "0:v", "-map", "1:a", "-t", f"{max(1.0, duration_s):.2f}",
+             "-af", "apad", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", str(out)],
             check=True, capture_output=True,
         )
         return out.read_bytes()
@@ -498,7 +502,7 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         prod.token_ledger.image_tokens += kf_tokens  # keyframe composition is real spend
         if not mime.startswith("image") and vo_paths.get(shot.id):
             # the clip carries its own spoken line for review; render re-mixes cleanly
-            data = _mux_voice_into_clip(data, vo_paths[shot.id], src_dir, shot.id)
+            data = _mux_voice_into_clip(data, vo_paths[shot.id], src_dir, shot.id, shot.duration_s)
         ext = "png" if mime.startswith("image") else "mp4"
         key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(data)}.{ext}"
         _store_bytes(ctx, key, data, mime)
