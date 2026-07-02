@@ -372,26 +372,23 @@ function ShotCard({
           <input
             className="sr-edit"
             value={note}
-            placeholder={
-              hasStill
-                ? "Redo note — e.g. “closer, add rain”"
-                : "Note for the still — optional"
-            }
+            placeholder="Optional note — “closer, add rain”"
             aria-label={`Still note for shot ${index + 1}`}
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !stillPending) redo();
             }}
           />
-          <button
-            className="sr-mini"
-            disabled={stillPending}
-            aria-label={`Redo still for shot ${index + 1}`}
-            onClick={redo}
-          >
-            <RotateCw size={12} />
-          </button>
         </div>
+        <button
+          className="sr-mini sr-still-redo"
+          disabled={stillPending}
+          aria-label={`Regenerate still for shot ${index + 1}`}
+          onClick={redo}
+        >
+          <RotateCw size={12} />
+          {hasStill ? "Regenerate still" : "Generate still"}
+        </button>
       </div>
       <div className="sr-shot-body">
         <div className="sr-shot-meta">
