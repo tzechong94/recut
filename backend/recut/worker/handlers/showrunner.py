@@ -44,27 +44,10 @@ def _store_bytes(ctx, key: str, data: bytes, mime: str) -> str:
     return key
 
 
-@register("cast_reference")
-def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
-    prod = repo.get_production(job.payload["production_id"])
-    if not prod:
-        raise ValueError("production not found")
-    ctx = _ctx_for(prod, ctx)
-    target, tid = job.payload["target"], job.payload["target_id"]
-    instruction = job.payload.get("instruction", "") or ""  # user's regenerate note
-
-    if target == "character":
-        subject = prod.character(tid)
-        if not subject:
-            raise ValueError("character not found")
-        gen = generate_character_reference(ctx.models, subject, prod.style, instruction)
-    else:
-        subject = prod.location(tid)
-        if not subject:
-            raise ValueError("location not found")
-        gen = generate_location_reference(ctx.models, subject, prod.style, instruction)
-
-    key = f"productions/{prod.id}/refs/{target}_{tid}_{content_hash(gen.data)}.png"
+def _lock_reference(prod, ctx: WorkerContext, target: str, subject, gen) -> dict:
+    """Store a generated reference, lock it on the subject, ledger the spend, and (for
+    characters) name the identity anchors that must not drift."""
+    key = f"productions/{prod.id}/refs/{target}_{subject.id}_{content_hash(gen.data)}.png"
     _store_bytes(ctx, key, gen.data, "image/png")
     asset = repo.create_asset(kind="reference", storage_key=key, project_id=prod.project_id, mime="image/png", width=720, height=1280)
     subject.reference_asset_id = asset["id"]
@@ -80,8 +63,89 @@ def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
         except Exception:  # noqa: BLE001 — anchors are an enhancement, never fatal
             subject.identity_notes = ""
     prod.token_ledger.image_tokens += gen.tokens
+    return asset
+
+
+def _cast_anchor(prod, *, exclude_id: str | None = None) -> str | None:
+    """The image every new reference should match: the custom style's hosted ref wins,
+    else the first locked cast member — so one look rules the whole bible."""
+    from recut.showrunner.pipeline.production import style_anchor_url
+
+    anchor = style_anchor_url(prod)
+    if anchor:
+        return anchor
+    for c in prod.characters:
+        if c.id != exclude_id and c.reference_url:
+            return c.reference_url
+    return None
+
+
+@register("cast_reference")
+def handle_cast_reference(job: Job, ctx: WorkerContext) -> dict:
+    prod = repo.get_production(job.payload["production_id"])
+    if not prod:
+        raise ValueError("production not found")
+    ctx = _ctx_for(prod, ctx)
+    target, tid = job.payload["target"], job.payload["target_id"]
+    instruction = job.payload.get("instruction", "") or ""  # user's regenerate note
+
+    # anchor to the existing look, so an individual regenerate can't drift the style
+    anchor = _cast_anchor(prod, exclude_id=tid)
+    if target == "character":
+        subject = prod.character(tid)
+        if not subject:
+            raise ValueError("character not found")
+        gen = generate_character_reference(ctx.models, subject, prod.style, instruction, anchor_url=anchor)
+    else:
+        subject = prod.location(tid)
+        if not subject:
+            raise ValueError("location not found")
+        gen = generate_location_reference(ctx.models, subject, prod.style, instruction, anchor_url=anchor)
+
+    asset = _lock_reference(prod, ctx, target, subject, gen)
     repo.save_production(prod)
     return {"target": target, "target_id": tid, "asset_id": asset["id"], "reference_url": subject.reference_url}
+
+
+@register("cast_all")
+def handle_cast_all(job: Job, ctx: WorkerContext) -> dict:
+    """Cast the WHOLE show bible in one consistent look: the first reference (or the
+    custom style's image) anchors every subsequent one via image-edit — same rendering,
+    different subject — so no character rolls their own art style. Uploaded references
+    are respected and never regenerated."""
+    prod = repo.get_production(job.payload["production_id"])
+    if not prod:
+        raise ValueError("production not found")
+    ctx = _ctx_for(prod, ctx)
+
+    from recut.showrunner.pipeline.production import style_anchor_url
+
+    anchor = style_anchor_url(prod)  # a hosted custom-style ref anchors everyone
+    for c in prod.characters:  # an uploaded face is canon — it can anchor too
+        if c.source == AssetSource.uploaded and c.reference_url:
+            anchor = anchor or c.reference_url
+    made, failed = 0, 0
+    targets = [("character", c) for c in prod.characters] + [("location", l) for l in prod.locations]
+    total = len(targets) or 1
+    for i, (target, subject) in enumerate(targets):
+        if subject.source == AssetSource.uploaded and subject.reference_url:
+            continue  # never overwrite the human's own image
+        try:
+            if target == "character":
+                gen = generate_character_reference(ctx.models, subject, prod.style, anchor_url=anchor)
+            else:
+                gen = generate_location_reference(ctx.models, subject, prod.style, anchor_url=anchor)
+        except Exception:  # noqa: BLE001 — one failure must not sink the bible
+            failed += 1
+            prod.warnings.append(f"reference failed for {target} '{subject.name}'")
+            repo.save_production(prod)
+            continue
+        _lock_reference(prod, ctx, target, subject, gen)
+        anchor = anchor or subject.reference_url  # the first ref becomes the show's look
+        made += 1
+        repo.save_production(prod)
+        queue.update_progress(job.id, (i + 1) / total)
+    return {"generated": made, "failed": failed, "total": len(targets)}
 
 
 @register("table_read")

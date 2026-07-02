@@ -181,6 +181,13 @@ export const api = {
     }),
 
   /**
+   * Cast the WHOLE show bible in one consistent look (the first reference — or the
+   * custom style image — anchors every other one). Async — poll the job.
+   */
+  castAll: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/cast-all`, { method: "POST" }),
+
+  /**
    * Rename a character — the backend propagates the new name across the whole
    * script (logline, question, theme, scene beats, every dialogue line + action)
    * and returns the FULL updated Production. Use this instead of the generic PUT

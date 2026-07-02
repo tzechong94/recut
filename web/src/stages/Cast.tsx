@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Sparkles,
   Upload,
+  Wand2,
 } from "lucide-react";
 import { api, assetRawUrl } from "../api/client";
 import { pollJob } from "../lib/jobs";
@@ -19,19 +20,47 @@ interface StageProps {
   onAdvance: () => void;
 }
 
-const STYLE_OPTIONS = [
-  "noir",
-  "anime",
-  "claymation",
-  "storybook",
-  "cinematic",
-  "pixar",
+const FALLBACK_STYLE_OPTIONS = [
+  "cinematic", "noir", "anime", "claymation", "storybook", "pixar", "ghibli",
+  "ink_wash", "comic", "pixel", "cyberpunk", "retro_film", "paper_craft",
 ];
 
 export function CastStage({ ctl, onAdvance }: StageProps) {
   const p = ctl.production!;
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [castingAll, setCastingAll] = useState(false);
+  const [styleOptions, setStyleOptions] = useState<string[]>(FALLBACK_STYLE_OPTIONS);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
+
+  useEffect(() => {
+    api.listStyles()
+      .then((s) => s.length && setStyleOptions(s.map((x) => x.name)))
+      .catch(() => {});
+  }, []);
+
+  /** One look for the whole bible: the first reference (or the custom style image)
+   *  anchors every other one. References stream in as the job saves per item. */
+  async function generateAll() {
+    setCastingAll(true);
+    setErrors({});
+    try {
+      const { job_id } = await api.castAll(p.id);
+      await pollJob(job_id, {
+        timeoutMs: 15 * 60 * 1000,
+        onProgress: () => { if (alive.current) void ctl.refetch(); },
+      });
+    } catch (e) {
+      if (alive.current)
+        setErrors((er) => ({ ...er, _all: e instanceof Error ? e.message : "Casting failed" }));
+    } finally {
+      if (alive.current) {
+        await ctl.refetch().catch(() => {});
+        setCastingAll(false);
+      }
+    }
+  }
 
   const setBusyFor = (id: string, v: boolean) =>
     setBusy((b) => ({ ...b, [id]: v }));
@@ -136,18 +165,39 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
       <div className="sr-style-bar">
         <span className="sr-field-label">Visual style</span>
         <div className="sr-style-pills">
-          {STYLE_OPTIONS.map((s) => (
+          {styleOptions.map((s) => (
             <button
               key={s}
               className={"sr-pill" + (p.style.name === s ? " on" : "")}
               onClick={() => changeStyle(s)}
             >
-              {s}
+              {s.replace("_", " ")}
             </button>
           ))}
         </div>
         <span className="sr-bible-count">
           {lockedCount}/{totalRefs} locked
+        </span>
+      </div>
+
+      {errors._all && <div className="rc-err">{errors._all}</div>}
+      <div className="sr-castall-bar">
+        <button
+          className="rc-cta sm"
+          disabled={castingAll}
+          onClick={() => void generateAll()}
+          data-testid="cast-all"
+        >
+          {castingAll ? (
+            <Loader2 size={15} className="rc-spin" />
+          ) : (
+            <Wand2 size={15} />
+          )}
+          Generate all — one look
+        </button>
+        <span className="rc-note">
+          The first reference anchors every other one (same art style, new
+          subject), so the whole bible shares one look. Uploaded images are kept.
         </span>
       </div>
 
@@ -161,7 +211,7 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
             description={c.description}
             assetId={c.reference_asset_id}
             source={c.source}
-            busy={!!busy[c.id]}
+            busy={!!busy[c.id] || (castingAll && !c.reference_asset_id)}
             error={errors[c.id]}
             onGenerate={(instruction) => generate("character", c.id, instruction)}
             onUpload={(f) => uploadFor("character", c.id, f)}
@@ -185,7 +235,7 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
             description={l.description}
             assetId={l.reference_asset_id}
             source={l.source}
-            busy={!!busy[l.id]}
+            busy={!!busy[l.id] || (castingAll && !l.reference_asset_id)}
             error={errors[l.id]}
             onGenerate={(instruction) => generate("location", l.id, instruction)}
             onUpload={(f) => uploadFor("location", l.id, f)}

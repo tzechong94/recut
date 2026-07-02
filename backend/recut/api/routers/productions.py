@@ -299,6 +299,19 @@ def cast(pid: str, body: CastRequest) -> dict:
     return {"job_id": job_id, "status": "queued"}
 
 
+@router.post("/productions/{pid}/cast-all", status_code=202)
+def cast_all(pid: str) -> dict:
+    """Cast the whole show bible in ONE consistent look: the first reference (or the
+    custom style's image) anchors every other one — no per-card style lottery."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    if not prod.characters and not prod.locations:
+        raise HTTPException(409, "nothing to cast")
+    job_id = queue.enqueue("cast_all", {"production_id": pid}, project_id=prod.project_id)
+    return {"job_id": job_id, "status": "queued"}
+
+
 class AttachReference(BaseModel):
     asset_id: str
     reference_url: str | None = None
