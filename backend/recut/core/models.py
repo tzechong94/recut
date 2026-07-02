@@ -202,7 +202,11 @@ class StubTextLLM(TextLLM):
     def complete(self, system: str, user: str, *, json_mode: bool = False) -> tuple[str, int]:
         marker = system.lower()
         tokens = max(120, (len(system) + len(user)) // 4)
-        if "showrunner:treatment" in marker:
+        if "showrunner:treatment reviser" in marker:
+            # The reviser must ECHO the draft it was handed (improved in spirit), not
+            # invent a new story — otherwise the premise-seeded draft gets replaced.
+            payload = _stub_embedded_json(user) or _stub_treatment(user)
+        elif "showrunner:treatment" in marker:
             payload = _stub_treatment(user)
         elif "showrunner:critic" in marker:
             payload = _stub_writers_critic(user)
@@ -220,11 +224,7 @@ class StubTextLLM(TextLLM):
         elif "showrunner:dialogue-critic" in marker:
             payload = {"scores": {"dialogue_quality": 0.82, "subtext": 0.78, "distinct_voices": 0.8}, "overall": 0.8, "notes": "Lines carry subtext; voices distinct."}
         elif "showrunner:dialogue" in marker:
-            payload = {"lines": [
-                {"character": "", "line": "You were the one I never checked."},
-                {"character": "", "line": "Because you didn't want to find me."},
-                {"character": "", "line": "I do now."},
-            ]}
+            payload = _stub_dialogue(user)
         elif "showrunner:rubric" in marker:
             payload = _stub_rubric()
         elif "showrunner:storyboard" in marker:
@@ -292,27 +292,172 @@ def _stub_script_on_beats(user: str) -> dict:
     return {"beats": [{"index": i, "text": t} for i, t in enumerate(lines)]}
 
 
+_STUB_STOP = {
+    "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "must",
+    "who", "that", "their", "her", "his", "its", "before", "across", "into", "from",
+    "at", "by", "is", "are", "was", "were", "has", "have", "she", "he", "they",
+    # premise-common verbs — a title like "Discovers & Ashes" is nobody's film
+    "discovers", "discover", "realizes", "realises", "becomes", "finds", "hears",
+    "learns", "decides", "starts", "begins", "receives", "delivers", "every",
+}
+
+
+def _stub_embedded_json(user: str) -> dict | None:
+    """The JSON document embedded in a prompt (reviser flows pass the draft back in)."""
+    start, end = user.find("{"), user.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        doc = json.loads(user[start : end + 1])
+        return doc if isinstance(doc, dict) and doc.get("scenes") else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _stub_rng(*parts: str):
+    """Deterministic RNG seeded on the prompt — same input, same output (tests stay
+    stable); different premise/scene, different story (test mode isn't repetitive)."""
+    import hashlib
+    import random
+
+    h = hashlib.sha256("|".join(parts).encode()).digest()
+    return random.Random(int.from_bytes(h[:8], "big"))
+
+
+def _stub_topic(text: str) -> str:
+    words = [w.strip(".,!?'\"—–-:;").lower() for w in text.split()]
+    cands = [w for w in words if len(w) > 4 and w.isalpha() and w not in _STUB_STOP]
+    return max(cands, key=len) if cands else "reckoning"
+
+
+def _stub_names(user: str, label: str) -> list[str]:
+    """Character names from a 'CAST:'/'CHARACTERS:' prompt line — 'Name (details…)'."""
+    import re
+
+    m = re.search(rf"{label}:\s*(.+)", user)
+    if not m:
+        return []
+    return re.findall(r"([A-Z][\w'-]*(?: [A-Z][\w'-]*)?)\s*\(", m.group(1))
+
+
 def _stub_treatment(user: str) -> dict:
-    """A coherent canned micro-drama so the whole Showrunner flow demos offline."""
+    """A premise-seeded micro-drama so test mode reads like a real (varied) script,
+    not the same canned story every time. Deterministic per premise."""
+    import re
+
+    m = re.search(r"PREMISE:\s*(.+)", user)
+    premise = (m.group(1).strip().splitlines()[0] if m else user.strip().splitlines()[0] if user.strip() else "a secret comes due")
+    rng = _stub_rng("treatment", premise)
+    topic = _stub_topic(premise)
+
+    # A series continuation names its RETURNING CAST/LOCATIONS — honor them exactly,
+    # the way the live model is instructed to (episode 2 keeps the same faces + sets).
+    returning = re.search(r"RETURNING CAST[^:]*:\s*(.+?)(?:\s*RETURNING LOCATIONS|$)", premise)
+    returning_pairs = (re.findall(r"([A-Z][\w'-]*(?: [A-Z][\w'-]*)?)\s*\(([^)]*)\)", returning.group(1))
+                       if returning else [])
+    ret_locs = re.search(r"RETURNING LOCATIONS[^:]*:\s*(.+)$", premise)
+    ret_loc_names = ([x.strip().rstrip(".") for x in ret_locs.group(1).split(",") if x.strip()]
+                     if ret_locs else [])
+    cliff = re.search(r"cliffhanger:\s*(.+?)(?:\s*Pick up|$)", premise)
+    hook_frag = (cliff.group(1) if cliff else premise)[:90].rstrip(".")
+
+    prot = rng.choice(["Mara", "Eli", "Noor", "Ivy", "Jonas", "Ada", "Theo", "Lena"])
+    ant = rng.choice(["Vince", "Silas", "Petra", "Hale", "Rook", "Junia", "Marlow", "Odile"])
+    prot_desc = rng.choice([
+        "late-30s, sharp eyes, a coat that's seen weather, runs on black coffee",
+        "mid-20s, quick hands, patched jacket, hides worry behind jokes",
+        "50s, silver-streaked hair, deliberate movements, misses nothing",
+        "30s, wiry, ink-stained fingers, always half-turned toward the exit",
+    ])
+    ant_desc = rng.choice([
+        "an easy smile that never reaches the eyes, immaculate dark clothes",
+        "soft-spoken, unhurried, the calm of someone who's already won",
+        "charming in daylight, unreadable after dark, a ring they keep turning",
+        "brisk and generous with favors that always come due",
+    ])
+    want = rng.choice([
+        f"to finish what the {topic} started",
+        f"to keep the {topic} from surfacing",
+        "to get out clean, just this once",
+        "to protect the one person who never asked why",
+    ])
+    flaw = rng.choice([
+        "loyalty that blinds them", "pride that won't fold", "a debt they never mention",
+        "the habit of carrying everything alone",
+    ])
+    if returning_pairs:
+        prot, prot_desc = returning_pairs[0]
+        if len(returning_pairs) > 1:
+            ant, ant_desc = returning_pairs[1]
+    loc1, loc2 = rng.sample([
+        {"name": "Night market", "description": "narrow stalls, paper lanterns, steam and neon, crowds thinning"},
+        {"name": "Rooftop greenhouse", "description": "cracked glass panes, overgrown planters, city lights below"},
+        {"name": "Ferry terminal", "description": "flickering departure board, wet concrete, the last boat idling"},
+        {"name": "Back-alley workshop", "description": "workbench clutter, one hanging bulb, shutters half down"},
+        {"name": "All-night diner", "description": "vinyl booths, buzzing sign, coffee rings on formica"},
+        {"name": "Rain-slick alley", "description": "neon reflections in puddles, fire escapes, midnight"},
+    ], 2)
+    if ret_loc_names:
+        loc1 = {"name": ret_loc_names[0], "description": loc1["description"]}
+        if len(ret_loc_names) > 1:
+            loc2 = {"name": ret_loc_names[1], "description": loc2["description"]}
+    title = rng.choice([
+        f"The {topic.title()}", f"{topic.title()} at Midnight", f"After the {topic.title()}",
+        f"The Last {topic.title()}", f"{topic.title()} & Ashes",
+    ])
+    logline = premise[0].upper() + premise[1:].rstrip(".") + "."
     return {
-        "title": "Last Call",
-        "logline": "A weary detective realizes the partner she trusts is the killer she's hunted all night.",
-        "dramatic_question": "Will Mara turn in the one person who ever had her back?",
-        "theme": "Trust is the most expensive thing a person can spend.",
+        "title": title,
+        "logline": logline,
+        "dramatic_question": rng.choice([
+            f"Will {prot} pay what the {topic} costs?",
+            f"Can {prot} stop {ant} without becoming them?",
+            f"Does {prot} choose the truth or the person?",
+        ]),
+        "theme": rng.choice([
+            f"The {topic} you bury digs itself out.",
+            "Trust is the most expensive thing a person can spend.",
+            "You can outrun anything except what you owe.",
+        ]),
         "characters": [
-            {"name": "Mara", "description": "late-30s detective, sharp eyes, rumpled grey coat, exhausted", "role": "protagonist", "want": "to close the case and finally rest", "flaw": "loyalty that blinds her", "voice": "longxiaochun_v2"},
-            {"name": "Vince", "description": "40s detective, easy smile that never reaches his eyes, dark suit", "role": "antagonist", "want": "to bury the evidence and walk free", "flaw": "believes he's owed it", "voice": "longshu_v2"},
+            {"name": prot, "description": prot_desc, "role": "protagonist", "want": want, "flaw": flaw},
+            {"name": ant, "description": ant_desc, "role": "antagonist",
+             "want": rng.choice(["to bury the evidence and walk away", f"to own the {topic} outright", "to be owed by everyone"]),
+             "flaw": rng.choice(["believes they're owed it", "can't leave a loose end", "mistakes fear for respect"])},
         ],
-        "locations": [
-            {"name": "Precinct office", "description": "cramped night-shift detective's office, venetian-blind shadows, one desk lamp"},
-            {"name": "Rain-slick alley", "description": "narrow alley behind the precinct, neon reflections in puddles, midnight"},
-        ],
+        "locations": [loc1, loc2],
         "scenes": [
-            {"heading": "INT. PRECINCT OFFICE - NIGHT", "summary": "Mara connects the last clue and understands who did it."},
-            {"heading": "INT. PRECINCT OFFICE - NIGHT", "summary": "Vince enters; the air shifts as Mara hides what she knows."},
-            {"heading": "EXT. RAIN-SLICK ALLEY - NIGHT", "summary": "The confrontation: Mara accuses Vince, the truth lands."},
+            {"heading": f"INT. {loc1['name'].upper()} - NIGHT",
+             "summary": f"Hook: {hook_frag} — {prot} is already in too deep when {ant} appears."},
+            {"heading": f"EXT. {loc2['name'].upper()} - NIGHT",
+             "summary": f"{ant} gets too close; {prot} hides what the {topic} really cost, and the lie shows."},
+            {"heading": f"INT. {loc1['name'].upper()} - LATER",
+             "summary": f"Cliffhanger: {prot} confronts {ant} — and learns the {topic} was never the point."},
         ],
     }
+
+
+def _stub_dialogue(user: str) -> dict:
+    """Scene-seeded dialogue: different lines per scene, attributed to the ACTUAL cast
+    named in the prompt (so speaker mapping works downstream)."""
+    import re
+
+    names = _stub_names(user, "CHARACTERS") or ["", ""]
+    a = names[0]
+    b = names[1] if len(names) > 1 else names[0]
+    sm = re.search(r"SCENE:.*?—\s*(.+)", user)
+    summary = sm.group(1) if sm else user
+    topic = _stub_topic(summary)
+    rng = _stub_rng("dialogue", user)
+    exchange = rng.choice([
+        [(a, f"You knew about the {topic}."), (b, "I knew enough to keep you out of it."), (a, "That wasn't your call.")],
+        [(b, "Walk away. While it's still a choice."), (a, "It stopped being a choice last night."), (b, "Then it stops being my problem.")],
+        [(a, "Say it to my face."), (b, f"The {topic} was gone before you ever got there."), (a, "Then whose hands took it?")],
+        [(b, "You look like you haven't slept."), (a, f"The {topic} doesn't sleep. Why should I?"), (b, "Because tomorrow it gets worse.")],
+        [(a, "One truth. That's all I'm asking."), (b, "You couldn't carry one of mine."), (a, "Try me.")],
+        [(b, "We had a deal."), (a, "You had a deal. I had a debt."), (b, f"Same thing, where the {topic} is concerned.")],
+    ])
+    return {"lines": [{"character": c, "line": ln} for c, ln in exchange]}
 
 
 def _stub_writers_critic(user: str = "") -> dict:
@@ -323,20 +468,60 @@ def _stub_writers_critic(user: str = "") -> dict:
     rnd = int(m.group(1)) if m else 1
     score = min(0.9, 0.6 + 0.12 * rnd)
     notes = {
-        1: "Strong hook, but Mara has no clear arc and the midpoint turn is missing. Give her something to lose if Vince realizes she knows.",
-        2: "Better. Now sharpen the climax — the betrayal should be shown through action, not stated. Tighten Vince's want.",
+        1: "Strong hook, but the protagonist has no clear arc and the midpoint turn is missing. Give them something concrete to lose if the antagonist realizes what they know.",
+        2: "Better. Now sharpen the climax — the betrayal should be shown through action, not stated. Tighten the antagonist's want.",
     }.get(rnd, "Solid structure and arc; the dramatic question lands. Ship it.")
     return {"notes": notes, "score": round(score, 2)}
 
 
 def _stub_storyboard(user: str) -> dict:
-    return {
-        "shots": [
-            {"action": "Mara hunched over a desk, pinning a photo to the evidence board, lamp light on her face", "shot_type": "medium", "camera": "push_in", "duration_s": 4, "character_names": ["Mara"], "location_name": "Precinct office", "dialogue": [], "narration": "Every case leaves a thread. This one led home."},
-            {"action": "Insert: the photo — two detectives shaking hands, one face circled in red", "shot_type": "insert", "camera": "static", "duration_s": 3, "character_names": [], "location_name": "Precinct office", "dialogue": [], "narration": "It was someone she trusted."},
-            {"action": "Mara turns sharply as a shadow falls across the doorway", "shot_type": "close_up", "camera": "handheld", "duration_s": 3, "character_names": ["Mara"], "location_name": "Precinct office", "dialogue": [{"character": "Mara", "line": "You're working late."}], "narration": ""},
-        ]
+    """Scene-seeded shots built from the ACTUAL cast/location/summary in the prompt —
+    every scene boards differently, and character names map to real cast ids."""
+    import re
+
+    names = _stub_names(user, "CAST")
+    lead = names[0] if names else ""
+    lm = re.search(r"LOCATIONS:\s*(.+)", user)
+    loc = (lm.group(1).split(",")[0].strip() if lm else "") or "the location"
+    sm = re.search(r"SCENE:\s*(.+?)\s*—\s*(.+)", user)
+    summary = (sm.group(2).strip() if sm else "the scene turns")
+    frag = summary.rstrip(".")[:70]
+    rng = _stub_rng("storyboard", user)
+    hook = "HOOK" in user
+    cliff = "CLIFFHANGER" in user
+
+    opener = {
+        "action": (f"Cold open, mid-action: {frag}" if hook else f"Establishing {loc}: {frag}"),
+        "shot_type": "wide", "camera": rng.choice(["pan", "static", "aerial"]), "duration_s": 4,
+        "character_names": [], "location_name": loc, "dialogue": [],
+        "narration": rng.choice([
+            "Some debts only come due after dark.", "Nobody plans the night that changes them.",
+            "It started the way these things always start — too late.", "",
+        ]),
     }
+    beat = {
+        "action": f"{lead or 'The lead'} {rng.choice(['moves through', 'works fast in', 'scans', 'slips into'])} {loc} — {rng.choice(['hands steady, eyes not', 'listening for footsteps', 'watching the exits', 'buying time'])}",
+        "shot_type": "medium", "camera": rng.choice(["push_in", "handheld", "static"]), "duration_s": 4,
+        "character_names": [lead] if lead else [], "location_name": loc,
+        "dialogue": ([{"character": lead, "line": rng.choice([
+            "Not tonight. Not like this.", "Stay where I can see you.",
+            "I can fix this. I just need an hour.", "You brought this here?",
+        ])}] if lead else []),
+        "narration": "",
+    }
+    closer = {
+        "action": (f"Close on {lead or 'the lead'} as the truth lands — hold the look, cut to black" if cliff
+                   else f"{rng.choice(['Insert', 'Detail'])}: {rng.choice(['a hand closing over', 'the light catching', 'rain hitting'])} what matters most in {loc}"),
+        "shot_type": "close_up", "camera": rng.choice(["push_in", "static"]), "duration_s": 3,
+        "character_names": [lead] if (cliff and lead) else [], "location_name": loc,
+        "dialogue": [], "narration": "" if cliff else rng.choice(["Whatever it cost, it wasn't done charging.", ""]),
+    }
+    nm = re.search(r"about (\d+) shot", user)
+    n = int(nm.group(1)) if nm else 3
+    shots = [opener, beat, closer][: max(1, min(3, n))]
+    if n <= 1:
+        shots = [beat]  # a single-shot scene keeps the character beat, not the establishing
+    return {"shots": shots}
 
 
 def _stub_rubric() -> dict:
