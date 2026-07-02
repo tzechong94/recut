@@ -356,8 +356,9 @@ class QwenVideoGen(VideoGen):
         — dialogue shots SPEAK with lip-sync; with `audio_url` the clip embeds OUR TTS
         track exactly (verified: waveform xcorr 0.998), giving hard voice consistency.
         Raw HTTP — the SDK doesn't map these input shapes. Probe-verified intl facts:
-        happyhorse wants media=[{type:first_frame}], wan2.5/2.6 want img_url; all are
-        landscape-locked at 720P/1080P (the worker blur-fills to 9:16)."""
+        happyhorse wants media=[{type:first_frame}], wan2.5/2.6 want img_url. ASPECT
+        follows the prompt — say 'vertical 9:16' for portrait (~716x1284); the worker
+        blur-fills any landscape output to 9:16 as a fallback."""
         import time
 
         import httpx

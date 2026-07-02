@@ -92,7 +92,10 @@ def build_storyboard(llm: TextLLM, prod: Production) -> Production:
         except Exception as exc:  # noqa: BLE001 — surface the dropped scene, don't silently skip
             prod.warnings.append(f"storyboard failed for scene '{scene.heading}': {type(exc).__name__}")
             continue
-        _place_dialogue(scene)
+        dropped = _place_dialogue(scene)
+        if dropped:
+            prod.warnings.append(
+                f"{dropped} line(s) in '{scene.heading}' didn't fit the shot budget and were cut — pacing over cramming")
     _enforce_budget(prod, budget)  # hard cap if the model over-produced
     _fit_durations(prod)  # …and honor the TARGET RUNTIME, not just the shot count
     prod.token_ledger.text_tokens += total
@@ -144,25 +147,37 @@ def _enforce_budget(prod: Production, budget: int) -> None:
         _place_dialogue(scene)  # re-home any lines that were on a removed shot
 
 
-def _place_dialogue(scene) -> None:
+def _place_dialogue(scene) -> int:
     """Distribute the scene's written, critiqued dialogue onto its shots (shot/reverse-
-    shot), replacing any LLM-invented shot dialogue. A line goes to a shot featuring its
-    speaker; if none, round-robin across the scene's shots."""
+    shot). ONE line per shot — a shot is one beat: captions stay readable (no subtitle
+    walls), speaking shots stay short, and some shots stay silent (pacing needs air).
+    Overflow lines allow a second per shot; anything beyond is dropped with a warning
+    rather than crammed."""
     if not scene.script or not scene.shots:
         return
     for sh in scene.shots:
         sh.dialogue = []
-    rr = 0
+
+    def pick(line, cap: int):
+        # prefer an empty shot featuring the speaker, then any shot featuring them,
+        # then any shot under the cap
+        t = next((s for s in scene.shots if line.character_id and line.character_id in s.character_ids
+                  and len(s.dialogue) < cap and not s.dialogue), None)
+        t = t or next((s for s in scene.shots if line.character_id and line.character_id in s.character_ids
+                       and len(s.dialogue) < cap), None)
+        t = t or next((s for s in scene.shots if len(s.dialogue) < cap), None)
+        return t
+
+    dropped = 0
     for line in scene.script:
-        target = next((s for s in scene.shots if line.character_id and line.character_id in s.character_ids and not s.dialogue), None)
+        target = pick(line, cap=1) or pick(line, cap=2)
         if not target:
-            target = next((s for s in scene.shots if line.character_id and line.character_id in s.character_ids), None)
-        if not target:
-            target = scene.shots[rr % len(scene.shots)]
-            rr += 1
-            if line.character_id and line.character_id not in target.character_ids:
-                target.character_ids.append(line.character_id)
+            dropped += 1
+            continue
+        if line.character_id and line.character_id not in target.character_ids:
+            target.character_ids.append(line.character_id)
         target.dialogue.append(line)
+    return dropped
 
 
 def _to_shot(sd: dict, prod: Production) -> Shot:

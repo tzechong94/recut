@@ -53,15 +53,22 @@ backend/recut/
 - `RECUT_MODEL_BACKEND=stub ./scripts/dev-local.sh` (api+worker) + `cd web && npm run dev`.
 - Live: `RECUT_MODEL_BACKEND=qwen` + `RECUT_DASHSCOPE_API_KEY` in backend/.env; `recut-doctor` first.
 
-## Live model facts (validated on the Singapore/intl key)
+## Live model facts (validated on the Singapore/intl key; shakedown 2026-07-03 passed)
 Wan t2v `wan2.2-t2v-plus` (size 1080*1920), Wan i2v `wan2.2-i2v-plus` (img_url + seed)
-+ draft tier `wan2.2-i2v-flash`, HappyHorse `happyhorse-1.0-i2v` (raw HTTP async;
-input.media=[{"type":"first_frame","url":…}], parameters duration 3-15 / resolution
-720P|1080P; native joint audio+video → dialogue lip-sync; render strips clip audio so
-the native speech is extracted into the VO track), image `wan2.2-t2i-flash` (sizes
-1024*1024/720*1280/1280*720, NOT 1080*1920), `qwen-image-edit` (multi-image compose,
-hosted OSS output), Qwen-VL, Qwen-Max, TTS `qwen3-tts-flash` (HTTP; voices Cherry/
-Serena/Ethan/Chelsie — CosyVoice v2 is China-region-only on intl).
++ draft tier `wan2.2-i2v-flash`. NATIVE-AUDIO i2v (raw HTTP async, same task endpoint):
+`wan2.6-i2v` / `wan2.5-i2v-preview` take input {prompt, img_url, audio_url?} — with
+audio_url the clip EMBEDS our exact TTS track (waveform xcorr 0.998 → hard voice
+consistency + lip-sync); `happyhorse-1.0/1.1-i2v` take media=[{"type":"first_frame",
+"url":…}] (1.1 watermarks; pass watermark:false). Params: duration 3-15 int,
+resolution 720P|1080P (suffix `model@1080P` in our routing = master tier). ASPECT
+follows the PROMPT — include "vertical 9:16" and wan2.6 outputs ~716×1284 portrait
+(without it: landscape; worker blur-fills any landscape clip to 9:16 as fallback).
+Routing: speaking shots → dialogue_i2v (wan2.6 + our TTS) in both modes; silent →
+flash/plus by draft|ship mode; master-cut → master models only. Image
+`wan2.2-t2i-flash` (sizes 1024*1024/720*1280/1280*720, NOT 1080*1920),
+`qwen-image-edit` (multi-image compose, hosted OSS output), Qwen-VL, Qwen-Max, TTS
+`qwen3-tts-flash` (HTTP; voices Cherry/Serena/Ethan/Chelsie; hosted url short-lived —
+synth fresh per speaking take; CosyVoice v2 is China-region-only on intl).
 
 ## Style
 Typed, pydantic v2, explicit over clever, named exceptions (no bare except outside the
