@@ -303,6 +303,69 @@ def storyboard(pid: str) -> dict:
     return prod.model_dump(mode="json")
 
 
+@router.post("/productions/{pid}/animatic", status_code=202)
+def animatic(pid: str) -> dict:
+    """THE ANIMATIC: render the whole film from board stills + real voices — $0 video
+    tokens. Watch the movie before you pay for the movie."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    if not any(sh.keyframe_asset_id for sh in prod.shots):
+        raise HTTPException(409, "no board stills yet — generate stills first")
+    job_id = queue.enqueue("animatic", {"production_id": pid}, project_id=prod.project_id)
+    return {"job_id": job_id, "status": "queued"}
+
+
+# The qwen3-tts roster (intl). Audition = hear a character's actual line in a voice.
+VOICE_ROSTER = [
+    {"name": "Cherry", "blurb": "bright, warm female — leads with energy"},
+    {"name": "Serena", "blurb": "calm, lower female — gravitas and warmth"},
+    {"name": "Ethan", "blurb": "steady male — grounded, trustworthy"},
+    {"name": "Chelsie", "blurb": "young female — quick, expressive"},
+]
+
+
+@router.get("/voices")
+def list_voices() -> list[dict]:
+    return VOICE_ROSTER
+
+
+class AuditionRequest(BaseModel):
+    voice: str
+
+
+@router.post("/productions/{pid}/characters/{cid}/audition")
+def audition(pid: str, cid: str, body: AuditionRequest) -> dict:
+    """VOICE CASTING: synthesize one of the character's actual lines in the requested
+    voice (tiny TTS spend, sync). With input-audio dialogue, this IS the film voice."""
+    prod = repo.get_production(pid)
+    if not prod:
+        raise HTTPException(404, "production not found")
+    char = prod.character(cid)
+    if not char:
+        raise HTTPException(404, "character not found")
+    line = next((l.line for sc in prod.scenes for l in (sc.script or [])
+                 if l.character_id == cid and l.line.strip()), None)
+    line = line or next((d.line for sc in prod.scenes for sh in sc.shots for d in sh.dialogue
+                         if d.character_id == cid and d.line.strip()), None)
+    line = line or f"I'm {char.name}. Every story needs a voice — this is mine."
+    m = stub_models() if prod.test_mode else models()
+    try:
+        va = m.voice.synthesize(line, voice=body.voice)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(502, f"audition synth failed ({type(exc).__name__})")
+    from recut.core.storage import content_hash as _ch
+
+    key = f"productions/{pid}/auditions/{cid}_{body.voice}_{_ch(va.data)[:8]}.wav"
+    from recut.api.deps import storage as _storage
+
+    _storage().put(key, va.data, content_type=va.mime)
+    asset = repo.create_asset(kind="audio", storage_key=key, project_id=prod.project_id, mime=va.mime)
+    prod.token_ledger.voice_tokens += va.tokens
+    repo.save_production(prod)
+    return {"asset_id": asset["id"], "line": line, "voice": body.voice}
+
+
 @router.post("/productions/{pid}/table-read", status_code=202)
 def table_read(pid: str) -> dict:
     """Speak the script aloud, each line in its character's voice (cheap voice tokens,

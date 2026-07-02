@@ -42,19 +42,31 @@ _STATUS_MAP = {
 }
 
 
-def shot_to_slot(shot: Shot, *, style_name: str = "") -> Slot:
+def shot_to_slot(shot: Shot, *, style_name: str = "", stills: bool = False,
+                 duration_override: float | None = None) -> Slot:
+    """One shot → one render slot. In STILLS mode (the animatic) the slot sources the
+    shot's board still instead of its video take — the render's image path (-loop 1)
+    plays it for the beat's duration; $0 video tokens."""
     caption = shot.caption
+    if stills and shot.keyframe_asset_id:
+        asset_id, source, status = shot.keyframe_asset_id, SlotSource.generated, SlotStatus.ready
+    elif stills:
+        asset_id, source, status = None, SlotSource.standin, SlotStatus.ready
+    else:
+        asset_id = shot.asset_id
+        source = _SOURCE_MAP.get(shot.source, SlotSource.standin)
+        status = _STATUS_MAP.get(shot.status, SlotStatus.ready)
     return Slot(
         id=shot.id,  # keep the shot id so render cache + lookups line up
         beat_label=f"Shot {shot.index + 1}",
         type=SlotType.broll,  # a drama shot is a video clip; render keys on the asset mime
-        duration_s=shot.duration_s,
-        source=_SOURCE_MAP.get(shot.source, SlotSource.standin),
-        asset_id=shot.asset_id,
+        duration_s=duration_override if duration_override is not None else shot.duration_s,
+        source=source,
+        asset_id=asset_id,
         text=caption,
         text_role=TextRole.on_screen_text if caption else TextRole.none,
         style=SlotStyle(font=Font.clean, size=Size.m, align=Align.center),
-        status=_STATUS_MAP.get(shot.status, SlotStatus.ready),
+        status=status,
         kept=True,
     )
 
@@ -71,18 +83,24 @@ def _card_slot(slot_id: str, text: str, *, size: Size, dur: float = 2.6) -> Slot
     )
 
 
-def compile_to_timeline(prod: Production, *, with_cards: bool = True) -> Timeline:
+def compile_to_timeline(prod: Production, *, with_cards: bool = True, stills: bool = False,
+                        duration_overrides: dict[str, float] | None = None) -> Timeline:
     """Build the render Timeline from the production's ordered shots, framed by a title
-    card and an end card so the export plays as a finished short film."""
+    card and an end card so the export plays as a finished short film. `stills` builds
+    the ANIMATIC (board stills instead of video takes, $0 video); `duration_overrides`
+    fits animatic beats to the voice job-locally without mutating the Production."""
+    overrides = duration_overrides or {}
     slots: list[Slot] = []
     for scene in prod.scenes:
         for i, sh in enumerate(scene.shots):
-            slot = shot_to_slot(sh, style_name=prod.style.name)
+            slot = shot_to_slot(sh, style_name=prod.style.name, stills=stills,
+                                duration_override=overrides.get(sh.id))
             slot.fade_in = i == 0  # dip-from-black as each scene opens
             slot.fade_out = i == len(scene.shots) - 1  # dip-to-black as it closes
             slots.append(slot)
     if not slots:  # productions without scenes (e.g. tests) still compile
-        slots = [shot_to_slot(sh, style_name=prod.style.name) for sh in prod.shots]
+        slots = [shot_to_slot(sh, style_name=prod.style.name, stills=stills,
+                              duration_override=overrides.get(sh.id)) for sh in prod.shots]
     if with_cards and slots:
         title = prod.title or "Untitled"
         end_text = (prod.title or "An AI Showrunner film")  # reprise the title, not the theme label

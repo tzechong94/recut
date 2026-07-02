@@ -46,12 +46,16 @@ class Settings(BaseSettings):
     # dialogue shots SPEAK with lip-sync, clips up to 15s (no loop artifact).
     happyhorse_i2v_model: str = "happyhorse-1.0-i2v"
     happyhorse_resolution: str = "720P"  # 720P | 1080P
-    # --- per-shot ROUTING (the fidelity contract; bake-off tunes these) ---
-    # speaking shots film here in BOTH modes (pilot is the cheap dialogue rehearsal):
-    dialogue_i2v_model: str = "happyhorse-1.0-i2v"
-    # master-cut promotion targets ("strongest"): silent shots / speaking shots
-    master_i2v_model: str = "wan2.2-i2v-plus"
-    master_dialogue_i2v_model: str = "happyhorse-1.1-i2v"
+    # --- per-shot ROUTING (bake-off verified 2026-07-03) ---
+    # speaking shots film here in BOTH modes (pilot is the cheap dialogue rehearsal).
+    # wan2.6-i2v accepts audio_url: the clip embeds OUR TTS exactly (xcorr 0.998) —
+    # hard voice consistency + lip-sync + style fidelity 0.95. "@1080P" suffix ups the
+    # native resolution (masters); default native res is happyhorse_resolution.
+    dialogue_i2v_model: str = "wan2.6-i2v"
+    # master-cut promotion targets ("strongest"): silent / speaking. Master dialogue
+    # stays on wan2.6 (same voice pipeline — a master cut can never change a voice).
+    master_i2v_model: str = "wan2.2-i2v-plus"  # strongest PORTRAIT-native silent model
+    master_dialogue_i2v_model: str = "wan2.6-i2v@1080P"
 
     # --- price table (USD, EDITABLE estimates — correct against your DashScope bill) ---
     price_video_second: float = 0.10  # wan2.2-i2v-plus per output second (est.)

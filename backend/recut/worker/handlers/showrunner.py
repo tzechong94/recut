@@ -156,6 +156,93 @@ def handle_cast_all(job: Job, ctx: WorkerContext) -> dict:
     return {"generated": made, "failed": failed, "total": len(targets)}
 
 
+@register("animatic")
+def handle_animatic(job: Job, ctx: WorkerContext) -> dict:
+    """THE ANIMATIC: watch the whole film for $0 video — board stills held for each
+    beat, real character voices speaking the real lines, title cards, music bed,
+    rendered as an actual MP4 through the existing engine. Durations are fitted to
+    the synthesized audio JOB-LOCALLY (the Production is never mutated pre-approval);
+    voice spend and per-line warnings land on the real ledger (honest accounting)."""
+    from recut.pipeline.render import AssetMeta, render_timeline
+    from recut.pipeline.shots import probe_duration
+    from recut.showrunner.compile import compile_to_timeline
+    from recut.showrunner.pipeline.assemble import concat_voiceover, find_or_make_bed
+
+    prod = repo.get_production(job.payload["production_id"])
+    if not prod:
+        raise ValueError("production not found")
+    ctx = _ctx_for(prod, ctx)
+    src_dir = Path(ctx.settings.work_dir) / f"prod_{prod.id}" / "animatic"
+    src_dir.mkdir(parents=True, exist_ok=True)
+
+    # per-shot VO (cache reuse) + JOB-LOCAL duration fit — no mid-word clipping
+    fits: dict[str, float] = {}
+    vo_paths: dict[str, str] = {}
+    shots = prod.shots
+    lo, hi = ctx.settings.min_shot_s, ctx.settings.max_shot_s
+    for i, shot in enumerate(shots):
+        dur = max(lo, min(hi, shot.duration_s))
+        if shot.caption:
+            chash = content_hash(shot.caption.encode())[:8]
+            sp = next((q for ext in ("wav", "mp3") if (q := src_dir / f"vo_{shot.id}_{chash}.{ext}").exists()), None)
+            if not sp:
+                try:
+                    va = synth_shot_voice(ctx.models, prod, shot)
+                except Exception as exc:  # noqa: BLE001 — a silent beat, never a dead animatic
+                    prod.warnings.append(f"animatic voice failed for a line ({type(exc).__name__})")
+                    va = None
+                if va:
+                    sp = src_dir / f"vo_{shot.id}_{chash}.{'wav' if va.mime.endswith('wav') else 'mp3'}"
+                    sp.write_bytes(va.data)
+                    prod.token_ledger.voice_tokens += va.tokens
+            if sp:
+                vo_paths[shot.id] = str(sp)
+                vdur = probe_duration(str(sp)) or dur
+                dur = round(max(lo, min(hi, vdur + 0.4)), 2)
+        fits[shot.id] = dur
+        queue.update_progress(job.id, (i + 1) / (len(shots) or 1) * 0.5)
+    repo.save_production(prod)  # honest ledger + warnings
+
+    timeline = compile_to_timeline(prod, stills=True, duration_overrides=fits)
+    assets = {}
+    for shot in shots:
+        if shot.keyframe_asset_id:
+            a = repo.get_asset(shot.keyframe_asset_id)
+            if a:
+                assets[shot.keyframe_asset_id] = AssetMeta(storage_key=a["storage_key"], mime=a["mime"],
+                                                           duration_s=a["duration_s"], width=a["width"], height=a["height"])
+    vo_segments = [(vo_paths.get(shot.id, ""), fits[shot.id]) for shot in shots]
+    try:
+        vo_path = concat_voiceover(vo_segments, str(src_dir / "animatic_vo.wav"), ctx.settings) if any(p for p, _ in vo_segments) else None
+    except Exception:  # noqa: BLE001 — audio is enhancement
+        vo_path = None
+    if vo_path:
+        vo_key = f"productions/{prod.id}/animatic_vo.wav"
+        ctx.storage.put_file(vo_key, vo_path, content_type="audio/wav")
+        vo_asset = repo.create_asset(kind="audio", storage_key=vo_key, project_id=prod.project_id, mime="audio/wav")
+        timeline.audio.voiceover.asset_id = vo_asset["id"]
+        timeline.audio.voiceover.enabled = True
+        assets[vo_asset["id"]] = AssetMeta(storage_key=vo_key, mime="audio/wav")
+    bed = find_or_make_bed(prod.style.name, str(src_dir / "bed.wav"), ctx.settings)
+    if bed:
+        bed_key = f"productions/{prod.id}/animatic_bed.wav"
+        ctx.storage.put_file(bed_key, bed, content_type="audio/wav")
+        bed_asset = repo.create_asset(kind="audio", storage_key=bed_key, project_id=prod.project_id, mime="audio/wav")
+        timeline.audio.bed.asset_id = bed_asset["id"]
+        timeline.audio.bed.enabled = True
+        timeline.audio.bed.gain_db = -16.0
+        assets[bed_asset["id"]] = AssetMeta(storage_key=bed_key, mime="audio/wav")
+
+    out_path = render_timeline(timeline, assets=assets, storage=ctx.storage, settings=ctx.settings,
+                               on_progress=lambda pr: queue.update_progress(job.id, 0.5 + pr * 0.5))
+    key = f"productions/{prod.id}/animatic_v{prod.version}.mp4"
+    ctx.storage.put_file(key, out_path, content_type="video/mp4")
+    asset = repo.create_asset(kind="animatic", storage_key=key, project_id=prod.project_id,
+                              mime="video/mp4", duration_s=timeline.duration_s, width=1080, height=1920)
+    return {"animatic_asset_id": asset["id"], "duration_s": timeline.duration_s,
+            "note": "the whole film, $0 video — stills + real voices"}
+
+
 @register("table_read")
 def handle_table_read(job: Job, ctx: WorkerContext) -> dict:
     """The TABLE READ: speak the written, critiqued script aloud — each line in its

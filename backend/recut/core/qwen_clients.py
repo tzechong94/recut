@@ -366,11 +366,13 @@ class QwenVideoGen(VideoGen):
         headers = {"Authorization": f"Bearer {self.s.dashscope_api_key}",
                    "Content-Type": "application/json", "X-DashScope-Async": "enable"}
         dur = int(max(3, min(15, round(duration_s))))
-        params: dict = {"duration": dur, "resolution": self.s.happyhorse_resolution,
-                        "watermark": False}
+        model = self.s.wan_i2v_model
+        res = self.s.happyhorse_resolution
+        if "@" in model:  # "wan2.6-i2v@1080P" — the master tier's resolution bump
+            model, res = model.split("@", 1)
+        params: dict = {"duration": dur, "resolution": res, "watermark": False}
         if seed:
             params["seed"] = seed % 2147483647
-        model = self.s.wan_i2v_model
         if model.startswith("happyhorse"):
             inp: dict = {"prompt": prompt, "media": [{"type": "first_frame", "url": image_url}]}
         else:  # wan2.5 / wan2.6
