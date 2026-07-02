@@ -3,11 +3,13 @@ import {
   ArrowRight,
   Clapperboard,
   Film,
+  FlaskConical,
   Loader2,
+  Play,
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { api } from "../api/client";
+import { api, assetRawUrl } from "../api/client";
 import type { ProductionSummary, StyleSummary } from "../types";
 
 const FALLBACK_STYLES: StyleSummary[] = [
@@ -39,6 +41,7 @@ export function Premise({ open }: PremiseProps) {
   const [premise, setPremise] = useState("");
   const [seconds, setSeconds] = useState(45);
   const [style, setStyle] = useState("cinematic");
+  const [testMode, setTestMode] = useState(false);
   const [styles, setStyles] = useState<StyleSummary[]>(FALLBACK_STYLES);
   const [productions, setProductions] = useState<ProductionSummary[]>([]);
   const [starting, setStarting] = useState(false);
@@ -84,6 +87,7 @@ export function Premise({ open }: PremiseProps) {
         premise: trimmed,
         target_seconds: seconds,
         style,
+        test_mode: testMode,
       });
       open(prod.id);
     } catch (e) {
@@ -201,6 +205,19 @@ export function Premise({ open }: PremiseProps) {
             ))}
           </div>
 
+          <label className="sr-testmode" data-testid="test-mode-toggle">
+            <input
+              type="checkbox"
+              checked={testMode}
+              onChange={(e) => setTestMode(e.target.checked)}
+            />
+            <FlaskConical size={13} />
+            <span>
+              <b>Test drive</b> — walk every stage with stub story &amp; stills,
+              zero tokens spent
+            </span>
+          </label>
+
           {error && <div className="rc-err">{error}</div>}
 
           {tooShort && (
@@ -234,13 +251,39 @@ export function Premise({ open }: PremiseProps) {
             <div className="sr-prod-grid">
               {productions.map((p) => (
                 <div className="sr-prod-card" key={p.id} data-testid="prod-card">
-                  <div className="sr-prod-thumb">
-                    <Film size={18} />
-                  </div>
+                  <button
+                    className="sr-prod-thumb"
+                    onClick={() => open(p.id)}
+                    aria-label={`Open ${p.title || "Untitled"}`}
+                    type="button"
+                  >
+                    {p.cover_asset_id ? (
+                      <img
+                        src={assetRawUrl(p.cover_asset_id)}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Film size={18} />
+                    )}
+                    {(p.episode ?? 1) > 1 && (
+                      <span className="sr-ep-badge">EP {p.episode}</span>
+                    )}
+                    {p.test_mode && (
+                      <span className="sr-test-badge" title="Test drive — no tokens">
+                        <FlaskConical size={10} /> TEST
+                      </span>
+                    )}
+                  </button>
                   <div className="sr-prod-meta">
                     <div className="sr-prod-title" title={p.title || "Untitled"}>
                       {p.title || "Untitled"}
                     </div>
+                    {p.logline && (
+                      <div className="sr-prod-logline" title={p.logline}>
+                        {p.logline}
+                      </div>
+                    )}
                     <div className="sr-prod-sub">
                       <span
                         className={"sr-stage-chip stage-" + p.stage}
@@ -248,6 +291,7 @@ export function Premise({ open }: PremiseProps) {
                       >
                         {stageLabel(p.stage)}
                       </span>
+                      {p.style && <span className="sr-prod-time">{p.style}</span>}
                       {relativeTime(p.updated_at) && (
                         <span className="sr-prod-time">
                           {relativeTime(p.updated_at)}
@@ -261,7 +305,15 @@ export function Premise({ open }: PremiseProps) {
                       onClick={() => open(p.id)}
                       type="button"
                     >
-                      Resume <ArrowRight size={13} />
+                      {p.stage === "export" ? (
+                        <>
+                          <Play size={13} /> Watch
+                        </>
+                      ) : (
+                        <>
+                          Resume <ArrowRight size={13} />
+                        </>
+                      )}
                     </button>
                     <button
                       className="rc-iconbtn sm sr-prod-del"

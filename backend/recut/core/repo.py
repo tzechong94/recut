@@ -198,9 +198,27 @@ def get_production(production_id: str):
 
 
 def list_productions() -> list[dict]:
+    """Compact gallery summaries. Includes what a home-screen card needs: logline,
+    episode number, test-mode flag, and a COVER (the first shot-board still, so the
+    gallery shows the film's actual look, not an icon)."""
     with session_scope() as s:
         rows = s.query(ProductionRow).order_by(ProductionRow.updated_at.desc()).all()
-        return [{"id": r.id, "title": r.title, "stage": r.stage, "updated_at": r.updated_at} for r in rows]
+        out = []
+        for r in rows:
+            doc = r.doc or {}
+            shots = [sh for sc in doc.get("scenes", []) for sh in sc.get("shots", [])]
+            cover = next((sh.get("keyframe_asset_id") for sh in shots if sh.get("keyframe_asset_id")), None)
+            out.append({
+                "id": r.id, "title": r.title, "stage": r.stage, "updated_at": r.updated_at,
+                "logline": doc.get("logline", ""),
+                "style": (doc.get("style") or {}).get("name", ""),
+                "episode": doc.get("episode", 1),
+                "test_mode": doc.get("test_mode", False),
+                "cover_asset_id": cover,
+                "export_asset_id": doc.get("export_asset_id"),
+                "n_shots": len(shots),
+            })
+        return out
 
 
 def delete_production(production_id: str) -> bool:

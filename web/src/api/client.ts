@@ -98,6 +98,8 @@ export const api = {
     premise: string;
     target_seconds: number;
     style: string;
+    /** Test drive: run the whole flow on stubs — zero provider tokens. */
+    test_mode?: boolean;
   }) => request<Production>("/productions", { method: "POST", body }),
   listProductions: () => request<ProductionSummary[]>("/productions"),
   getProduction: (id: string) => request<Production>(`/productions/${id}`),

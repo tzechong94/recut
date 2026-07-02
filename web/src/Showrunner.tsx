@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Clapperboard, Cloud, Loader2, X } from "lucide-react";
+import { Check, Clapperboard, Cloud, FlaskConical, Loader2, X } from "lucide-react";
 import { useProduction } from "./lib/useProduction";
 import type { Stage } from "./types";
 import { ScriptStage } from "./stages/Script";
@@ -70,7 +70,12 @@ export function Showrunner({ productionId, exit, open }: ShowrunnerProps) {
   const activeIdx = ORDER.indexOf(activeStage);
 
   return (
-    <Shell exit={exit} saveStatus={saveStatus} title={production.title}>
+    <Shell
+      exit={exit}
+      saveStatus={saveStatus}
+      title={production.title}
+      testMode={production.test_mode}
+    >
       <div className="rc-bodywrap">
         <nav className="rc-rail" aria-label="Production stages">
           {STEPS.map((step, i) => {
@@ -141,11 +146,13 @@ function Shell({
   exit,
   saveStatus,
   title,
+  testMode,
 }: {
   children: React.ReactNode;
   exit: () => void;
   saveStatus: string;
   title?: string;
+  testMode?: boolean;
 }) {
   return (
     <>
@@ -159,6 +166,11 @@ function Shell({
           </div>
           <div className="rc-name">Showrunner</div>
           {title && <div className="rc-proj">· {title}</div>}
+          {testMode && (
+            <span className="sr-test-badge in-header" data-testid="test-mode-badge">
+              <FlaskConical size={11} /> TEST MODE · no tokens
+            </span>
+          )}
         </div>
         <div className="rc-meta">
           <SaveIndicator status={saveStatus} />
