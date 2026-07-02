@@ -109,6 +109,22 @@ export interface DialogueLine {
   line: string;
 }
 
+/** One PERMANENT generation of a shot — the fidelity contract's unit. */
+export interface Take {
+  id: string;
+  asset_id: string;
+  model?: string | null;
+  seed?: number | null;
+  duration_s: number;
+  audio_kind: "native" | "tts" | "silent" | string;
+  keyframe_asset_id?: string | null;
+  keyframe_sig?: string;
+  caption_hash?: string;
+  critic_score?: number | null;
+  note?: string;
+  created_at?: number;
+}
+
 export interface Shot {
   id: string;
   index: number;
@@ -128,6 +144,10 @@ export interface Shot {
   /** Still-gate scores: identity vs character ref, setting vs location plate. */
   keyframe_score?: number | null;
   setting_score?: number | null;
+  /** THE FIDELITY CONTRACT: every generation is kept; the chosen take is the
+   *  slot's sole video source and is never replaced implicitly. */
+  takes?: Take[];
+  chosen_take_id?: string | null;
   source: AssetSource;
   asset_id?: string | null;
   status: ShotStatus;
@@ -198,7 +218,8 @@ export interface Production {
   previous_production_id?: string | null;
   /** Test mode: the whole flow runs on stubs — zero provider tokens. */
   test_mode?: boolean;
-  /** Video tier: "draft" (cheap flash rehearsal) or "final" (plus quality). */
+  /** MODE: "draft" (cheap silent-shot rehearsal) or "ship". Speaking shots film on
+   *  the dialogue model (our voice + lip-sync) in BOTH modes. */
   video_quality?: string;
   version: number;
   created_at?: number;

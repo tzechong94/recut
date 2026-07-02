@@ -48,6 +48,8 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
   const [building, setBuilding] = useState(false);
   const [stillsBusy, setStillsBusy] = useState(false);
   const [stillBusy, setStillBusy] = useState<string | null>(null);
+  const [animaticBusy, setAnimaticBusy] = useState(false);
+  const [animaticAsset, setAnimaticAsset] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
   // StrictMode remounts share the ref — reset to true on (re)mount (see Cast.tsx).
@@ -95,6 +97,24 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
         await ctl.refetch().catch(() => {});
         setStillsBusy(false);
       }
+    }
+  }
+
+  /** THE ANIMATIC: the whole film from these stills + real voices — $0 video. */
+  async function playAnimatic() {
+    setAnimaticBusy(true);
+    setError(null);
+    try {
+      const { job_id } = await api.animatic(p.id);
+      const job = await pollJob(job_id, { timeoutMs: 10 * 60 * 1000 });
+      const asset = job.result?.animatic_asset_id;
+      if (alive.current && typeof asset === "string") setAnimaticAsset(asset);
+      await ctl.refetch().catch(() => {});
+    } catch (e) {
+      if (alive.current)
+        setError(e instanceof Error ? e.message : "Couldn't build the animatic");
+    } finally {
+      if (alive.current) setAnimaticBusy(false);
     }
   }
 
@@ -202,6 +222,29 @@ export function StoryboardStage({ ctl, onAdvance }: StageProps) {
       </div>
 
       {error && <div className="rc-err">{error}</div>}
+
+      {missingStills < totalShots && (
+        <div className="sr-animatic-bar">
+          <button
+            className="sr-mini"
+            disabled={animaticBusy || stillsBusy}
+            onClick={() => void playAnimatic()}
+            data-testid="watch-animatic"
+          >
+            {animaticBusy ? <Loader2 size={13} className="rc-spin" /> : <Clapperboard size={13} />}
+            {animaticBusy ? "Building the animatic…" : "Watch animatic — $0 video"}
+          </button>
+          <span>
+            The whole film as your stills + real character voices, before any video
+            spend. If the animatic works, the film works.
+          </span>
+        </div>
+      )}
+      {animaticAsset && (
+        <div className="sr-animatic-player" data-testid="animatic-player">
+          <video src={assetRawUrl(animaticAsset)} controls playsInline />
+        </div>
+      )}
 
       {(stillsBusy || missingStills > 0 || staleStills > 0) && (
         <div className="sr-stills-bar">

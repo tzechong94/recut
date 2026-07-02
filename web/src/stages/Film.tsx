@@ -13,9 +13,10 @@ import {
 import { api, assetRawUrl } from "../api/client";
 import { pollJob } from "../lib/jobs";
 import type { UseProduction } from "../lib/useProduction";
-import type { ProductionEval, Scoreboard, Shot, Timeline } from "../types";
+import type { Pricing, ProductionEval, Scoreboard, Shot, Timeline } from "../types";
 import { PreviewPlayer } from "../preview/PreviewPlayer";
 import { OrchestrationMap } from "../components/OrchestrationMap";
+import { TakePicker } from "../components/TakePicker";
 import { ScoreboardPanel } from "../components/Scoreboard";
 import { ProofPanel } from "../components/ProofPanel";
 import { DirectorLog } from "../components/DirectorLog";
@@ -40,6 +41,10 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
   const [rerenderAsset, setRerenderAsset] = useState<string | null>(null);
   const [epBusy, setEpBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pricing, setPricing] = useState<Pricing | null>(null);
+  const [openTakes, setOpenTakes] = useState<Record<string, boolean>>({});
+  const [masterSel, setMasterSel] = useState<Record<string, boolean>>({});
+  const [mastering, setMastering] = useState(false);
   const alive = useRef(true);
   // StrictMode remounts share the ref — reset to true on (re)mount (see Cast.tsx).
   useEffect(() => {
@@ -49,8 +54,29 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
 
   useEffect(() => {
     void refreshPanels();
+    api.getPricing().then(setPricing).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** MASTER CUT: re-film the selected shots on the strongest models; new takes
+   *  append UNCHOSEN — the picker compares, you choose, re-render is ≈free. */
+  async function masterCut() {
+    const ids = Object.keys(masterSel).filter((k) => masterSel[k]);
+    if (!ids.length || mastering) return;
+    setMastering(true);
+    setError(null);
+    try {
+      const { job_id } = await api.masterCut(p.id, ids);
+      await pollJob(job_id, { timeoutMs: 30 * 60 * 1000 });
+      await ctl.refetch();
+      setMasterSel({});
+      setOpenTakes((o) => ({ ...o, ...Object.fromEntries(ids.map((i) => [i, true])) }));
+    } catch (e) {
+      if (alive.current) setError(e instanceof Error ? e.message : "Master cut failed");
+    } finally {
+      if (alive.current) setMastering(false);
+    }
+  }
 
   async function refreshPanels() {
     const [sb, tl, ev] = await Promise.all([
@@ -199,7 +225,18 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
           </div>
 
           <div className="sr-section-head">
-            The cut · re-roll, reorder, or drop any shot
+            The cut · takes, retakes, reorder
+            {Object.values(masterSel).some(Boolean) && (
+              <button
+                className="sr-mini sr-master-btn"
+                disabled={mastering}
+                onClick={() => void masterCut()}
+                data-testid="master-cut"
+              >
+                {mastering ? <Loader2 size={13} className="rc-spin" /> : <Clapperboard size={13} />}
+                Master cut ({Object.values(masterSel).filter(Boolean).length}) — strongest models
+              </button>
+            )}
             {dirty && (
               <button
                 className="sr-mini"
@@ -218,7 +255,18 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
           </div>
           <div className="sr-film-shots">
             {rows.map(({ sh, sceneId, i, len }, k) => (
-              <div className="sr-filmshot" key={sh.id}>
+              <div className="sr-filmshot-wrap" key={sh.id}>
+              <div className="sr-filmshot">
+                <label className="sr-master-check" title="Select for master cut">
+                  <input
+                    type="checkbox"
+                    checked={!!masterSel[sh.id]}
+                    aria-label={`Select shot ${k + 1} for master cut`}
+                    onChange={(e) =>
+                      setMasterSel((m) => ({ ...m, [sh.id]: e.target.checked }))
+                    }
+                  />
+                </label>
                 <div className="sr-filmshot-thumb">
                   {sh.asset_id ? (
                     <video
@@ -238,6 +286,18 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
                     {sh.shot_type.replace("_", " ")}
                     {typeof sh.critic_score === "number" &&
                       ` · ${sh.critic_score.toFixed(2)}`}
+                    {(sh.takes?.length ?? 0) > 0 && (
+                      <button
+                        className="sr-takes-toggle"
+                        onClick={() =>
+                          setOpenTakes((o) => ({ ...o, [sh.id]: !o[sh.id] }))
+                        }
+                        data-testid={`toggle-takes-${sh.id}`}
+                      >
+                        · {sh.takes!.length} take{sh.takes!.length === 1 ? "" : "s"}{" "}
+                        {openTakes[sh.id] ? "▾" : "▸"}
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="sr-filmshot-tools">
@@ -275,8 +335,20 @@ export function FilmStage({ ctl, exportAssetId, onOpenProduction }: FilmStagePro
                   ) : (
                     <RotateCw size={13} />
                   )}
-                  Regenerate
+                  Retake
                 </button>
+              </div>
+              {openTakes[sh.id] && (
+                <TakePicker
+                  production={p}
+                  shot={sh}
+                  pricing={pricing}
+                  onChanged={(next) => {
+                    ctl.set(next);
+                    setDirty(true); // a new choice wants a free re-render
+                  }}
+                />
+              )}
               </div>
             ))}
           </div>

@@ -232,12 +232,52 @@ export const api = {
   nextEpisode: (id: string) =>
     request<Production>(`/productions/${id}/next-episode`, { method: "POST" }),
 
-  /** Approve the plan. With shotIds it's a PILOT: film only those, no final render. */
-  produce: (id: string, shotIds: string[] = []) =>
+  /**
+   * Approve the plan. scopeIds = pilot (film only these, no render); forceIds =
+   * re-film shots that already have a chosen take (explicit only). Legacy shotIds
+   * kept as scope for compat.
+   */
+  produce: (
+    id: string,
+    shotIds: string[] = [],
+    opts: { forceIds?: string[]; master?: boolean; render?: boolean } = {},
+  ) =>
     request<{ job_id: string }>(`/productions/${id}/produce`, {
+      method: "POST",
+      body: {
+        scope_ids: shotIds,
+        force_ids: opts.forceIds ?? [],
+        master: opts.master ?? false,
+        render: opts.render ?? null,
+      },
+    }),
+
+  /** THE PICKER: make this take the shot's video source (export re-render ≈free). */
+  chooseTake: (id: string, sid: string, takeId: string) =>
+    request<Production>(`/productions/${id}/shots/${sid}/take`, {
+      method: "POST",
+      body: { take_id: takeId },
+    }),
+
+  /** MASTER CUT: re-film selected shots on the strongest models; takes append
+   *  UNCHOSEN — the picker compares and chooses. */
+  masterCut: (id: string, shotIds: string[]) =>
+    request<{ job_id: string }>(`/productions/${id}/master-cut`, {
       method: "POST",
       body: { shot_ids: shotIds },
     }),
+
+  /** THE ANIMATIC: the whole film from board stills + real voices — $0 video. */
+  animatic: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/animatic`, { method: "POST" }),
+
+  /** Voice casting roster + audition (speaks one of the character's real lines). */
+  listVoices: () => request<{ name: string; blurb: string }[]>("/voices"),
+  audition: (id: string, cid: string, voice: string) =>
+    request<{ asset_id: string; line: string; voice: string }>(
+      `/productions/${id}/characters/${cid}/audition`,
+      { method: "POST", body: { voice } },
+    ),
 
   /** Editable price table (USD estimates) for the run sheet's money view. */
   getPricing: () => request<Pricing>("/pricing"),

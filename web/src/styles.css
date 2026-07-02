@@ -424,6 +424,37 @@ html,body{background:#0b0a0f;}
 .sr-testmode{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:12.5px;color:var(--soft);cursor:pointer;user-select:none;}
 .sr-tableread{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-weight:400;}
 .sr-castall-bar{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:rgba(123,92,255,.05);}
+/* voice casting chips */
+.sr-voice-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:2px 0 8px;}
+.sr-voice-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);}
+/* animatic */
+.sr-animatic-bar{display:flex;align-items:center;gap:11px;margin:0 0 12px;padding:10px 13px;border:1px solid rgba(15,181,166,.35);border-radius:11px;background:rgba(15,181,166,.07);color:var(--soft);font-size:12.5px;}
+.sr-animatic-player{margin:0 0 14px;display:flex;justify-content:center;}
+.sr-animatic-player video{width:280px;aspect-ratio:9/16;border-radius:14px;background:#000;border:1px solid var(--line);}
+/* take picker — the fidelity contract's UI */
+.sr-filmshot-wrap{display:flex;flex-direction:column;gap:6px;}
+.sr-master-check{display:flex;align-items:center;padding:0 2px;}
+.sr-master-check input{accent-color:var(--violet);}
+.sr-master-btn{margin-left:10px;background:#d9a24b;color:#1a1408;}
+.rc-root .sr-master-btn{color:#1a1408;}
+.sr-takes-toggle{font-family:var(--mono);font-size:10.5px;color:var(--violet);margin-left:4px;}
+.sr-takes{border:1px solid var(--line);border-radius:11px;padding:10px;background:rgba(255,255,255,.02);display:flex;flex-direction:column;gap:9px;}
+.sr-take-strip{display:flex;gap:9px;overflow-x:auto;padding-bottom:4px;}
+.sr-take{flex:0 0 108px;display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);border-radius:9px;padding:5px;}
+.sr-take.is-chosen{border-color:var(--violet);box-shadow:0 0 0 1px var(--violet);}
+.sr-take video{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:6px;background:#000;cursor:pointer;}
+.sr-take-meta{display:flex;gap:5px;flex-wrap:wrap;font-family:var(--mono);font-size:9px;color:var(--soft);}
+.sr-take-model{color:var(--violet);}
+.sr-take-stale{color:#1a1408;background:#d9a24b;border-radius:4px;padding:0 4px;}
+.sr-take-actions{display:flex;gap:4px;}
+.sr-take-actions .sr-mini.sm{padding:3px 7px;font-size:10px;}
+.sr-take-actions .ghost{background:transparent;border:1px solid var(--line);color:var(--soft);}
+.sr-take-actions .ghost.on{border-color:var(--violet);color:var(--violet);}
+.sr-take-compare{display:flex;gap:10px;justify-content:center;}
+.sr-take-compare-cell{display:flex;flex-direction:column;gap:6px;align-items:center;}
+.sr-take-compare-cell video{width:200px;aspect-ratio:9/16;border-radius:10px;background:#000;}
+.sr-take-compare-meta{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--soft);}
+.sr-gate-hint{font-family:var(--ui);font-size:10.5px;color:var(--soft);text-transform:none;letter-spacing:0;}
 .sr-castall-bar .rc-note{font-size:12px;}
 .sr-tr-now{font-size:12px;color:var(--soft);max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sr-tr-now b{color:var(--violet);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;margin-right:5px;}

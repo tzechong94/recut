@@ -196,14 +196,16 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
             <label className="sr-gate-control">
               Video quality
               <select
-                value={p.video_quality ?? "final"}
-                aria-label="Video quality"
+                value={p.video_quality === "ship" ? "ship" : "draft"}
+                aria-label="Mode"
                 onChange={(e) => ctl.update({ ...p, video_quality: e.target.value })}
               >
-                <option value="final">Final — Wan i2v plus</option>
-                <option value="draft">Draft — Wan flash, ~5× cheaper rehearsal</option>
-                <option value="happyhorse">HappyHorse — speaks with lip-sync, 15s shots</option>
+                <option value="draft">Draft — silent shots on Wan flash (cheap rehearsal)</option>
+                <option value="ship">Ship — silent shots on Wan plus (full quality)</option>
               </select>
+              <span className="sr-gate-hint">
+                dialogue always speaks — your cast voices, lip-synced
+              </span>
             </label>
             <label className="sr-gate-control">
               Pilot
@@ -358,52 +360,68 @@ function RunSheet({
 }) {
   const all = p.scenes.flatMap((s) => s.shots);
   const target = pilotN > 0 ? all.slice(0, pilotN) : all;
-  const toFilm = target.filter((s) => !s.asset_id);
+  // THE CONTRACT: shots with a chosen take are NEVER re-filmed by this run
+  const kept = target.filter((s) => s.chosen_take_id);
+  const toFilm = target.filter((s) => !s.chosen_take_id);
+  const speakingShots = toFilm.filter((s) => s.dialogue.some((d) => d.line.trim()));
+  const silentShots = toFilm.filter((s) => !s.dialogue.some((d) => d.line.trim()));
   const stills = all.filter((s) => s.keyframe_asset_id || s.keyframe_url).length;
   const gated = all.filter((s) => s.keyframe_score != null).length;
-  const spoken = all.filter((s) => s.dialogue.length > 0 || s.narration).length;
-  const seconds = toFilm.reduce((a, s) => a + s.duration_s, 0);
-  const quality = p.video_quality ?? "final";
-  const draft = quality === "draft";
-  const rate = pricing
-    ? quality === "draft"
-      ? pricing.video_second_draft
-      : quality === "happyhorse"
-        ? (pricing.video_second_happyhorse ?? pricing.video_second_final)
-        : pricing.video_second_final
-    : null;
-  const videoUsd = rate != null ? seconds * rate : null;
-  const voiceUsd = pricing ? (spoken * 60 * pricing.voice_1k) / 1000 : null;
-  const minutes = Math.max(2, Math.ceil(toFilm.length * (draft ? 1.5 : 3)));
-  const usd = (v: number | null) => (v == null ? "" : `≈$${v.toFixed(2)} · `);
+  const draft = (p.video_quality ?? "draft") !== "ship";
+  const speakRate = pricing ? (pricing.video_second_happyhorse ?? pricing.video_second_final) : null;
+  const silentRate = pricing ? (draft ? pricing.video_second_draft : pricing.video_second_final) : null;
+  const speakSecs = speakingShots.reduce((a, s) => a + s.duration_s, 0);
+  const silentSecs = silentShots.reduce((a, s) => a + s.duration_s, 0);
+  const speakUsd = speakRate != null ? speakSecs * speakRate : null;
+  const silentUsd = silentRate != null ? silentSecs * silentRate : null;
+  const voiceUsd = pricing ? (speakingShots.length * 60 * pricing.voice_1k) / 1000 : null;
+  const minutes = Math.max(2, Math.ceil(speakingShots.length * 3 + silentShots.length * (draft ? 1.5 : 3)));
+  const usd = (v: number | null) => (v == null ? "" : `≈$${v.toFixed(2)}`);
   return (
     <div className="sr-runsheet" data-testid="run-sheet">
       <div className="sr-rs-row is-done">
         <span>{stills}/{all.length} board stills composed{gated ? ` · ${gated} gated by the critic` : ""}</span>
         <b>already spent (image)</b>
       </div>
+      {kept.length > 0 && (
+        <div className="sr-rs-row is-done">
+          <span>{kept.length} shot{kept.length === 1 ? "" : "s"} keep their APPROVED takes — never re-filmed</span>
+          <b>$0 · the contract</b>
+        </div>
+      )}
       <div className="sr-rs-line" aria-hidden="true" />
+      {speakingShots.length > 0 && (
+        <div className="sr-rs-row">
+          <span>
+            {speakingShots.length} speaking shot{speakingShots.length === 1 ? "" : "s"} — wan2.6 i2v, YOUR cast
+            voices lip-synced (both modes)
+          </span>
+          <b>{usd(speakUsd)}</b>
+        </div>
+      )}
+      {silentShots.length > 0 && (
+        <div className="sr-rs-row">
+          <span>
+            {silentShots.length} silent/action shot{silentShots.length === 1 ? "" : "s"} — Wan {draft ? "flash (DRAFT)" : "plus (SHIP)"}
+          </span>
+          <b>{usd(silentUsd)}</b>
+        </div>
+      )}
       <div className="sr-rs-row">
-        <span>
-          {toFilm.length} × {quality === "happyhorse" ? "HappyHorse i2v (SPEAKS with lip-sync)" : `Wan i2v (${draft ? "DRAFT — flash" : "FINAL — plus"})`} — animate your approved frames
-        </span>
-        <b>{usd(videoUsd)}{Math.round(seconds * 1.8)}k video tokens (est.)</b>
-      </div>
-      <div className="sr-rs-row">
-        <span>Qwen-VL critic verifies every shot against its approved still</span>
+        <span>Qwen-VL critic verifies every new take against its approved still</span>
         <b>re-rolls bounded: ≤2 per drifted shot</b>
       </div>
       <div className="sr-rs-row">
-        <span>{spoken} spoken shot{spoken === 1 ? "" : "s"} — qwen3-tts in character voices</span>
-        <b>{usd(voiceUsd)}voice (tiny)</b>
+        <span>Character voices — qwen3-tts (embedded + lip-synced on speaking shots)</span>
+        <b>{usd(voiceUsd)} voice (tiny)</b>
       </div>
       <div className="sr-rs-row">
         <span>Assemble: music bed, captions, title cards, ffmpeg render</span>
         <b>$0 · 0 model tokens</b>
       </div>
       <div className="sr-rs-total">
-        {videoUsd != null && (
-          <b>total ≈${(videoUsd + (voiceUsd ?? 0)).toFixed(2)}</b>
+        {(speakUsd != null || silentUsd != null) && (
+          <b>total ≈${((speakUsd ?? 0) + (silentUsd ?? 0) + (voiceUsd ?? 0)).toFixed(2)}</b>
         )}
         <span> · ≈{minutes} min{pilotN > 0 ? ` · pilot: first ${pilotN} shots only` : ""} · prices editable in settings</span>
       </div>

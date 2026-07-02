@@ -38,8 +38,7 @@ describe("ProduceStage", () => {
     const prod = makeProduction({ stage: "storyboard" });
     render(<ProduceStage ctl={ctlFor(prod)} onAdvance={vi.fn()} />);
     const sheet = screen.getByTestId("run-sheet");
-    expect(sheet).toHaveTextContent(/1 × Wan i2v/i);
-    expect(sheet).toHaveTextContent(/video tokens \(est\.\)/i);
+    expect(sheet).toHaveTextContent(/silent\/action shot/i);  // model-grouped rows
     expect(sheet).toHaveTextContent(/0 model tokens/i);
     expect(
       screen.getByRole("button", { name: /Action — approve the plan/i }),

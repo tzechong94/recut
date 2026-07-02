@@ -30,6 +30,8 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [castingAll, setCastingAll] = useState(false);
+  const [voices, setVoices] = useState<{ name: string; blurb: string }[]>([]);
+  const [auditioning, setAuditioning] = useState<string | null>(null);
   const [styleOptions, setStyleOptions] = useState<string[]>(FALLBACK_STYLE_OPTIONS);
   const alive = useRef(true);
   // StrictMode remounts share the ref — reset to true on (re)mount or the false
@@ -43,7 +45,26 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
     api.listStyles()
       .then((s) => s.length && setStyleOptions(s.map((x) => x.name)))
       .catch(() => {});
+    api.listVoices().then(setVoices).catch(() => {});
   }, []);
+
+  /** VOICE CASTING: audition speaks one of the character's real lines in that voice
+   *  — and with input-audio dialogue, the voice you pick IS the film voice. */
+  async function auditionVoice(cid: string, voice: string) {
+    setAuditioning(`${cid}:${voice}`);
+    try {
+      const r = await api.audition(p.id, cid, voice);
+      new Audio(assetRawUrl(r.asset_id)).play().catch(() => {});
+      ctl.update({
+        ...p,
+        characters: p.characters.map((c) => (c.id === cid ? { ...c, voice } : c)),
+      });
+    } catch (e) {
+      setErrors((er) => ({ ...er, [cid]: e instanceof Error ? e.message : "Audition failed" }));
+    } finally {
+      setAuditioning(null);
+    }
+  }
 
   /** One look for the whole bible: the first reference (or the custom style image)
    *  anchors every other one. References stream in as the job saves per item. */
@@ -226,6 +247,24 @@ export function CastStage({ ctl, onAdvance }: StageProps) {
                 characters: updateChar(p.characters, c.id, { name: v }),
               })
             }
+            voiceRow={
+              voices.length > 0 ? (
+                <div className="sr-voice-row" data-testid={`voices-${c.id}`}>
+                  <span className="sr-voice-label">voice</span>
+                  {voices.map((v) => (
+                    <button
+                      key={v.name}
+                      className={"sr-chip" + (c.voice === v.name ? " is-on" : "")}
+                      title={`${v.blurb} — click to hear ${c.name}'s line`}
+                      disabled={auditioning === `${c.id}:${v.name}`}
+                      onClick={() => void auditionVoice(c.id, v.name)}
+                    >
+                      {auditioning === `${c.id}:${v.name}` ? "…" : v.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null
+            }
           />
         ))}
       </div>
@@ -296,6 +335,7 @@ interface RefCardProps {
   onGenerate: (instruction: string) => void;
   onUpload: (file: File) => void;
   onRename: (name: string) => void;
+  voiceRow?: React.ReactNode;
 }
 
 function RefCard({
@@ -309,6 +349,7 @@ function RefCard({
   onGenerate,
   onUpload,
   onRename,
+  voiceRow,
 }: RefCardProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [note, setNote] = useState("");
@@ -345,6 +386,7 @@ function RefCard({
         aria-label={`${kind} name`}
       />
       <p className="sr-bible-desc">{description}</p>
+      {voiceRow}
 
       {error && <div className="rc-err">{error}</div>}
 
