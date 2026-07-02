@@ -84,6 +84,36 @@ def test_cancel_keeps_finished_shots_and_returns_partial(client, monkeypatch):
     assert any("stopped by you" in w for w in updated.warnings)
 
 
+def test_retake_with_note_refilms_only_that_shot_and_carries_the_note(client, monkeypatch):
+    p = _seed()
+    # pilot pass films the first shot
+    first = p.shots[0].id
+    client.post(f"/api/productions/{p.id}/produce", json={"shot_ids": [first]})
+    process_once(build_context())
+    assert repo.get_production(p.id).find_shot(first).asset_id
+
+    # the director retakes it with a note; capture the prompt the video model sees
+    ctx = build_context()
+    prompts: list[str] = []
+    orig = ctx.models.video.generate_from_image
+
+    def rec(url, prompt, **kw):
+        prompts.append(prompt)
+        return orig(url, prompt, **kw)
+
+    ctx.models.video.generate_from_image = rec
+    r = client.post(f"/api/productions/{p.id}/shots/{first}/regenerate",
+                    json={"instruction": "slower, hold on her face"})
+    assert r.status_code == 202
+    process_once(ctx)
+    job = client.get(f"/api/jobs/{r.json()['job_id']}").json()
+    assert job["status"] == "done" and job["result"].get("pilot") is True  # no render pre-export
+    updated = repo.get_production(p.id)
+    assert updated.find_shot(first).asset_id  # re-filmed
+    assert sum(1 for s in updated.shots if s.asset_id) == 1  # ONLY that shot
+    assert any("hold on her face" in pr for pr in prompts)  # the note rode the prompt
+
+
 def test_cancel_endpoint_flags_a_running_job(client):
     p = _seed()
     job_id = client.post(f"/api/productions/{p.id}/produce", json={}).json()["job_id"]

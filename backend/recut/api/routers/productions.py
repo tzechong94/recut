@@ -438,8 +438,14 @@ def produce(pid: str, body: ProduceRequest | None = None) -> dict:
     return {"job_id": job_id, "status": "queued"}
 
 
+class RetakeRequest(BaseModel):
+    instruction: str = ""  # the director's note ("slower, hold on her face")
+
+
 @router.post("/productions/{pid}/shots/{sid}/regenerate", status_code=202)
-def regenerate_shot(pid: str, sid: str) -> dict:
+def regenerate_shot(pid: str, sid: str, body: RetakeRequest | None = None) -> dict:
+    """Retake ONE shot, optionally steered by a note. Before the film has rendered
+    (pilot phase) only that shot is re-filmed — no render; after, the film re-renders."""
     prod = repo.get_production(pid)
     if not prod:
         raise HTTPException(404, "production not found")
@@ -449,10 +455,14 @@ def regenerate_shot(pid: str, sid: str) -> dict:
     shot.asset_id = None
     shot.source = AssetSource.standin
     shot.status = shot.status.__class__.planned
-    if prod.export_asset_id:
+    pilot_phase = prod.export_asset_id is None
+    if not pilot_phase:
         prod.version += 1  # the retake re-renders into a fresh film file
     repo.save_production(prod)
-    job_id = queue.enqueue("produce_film", {"production_id": pid}, project_id=prod.project_id)
+    note = (body.instruction.strip() if body else "")
+    payload = {"production_id": pid, "notes": ({sid: note} if note else {}),
+               "shot_ids": ([sid] if pilot_phase else [])}
+    job_id = queue.enqueue("produce_film", payload, project_id=prod.project_id)
     return {"job_id": job_id, "status": "queued"}
 
 

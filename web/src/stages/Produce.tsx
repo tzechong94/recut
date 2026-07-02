@@ -8,7 +8,7 @@ import {
   Square,
   XCircle,
 } from "lucide-react";
-import { api } from "../api/client";
+import { api, assetRawUrl } from "../api/client";
 import { pollJob } from "../lib/jobs";
 import type { UseProduction } from "../lib/useProduction";
 import type {
@@ -221,10 +221,22 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
           <RunSheet production={p} pricing={pricing} pilotN={pilotN} />
 
           {ready > 0 && (
-            <div className="sr-shotlist sr-pilot-list" data-testid="pilot-shots">
-              {shots.filter((s) => s.asset_id).map((sh, i) => (
-                <ShotStatusRow key={sh.id} shot={sh} index={i} production={p} />
-              ))}
+            <div className="sr-pilot-review" data-testid="pilot-shots">
+              <div className="sr-pilot-review-head">
+                Watch the {ready} filmed shot{ready === 1 ? "" : "s"} — retake any
+                with a note before committing the rest
+              </div>
+              {shots.map((sh, i) =>
+                sh.asset_id ? (
+                  <PilotShot
+                    key={sh.id}
+                    shot={sh}
+                    index={i}
+                    productionId={p.id}
+                    onDone={() => void ctl.refetch()}
+                  />
+                ) : null,
+              )}
             </div>
           )}
 
@@ -386,6 +398,70 @@ function RunSheet({
           <b>total ≈${(videoUsd + (voiceUsd ?? 0)).toFixed(2)}</b>
         )}
         <span> · ≈{minutes} min{pilotN > 0 ? ` · pilot: first ${pilotN} shots only` : ""} · prices editable in settings</span>
+      </div>
+    </div>
+  );
+}
+
+/** One filmed pilot shot: WATCH it, then retake with a director's note. */
+function PilotShot({
+  shot,
+  index,
+  productionId,
+  onDone,
+}: {
+  shot: Shot;
+  index: number;
+  productionId: string;
+  onDone: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function retake() {
+    setBusy(true);
+    try {
+      const { job_id } = await api.regenerateShot(productionId, shot.id, note.trim());
+      await pollJob(job_id, { timeoutMs: 15 * 60 * 1000 });
+      setNote("");
+      onDone();
+    } catch {
+      /* row resets; user can retry */
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sr-pilotshot">
+      <video
+        className="sr-pilotshot-video"
+        src={assetRawUrl(shot.asset_id!)}
+        controls
+        playsInline
+        preload="metadata"
+      />
+      <div className="sr-pilotshot-body">
+        <div className="sr-pilotshot-title">Shot {index + 1}</div>
+        <div className="sr-pilotshot-action">{shot.action}</div>
+        {typeof shot.critic_score === "number" && (
+          <div className="sr-pilotshot-meta">consistency {shot.critic_score.toFixed(2)}</div>
+        )}
+        <input
+          className="sr-edit sr-pilotshot-note"
+          value={note}
+          disabled={busy}
+          placeholder="Retake note — “slower, hold on her face”"
+          aria-label={`Retake note for shot ${index + 1}`}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !busy) void retake();
+          }}
+        />
+        <button className="sr-mini" disabled={busy} onClick={() => void retake()}>
+          {busy ? <Loader2 size={13} className="rc-spin" /> : <Film size={13} />}
+          {busy ? "Retaking…" : "Retake this shot"}
+        </button>
       </div>
     </div>
   );

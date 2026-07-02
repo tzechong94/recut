@@ -245,10 +245,14 @@ export const api = {
   /** Cooperative stop: the worker keeps everything finished so far. */
   cancelJob: (jobId: string) =>
     request<{ cancelling: boolean }>(`/jobs/${jobId}/cancel`, { method: "POST" }),
-  regenerateShot: (id: string, sid: string) =>
+  /**
+   * Retake ONE shot, optionally steered by a director's note ("slower, hold on
+   * her face"). Pre-render (pilot phase) only that shot re-films — no render.
+   */
+  regenerateShot: (id: string, sid: string, instruction = "") =>
     request<{ job_id: string }>(
       `/productions/${id}/shots/${sid}/regenerate`,
-      { method: "POST" },
+      { method: "POST", body: { instruction } },
     ),
 
   getTimeline: (id: string) =>

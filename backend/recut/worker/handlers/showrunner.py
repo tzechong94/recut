@@ -369,14 +369,15 @@ def _project_cap(prod, ctx) -> int:
 MAX_ATTEMPTS = 3  # 1 initial + up to 2 re-rolls (bounded so the critic can't blow the budget)
 
 
-def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None) -> tuple[bytes, str, str, int, float | None, int, int]:
+def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None, user_note: str = "") -> tuple[bytes, str, str, int, float | None, int, int]:
     """Generate a shot, scoring each attempt against its reference and re-rolling drift
-    with a NEW seed + the critic's corrective note. Returns the BEST attempt
+    with a NEW seed + the critic's corrective note. `user_note` is the director's retake
+    comment — it rides EVERY attempt's prompt. Returns the BEST attempt
     (bytes, mime, tool, video_tokens, best_score, rerolls, keyframe_image_tokens)."""
     import hashlib
 
     best = None  # (score, bytes, mime, tool, tokens)
-    corrective = ""
+    corrective = user_note.strip()
     rerolls = 0
     kf_tokens = 0  # keyframe image-gen tokens spent across attempts (honest accounting)
     for attempt in range(MAX_ATTEMPTS):
@@ -396,7 +397,8 @@ def _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url=None) -> tup
             if kf:
                 verdict = ctx.models.vision.score_consistency(render.reference_url, kf)
                 score = verdict.score
-                corrective = verdict.reason or corrective
+                if verdict.reason:  # the director's note stays; the critic's reason joins it
+                    corrective = "; ".join(x for x in (user_note.strip(), verdict.reason) if x)
         # keep the best-scoring attempt (None score sorts low so a scored attempt wins)
         rank = score if score is not None else -1.0
         if best is None or rank > best[0]:
@@ -424,6 +426,7 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         s2 = ctx.settings.model_copy(update={"wan_i2v_model": ctx.settings.wan_i2v_draft_model})
         ctx = replace(ctx, settings=s2, models=get_models(s2))
     pilot = set(job.payload.get("shot_ids") or [])  # non-empty = film ONLY these
+    notes = job.payload.get("notes") or {}  # director's retake comments, per shot id
     shots = prod.shots
     total = len(shots) or 1
     cap = _project_cap(prod, ctx)
@@ -468,7 +471,8 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         shot.status = ShotStatus.generating
         repo.save_production(prod)
 
-        data, mime, tool, tokens, score, rerolls, kf_tokens = _generate_shot_best_of(prod, shot, ctx, src_dir, prev_frame_url)
+        data, mime, tool, tokens, score, rerolls, kf_tokens = _generate_shot_best_of(
+            prod, shot, ctx, src_dir, prev_frame_url, user_note=notes.get(shot.id, ""))
         prod.token_ledger.image_tokens += kf_tokens  # keyframe composition is real spend
         ext = "png" if mime.startswith("image") else "mp4"
         key = f"productions/{prod.id}/shots/{shot.id}_{content_hash(data)}.{ext}"
