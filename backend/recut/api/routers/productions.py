@@ -34,25 +34,13 @@ from recut.showrunner.schemas import AssetSource, Production, STYLE_PRESETS, Sta
 router = APIRouter(prefix="/api", tags=["showrunner"])
 
 
-# Newer presets use free online reference images (CC via loremflickr) — zero image-gen
-# credits spent on the picker. The original six keep their local pre-generated stills.
-_PRESET_IMAGES = {
-    "ink_wash": "https://loremflickr.com/320/480/ink,painting",
-    "comic": "https://loremflickr.com/320/480/comic,art",
-    "pixel": "https://loremflickr.com/320/480/pixel,art",
-    "cyberpunk": "https://loremflickr.com/320/480/neon,night,city",
-    "retro_film": "https://loremflickr.com/320/480/vintage,analog,film",
-    "paper_craft": "https://loremflickr.com/320/480/papercraft,origami",
-}
-
-
 @router.get("/styles")
 def list_styles() -> list[dict]:
-    # `image` shows the actual look, not just a word: local pre-generated stills for the
-    # original presets, free online references for the newer ones.
+    # `image` is a fixed, pre-generated reference still per style (served by the web app
+    # from /public/styles/) — every card shows the SAME scene (figure, umbrella, rain-lit
+    # street) rendered in that style, so the picker communicates the look, not the word.
     return [
-        {"name": s.name, "descriptors": s.descriptors, "palette": s.palette,
-         "image": _PRESET_IMAGES.get(s.name, f"/styles/{s.name}.jpg")}
+        {"name": s.name, "descriptors": s.descriptors, "palette": s.palette, "image": f"/styles/{s.name}.jpg"}
         for s in STYLE_PRESETS.values()
     ]
 
