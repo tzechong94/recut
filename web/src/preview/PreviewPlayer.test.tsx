@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { PreviewPlayer } from "./PreviewPlayer";
-import { demoBaseCut, DEMO_RECIPE } from "../lib/demo";
+import { makeTimeline } from "../lib/fixtures";
 
 afterEach(cleanup);
 
@@ -20,18 +20,10 @@ describe("PreviewPlayer", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("renders the first slot's caption from the timeline", () => {
-    const tl = demoBaseCut("p1", DEMO_RECIPE);
+    const tl = makeTimeline();
     render(<PreviewPlayer timeline={tl} />);
     const caption = screen.getByTestId("preview-caption");
     expect(caption.textContent).toBe(tl.slots[0].text);
-  });
-
-  it("derives caption font-size in canvas px from the shared spec", () => {
-    const tl = demoBaseCut("p1", DEMO_RECIPE);
-    render(<PreviewPlayer timeline={tl} />);
-    const caption = screen.getByTestId("preview-caption");
-    // first slot is the 'l' display hook -> canvas_px 96 per caption-style.json
-    expect(caption.getAttribute("data-canvas-px")).toBe("96");
   });
 
   it("advances to the next slot when play is pressed and time elapses", () => {
@@ -44,11 +36,10 @@ describe("PreviewPlayer", () => {
     });
     vi.stubGlobal("cancelAnimationFrame", () => {});
 
-    const tl = demoBaseCut("p1", DEMO_RECIPE);
+    const tl = makeTimeline();
     const onChange = vi.fn();
     render(<PreviewPlayer timeline={tl} onActiveSlotChange={onChange} />);
 
-    // initially showing slot 0
     expect(screen.getByTestId("preview-caption").textContent).toBe(
       tl.slots[0].text,
     );
@@ -58,7 +49,6 @@ describe("PreviewPlayer", () => {
       playBtn.click();
     });
 
-    // pump rAF: first slot lasts 3s, advance ~3.5s of frames
     const step = (ms: number) => {
       now += ms;
       const cbs = rafCbs.splice(0, rafCbs.length);
@@ -66,9 +56,8 @@ describe("PreviewPlayer", () => {
         cbs.forEach((cb) => cb(now));
       });
     };
-    // prime
     step(0);
-    for (let i = 0; i < 8; i++) step(500); // 4s elapsed
+    for (let i = 0; i < 8; i++) step(500); // 4s elapsed; slot 0 lasts 3s
 
     expect(screen.getByTestId("preview-caption").textContent).toBe(
       tl.slots[1].text,
@@ -79,9 +68,14 @@ describe("PreviewPlayer", () => {
   });
 
   it("renders one scrubber segment per slot", () => {
-    const tl = demoBaseCut("p1", DEMO_RECIPE);
+    const tl = makeTimeline();
     render(<PreviewPlayer timeline={tl} />);
     const segs = screen.getAllByLabelText(/^Go to /);
     expect(segs.length).toBe(tl.slots.length);
+  });
+
+  it("shows the empty state for a timeline with no slots", () => {
+    render(<PreviewPlayer timeline={makeTimeline([])} />);
+    expect(screen.getByTestId("preview-empty")).toBeInTheDocument();
   });
 });

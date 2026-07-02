@@ -7,7 +7,7 @@ is trivially scopeable by a future tenant_id.
 
 from __future__ import annotations
 
-from recut.core.db import Asset, Job, Project, RecipeRow, TimelineRow, session_scope
+from recut.core.db import Asset, Job, ProductionRow, Project, RecipeRow, TimelineRow, session_scope
 from recut.core.schemas import Recipe, Timeline
 
 
@@ -164,6 +164,70 @@ def get_timeline(timeline_id: str) -> Timeline | None:
     with session_scope() as s:
         r = s.get(TimelineRow, timeline_id)
         return Timeline.model_validate(r.doc) if r else None
+
+
+# --------------------------------------------------------------------------- #
+#  Productions (the AI Showrunner film document)                               #
+# --------------------------------------------------------------------------- #
+def save_production(production) -> object:
+    """Persist a Production (recut.showrunner.schemas.Production) as a JSON document."""
+    from recut.showrunner.schemas import Production
+
+    assert isinstance(production, Production)
+    with session_scope() as s:
+        existing = s.get(ProductionRow, production.id)
+        doc = production.model_dump(mode="json")
+        if existing:
+            existing.doc = doc
+            existing.title = production.title
+            existing.stage = production.stage.value
+        else:
+            s.add(ProductionRow(
+                id=production.id, project_id=production.project_id, title=production.title,
+                stage=production.stage.value, doc=doc,
+            ))
+        return production
+
+
+def get_production(production_id: str):
+    from recut.showrunner.schemas import Production
+
+    with session_scope() as s:
+        r = s.get(ProductionRow, production_id)
+        return Production.model_validate(r.doc) if r else None
+
+
+def list_productions() -> list[dict]:
+    """Compact gallery summaries. Includes what a home-screen card needs: logline,
+    episode number, test-mode flag, and a COVER (the first shot-board still, so the
+    gallery shows the film's actual look, not an icon)."""
+    with session_scope() as s:
+        rows = s.query(ProductionRow).order_by(ProductionRow.updated_at.desc()).all()
+        out = []
+        for r in rows:
+            doc = r.doc or {}
+            shots = [sh for sc in doc.get("scenes", []) for sh in sc.get("shots", [])]
+            cover = next((sh.get("keyframe_asset_id") for sh in shots if sh.get("keyframe_asset_id")), None)
+            out.append({
+                "id": r.id, "title": r.title, "stage": r.stage, "updated_at": r.updated_at,
+                "logline": doc.get("logline", ""),
+                "style": (doc.get("style") or {}).get("name", ""),
+                "episode": doc.get("episode", 1),
+                "test_mode": doc.get("test_mode", False),
+                "cover_asset_id": cover,
+                "export_asset_id": doc.get("export_asset_id"),
+                "n_shots": len(shots),
+            })
+        return out
+
+
+def delete_production(production_id: str) -> bool:
+    with session_scope() as s:
+        r = s.get(ProductionRow, production_id)
+        if not r:
+            return False
+        s.delete(r)
+        return True
 
 
 def latest_timeline_for_project(project_id: str) -> Timeline | None:

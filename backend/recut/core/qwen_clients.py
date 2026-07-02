@@ -18,6 +18,7 @@ from typing import Callable, TypeVar
 
 from recut.core.config import Settings
 from recut.core.models import (
+    ConsistencyVerdict,
     GenAsset,
     ImageGen,
     ModelClients,
@@ -47,16 +48,61 @@ def _retry(fn: Callable[[], T], *, attempts: int = 3, base_delay: float = 1.0) -
     raise last
 
 
-def _extract_json(text: str) -> dict:
-    """Pull the first JSON object out of an LLM response, tolerating code fences."""
+# wan2.2-t2i-flash accepts a fixed set of sizes; 1080*1920 is NOT one of them (returns
+# empty). Snap requested dims to the nearest supported size by aspect ratio.
+_IMAGE_SIZES = {"portrait": "720*1280", "landscape": "1280*720", "square": "1024*1024"}
+
+
+def _snap_image_size(width: int, height: int) -> str:
+    if not width or not height:
+        return _IMAGE_SIZES["portrait"]
+    ar = width / height
+    if ar < 0.85:
+        return _IMAGE_SIZES["portrait"]
+    if ar > 1.18:
+        return _IMAGE_SIZES["landscape"]
+    return _IMAGE_SIZES["square"]
+
+
+def _json_objects(text: str) -> list[dict]:
+    """Every top-level JSON object in an LLM response, tolerating code fences, prose,
+    and NDJSON. Live qwen-max often stacks objects (one per line) instead of returning a
+    single wrapper, which makes a naive json.loads choke on 'Extra data'. We scan with
+    raw_decode so stacked/garnished output still parses."""
     t = text.strip()
     if t.startswith("```"):
         t = t.split("```", 2)[1]
         t = t[4:] if t.lower().startswith("json") else t
-    start, end = t.find("{"), t.rfind("}")
-    if start == -1 or end == -1:
+    dec = json.JSONDecoder()
+    out: list[dict] = []
+    i, n = 0, len(t)
+    while i < n:
+        brace = t.find("{", i)
+        if brace == -1:
+            break
+        try:
+            obj, end = dec.raw_decode(t, brace)
+        except json.JSONDecodeError:
+            i = brace + 1
+            continue
+        if isinstance(obj, dict):
+            out.append(obj)
+        i = end
+    return out
+
+
+def _extract_json(text: str) -> dict:
+    """The intended single JSON object from an LLM response. If the model stacked several
+    line-shaped objects (NDJSON) instead of the requested {"lines":[...]} wrapper, fold
+    them back into that wrapper so the dialogue pass survives; otherwise take the first."""
+    objs = _json_objects(text)
+    if not objs:
         raise ValueError("no JSON object in model response")
-    return json.loads(t[start : end + 1])
+    if len(objs) == 1:
+        return objs[0]
+    if all(("line" in o or "character" in o or "text" in o) for o in objs):
+        return {"lines": objs}
+    return objs[0]
 
 
 class QwenVision(VisionAnalyzer):
@@ -124,6 +170,108 @@ class QwenVision(VisionAnalyzer):
 
         return _retry(call)
 
+    def score_consistency(self, reference: str, candidate: str) -> ConsistencyVerdict:
+        """Qwen-VL compares the locked reference still to a generated shot's keyframe and
+        scores character/location consistency 0..1 with a reason. The reason feeds the
+        re-roll's corrective prompt. On failure: skip (None), never silently pass."""
+        import os
+
+        import dashscope
+
+        def uri(p: str) -> str:
+            return p if "://" in p else "file://" + os.path.abspath(p)
+
+        prompt = (
+            "Image 1 is a locked character/location reference. Image 2 is a frame from a "
+            "generated shot meant to depict the SAME subject. Return STRICT JSON "
+            '{"score": float 0..1, "reason": str} where score is how consistent the subject '
+            "identity, wardrobe, and art style are (1=identical, 0=totally different). The "
+            "reason must name the SPECIFIC drift (e.g. 'jacket changed from navy to red') so "
+            "it can be corrected."
+        )
+
+        def call() -> ConsistencyVerdict:
+            resp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_vl_model,
+                messages=[{"role": "user", "content": [{"image": uri(reference)}, {"image": uri(candidate)}, {"text": prompt}]}],
+            )
+            if getattr(resp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-vl consistency {getattr(resp,'code','?')}: {getattr(resp,'message',resp)}")
+            raw = resp["output"]["choices"][0]["message"]["content"]
+            text = raw if isinstance(raw, str) else " ".join(p.get("text", "") for p in raw if isinstance(p, dict))
+            data = _extract_json(text)
+            return ConsistencyVerdict(score=float(data.get("score", 0.0)), reason=str(data.get("reason", "")))
+
+        try:
+            return _retry(call, attempts=2)
+        except Exception:  # noqa: BLE001 — critic unavailable -> skip, do NOT fake-pass
+            return ConsistencyVerdict(score=None, reason="critic unavailable")
+
+    def describe_subject(self, image_ref: str) -> str:
+        """Compact identity anchors from a locked reference still — fed into every
+        keyframe compose so the edit model knows exactly what must not drift."""
+        import os
+
+        import dashscope
+
+        u = image_ref if "://" in image_ref else "file://" + os.path.abspath(image_ref)
+        prompt = (
+            "List the visual identity anchors of the main subject as a SHORT comma-separated "
+            "phrase list (max 6): distinctive facial features, hair, wardrobe items and colors, "
+            "accessories. No sentences, no commentary."
+        )
+
+        def call() -> str:
+            resp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_vl_model,
+                messages=[{"role": "user", "content": [{"image": u}, {"text": prompt}]}],
+            )
+            if getattr(resp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-vl subject {getattr(resp,'code','?')}: {getattr(resp,'message',resp)}")
+            raw = resp["output"]["choices"][0]["message"]["content"]
+            text = raw if isinstance(raw, str) else " ".join(p.get("text", "") for p in raw if isinstance(p, dict))
+            return text.strip().strip(".")[:220]
+
+        try:
+            return _retry(call, attempts=2)
+        except Exception:  # noqa: BLE001 — anchors are an enhancement, never fatal
+            return ""
+
+    def describe_style(self, image_refs: list[str], *, hint: str = "") -> dict:
+        """Distill the VISUAL STYLE of the reference image(s) into StyleLock fields.
+        Accepts hosted URLs or local paths (sent as file:// uploads)."""
+        import os
+
+        import dashscope
+
+        def uri(p: str) -> str:
+            return p if "://" in p else "file://" + os.path.abspath(p)
+
+        prompt = (
+            "Study these reference image(s) and distill their VISUAL STYLE (not their "
+            "subject matter) so an image model can reproduce the look. Return STRICT JSON "
+            '{"descriptors": str, "palette": str}. descriptors = comma-separated medium, '
+            "technique, lighting and texture cues (e.g. 'grainy 16mm film, warm halation, "
+            "handheld'); palette = the dominant color language. "
+            + (f"The user adds: {hint}" if hint else "")
+        )
+        content = [{"image": uri(p)} for p in image_refs] + [{"text": prompt}]
+
+        def call() -> dict:
+            resp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_vl_model,
+                messages=[{"role": "user", "content": content}],
+            )
+            if getattr(resp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-vl style {getattr(resp,'code','?')}: {getattr(resp,'message',resp)}")
+            raw = resp["output"]["choices"][0]["message"]["content"]
+            text = raw if isinstance(raw, str) else " ".join(p.get("text", "") for p in raw if isinstance(p, dict))
+            data = _extract_json(text)
+            return {"descriptors": str(data.get("descriptors", "")).strip(),
+                    "palette": str(data.get("palette", "")).strip()}
+
+        return _retry(call, attempts=2)
+
 
 class QwenTranscriber(Transcriber):
     def __init__(self, s: Settings):
@@ -183,10 +331,12 @@ class QwenVideoGen(VideoGen):
         import dashscope
         import httpx
 
+        kwargs = {"seed": seed} if seed else {}
+
         def call() -> GenAsset:
             rsp = dashscope.VideoSynthesis.call(
                 api_key=self.s.dashscope_api_key, model=self.s.wan_model, prompt=prompt,
-                size=self.s.wan_size,
+                size=self.s.wan_size, **kwargs,
             )
             if getattr(rsp, "status_code", 200) != 200:
                 raise RuntimeError(f"wan {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
@@ -195,6 +345,29 @@ class QwenVideoGen(VideoGen):
             url = getattr(out, "video_url", "") or ""
             if status != "SUCCEEDED" or not url:
                 raise RuntimeError(f"wan task {status}: {getattr(out, 'message', '') or 'no video_url'}")
+            data = httpx.get(url, timeout=180).content
+            return GenAsset(data=data, mime="video/mp4", duration_s=duration_s, tokens=int(duration_s * 1800))
+
+        return _retry(call, attempts=2, base_delay=3.0)
+
+    def generate_from_image(self, image_url: str, prompt: str, *, duration_s: float, seed: int = 0) -> GenAsset:
+        import dashscope
+        import httpx
+
+        kwargs = {"seed": seed} if seed else {}
+
+        def call() -> GenAsset:
+            rsp = dashscope.VideoSynthesis.call(
+                api_key=self.s.dashscope_api_key, model=self.s.wan_i2v_model, prompt=prompt,
+                img_url=image_url, **kwargs,
+            )
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"wan-i2v {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
+            out = rsp.output
+            status = getattr(out, "task_status", "")
+            url = getattr(out, "video_url", "") or ""
+            if status != "SUCCEEDED" or not url:
+                raise RuntimeError(f"wan-i2v task {status}: {getattr(out, 'message', '') or 'no video_url'}")
             data = httpx.get(url, timeout=180).content
             return GenAsset(data=data, mime="video/mp4", duration_s=duration_s, tokens=int(duration_s * 1800))
 
@@ -209,16 +382,49 @@ class QwenImageGen(ImageGen):
         import dashscope
         import httpx
 
+        size = _snap_image_size(width, height)
+
         def call() -> GenAsset:
             rsp = dashscope.ImageSynthesis.call(
                 api_key=self.s.dashscope_api_key, model=self.s.qwen_image_model, prompt=prompt,
-                n=1, size=f"{width}*{height}",
+                n=1, size=size,
             )
             if getattr(rsp, "status_code", 200) != 200:
                 raise RuntimeError(f"image {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
-            url = rsp.output.results[0].url
+            results = getattr(rsp.output, "results", None) or []
+            if not results:
+                raise RuntimeError(f"image returned no results (size={size}, task={getattr(rsp.output,'task_status','?')})")
+            url = results[0].url
             data = httpx.get(url, timeout=60).content
-            return GenAsset(data=data, mime="image/png", tokens=250)
+            return GenAsset(data=data, mime="image/png", tokens=250, url=url)
+
+        return _retry(call, attempts=2, base_delay=2.0)
+
+    def edit(self, image_url: str | list[str], instruction: str) -> GenAsset:
+        """qwen-image-edit: compose a keyframe that places the locked character into the
+        shot's location while preserving identity + art style (the step before i2v). Accepts
+        ONE image (character) or a list [character, location plate] — with two images the
+        SAME locked kitchen carries across every shot. Returns a hosted URL so the keyframe
+        can feed image-to-video directly."""
+        import dashscope
+        import httpx
+
+        urls = [image_url] if isinstance(image_url, str) else list(image_url)
+
+        def call() -> GenAsset:
+            content = [{"image": u} for u in urls] + [{"text": instruction}]
+            rsp = dashscope.MultiModalConversation.call(
+                api_key=self.s.dashscope_api_key, model=self.s.qwen_image_edit_model,
+                messages=[{"role": "user", "content": content}],
+            )
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"image-edit {getattr(rsp, 'code', '?')}: {getattr(rsp, 'message', rsp)}")
+            content = rsp.output.choices[0].message.content
+            url = next((p["image"] for p in content if isinstance(p, dict) and p.get("image")), None) if isinstance(content, list) else None
+            if not url:
+                raise RuntimeError("image-edit returned no image")
+            data = httpx.get(url, timeout=90).content
+            return GenAsset(data=data, mime="image/png", tokens=300, url=url)
 
         return _retry(call, attempts=2, base_delay=2.0)
 
@@ -229,17 +435,43 @@ class QwenVoiceGen(VoiceGen):
 
     def synthesize(self, text: str, *, voice: str = "default") -> GenAsset:
         import dashscope
+        import httpx
 
-        chosen = self.s.cosyvoice_voice if voice in ("", "default", None) else voice
+        chosen = resolve_tts_voice(voice, self.s.cosyvoice_voice)
 
         def call() -> GenAsset:
-            synth = dashscope.audio.tts_v2.SpeechSynthesizer(
-                model=self.s.cosyvoice_model, voice=chosen
+            # qwen3-tts-flash returns a hosted audio URL (no websocket); fetch the bytes.
+            rsp = dashscope.audio.qwen_tts.SpeechSynthesizer.call(
+                model=self.s.cosyvoice_model, api_key=self.s.dashscope_api_key,
+                text=text, voice=chosen,
             )
-            audio = synth.call(text)
-            return GenAsset(data=audio, mime="audio/mp3", duration_s=max(1.0, len(text) * 0.06), tokens=len(text))
+            if getattr(rsp, "status_code", 200) != 200:
+                raise RuntimeError(f"qwen-tts failed: {getattr(rsp, 'code', '')} {getattr(rsp, 'message', '')}")
+            url = rsp.output.audio["url"]
+            data = httpx.get(url, timeout=60).content
+            mime = "audio/wav" if data[:4] == b"RIFF" else "audio/mp3"
+            return GenAsset(data=data, mime=mime, duration_s=max(1.0, len(text) * 0.06), tokens=len(text))
 
         return _retry(call)
+
+
+# qwen3-tts-flash roster (intl). Characters may still carry legacy CosyVoice ids
+# ("longxiaochun_v2") — those don't exist here and would fail the call (→ silent film).
+_QWEN_TTS_VOICES = ("Cherry", "Serena", "Ethan", "Chelsie")
+
+
+def resolve_tts_voice(requested: str | None, default: str) -> str:
+    """Map any requested voice onto the qwen-tts roster: known names pass through,
+    legacy/unknown ids resolve deterministically to a roster voice (stable per id, so
+    a character keeps the same voice across shots and episodes)."""
+    if not requested or requested == "default":
+        return default
+    if requested in _QWEN_TTS_VOICES:
+        return requested
+    import hashlib
+
+    i = int(hashlib.sha256(requested.encode()).hexdigest(), 16) % len(_QWEN_TTS_VOICES)
+    return _QWEN_TTS_VOICES[i]
 
 
 def build_qwen_clients(s: Settings) -> ModelClients:

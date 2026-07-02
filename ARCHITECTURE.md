@@ -1,106 +1,77 @@
-# Recut Architecture
+# Recut Showrunner — Architecture
 
-**Borrow the format, tell your story.** Recut analyses one reel into a reusable *recipe*
-(beats, pacing, on-screen-text rhythm — never the content), co-writes the creator's story
-onto those beats, generates a base cut that plays instantly with stand-ins, and lets the
-creator swap in real footage, restyle, pick a cover, and export. Generation is gap-fill
-only; the creator's footage is the spine.
+An autonomous short-drama agent. The **creative layer** (drama domain + pipeline + agent)
+sits on a reused **infra spine** (model clients, render engine, queue, worker, storage,
+MCP, FastAPI). The drama model compiles down to the existing render Timeline so the
+validated ffmpeg engine is reused unchanged.
 
-## System diagram
-
-```
-                              ┌───────────────────────────────────────────┐
-                              │  React + Vite editor (web/)                 │
-                              │  projects → Reference → Recipe → Script →   │
-                              │  Storyboard → Cover                         │
-                              │  live preview player (reads timeline +      │
-                              │  shared/caption-style.json)                 │
-                              └───────────────┬─────────────────────────────┘
-                                              │ REST / SSE
-                                              ▼
-        ┌─────────────────────────────────────────────────────────────────┐
-        │  FastAPI (recut.api)                                              │
-        │  projects · assets · recipes · timelines · jobs · analyse ·       │
-        │  agent · generation                                              │
-        └───┬───────────────┬───────────────┬───────────────┬─────────────┘
-            │               │               │ enqueue       │ calls
-            ▼               ▼               ▼               ▼
-      ┌──────────┐   ┌────────────┐   ┌──────────┐   ┌──────────────┐
-      │ Postgres │   │ OSS / MinIO│   │  jobs    │   │ MCP server   │
-      │ projects │   │ all media  │   │ (queue,  │   │ (recut.mcp)  │
-      │ assets   │   │            │   │  SKIP    │   │ pipeline ops │
-      │ recipes  │   │            │   │  LOCKED) │   │ as tools     │
-      │ timelines│   └────────────┘   └────┬─────┘   └──────┬───────┘
-      │ jobs     │                         │ claim          │
-      └──────────┘                         ▼                ▼
-                                  ┌────────────────────────────────────┐
-                                  │  Worker (recut.worker) — resumable  │
-                                  │  handlers: render_export,           │
-                                  │  generate_broll/text/voiceover      │
-                                  └───────────────┬─────────────────────┘
-                                                  │ uses
-                                                  ▼
-        ┌──────────────────────── pipeline (recut.pipeline) ───────────────────────┐
-        │ analyse_reference   draft_script   generate_*   render(ffmpeg)  music-sync│
-        └──────────────────────────────┬───────────────────────────────────────────┘
-                                        │ via interfaces (recut.core.models)
-                                        ▼
-        ┌──────────────────────────────────────────────────────────────────────────┐
-        │ Model Studio / DashScope:  Qwen-VL · ASR · Qwen-Max · Wan · Qwen-Image ·   │
-        │ CosyVoice         (RECUT_MODEL_BACKEND=stub | qwen)                         │
-        └──────────────────────────────────────────────────────────────────────────┘
-```
-
-## Two cross-cutting cores
-
-### 1. The canonical timeline JSON (single source of truth)
-`recut.core.schemas.Timeline` — slots, durations, resolved assets, captions, styles,
-audio, and a `token_ledger`. Stored as one versioned JSONB document. **Both** the live
-preview and the export read it, so they never drift.
-
-### 2. The render has two surfaces, one spec
-- **Live preview** — a pure React player (no ffmpeg in the browser): sequences slots,
-  overlays captions with the chosen style, advances per duration, plays audio.
-- **Export** — `recut.pipeline.render`: per-slot normalize to 9:16, burn ASS captions,
-  concat, mix voiceover + bed, write MP4 to OSS. Per-slot clips are cached by content
-  hash → the render is resumable.
-
-Both compute caption geometry from **one** file, `shared/caption-style.json` (the
-anti-drift keystone). `canvas_px == preview_px * scale_factor` is pinned by a test on
-both sides.
-
-## Data flow: reference → exported MP4
+## System
 
 ```
-upload ──▶ analyse_reference (Qwen-VL + ASR + OCR + beat detection)
-   │            │ failure → deterministic fallback recipe (never blank)
-   │            ▼
-   │        Recipe JSON  ──▶ draft_script_on_beats (Qwen-Max)  ──▶ beats with lines
-   │                                                                  │
-   ▼                                                                  ▼
- base_cut_from_recipe  ──▶  Timeline (all stand-ins, plays instantly)
-                                  │ creator swaps real footage / keeps auto slots
-                                  ▼
-                         generation gap-fill (kept slots only, async, token-capped)
-                                  │
-                                  ▼
-                         render_export (ffmpeg) ──▶ MP4 in OSS
+                         React app (web/) — one flow:
+        Premise · Script (writers' room) · Cast & Style · Storyboard · Produce · Film
+                         live: per-shot status · director's log · proof panel
+                                   │ REST  (GET/PUT/POST /api/productions/...)
+                                   ▼
+        FastAPI (recut.api)  productions · assets · jobs · styles · eval · scoreboard
+              │ sync (cheap text/image, human-approved)     │ enqueue (expensive, async)
+              ▼                                              ▼
+   pipeline (recut.showrunner.pipeline)              jobs (Postgres queue, SKIP LOCKED)
+   writers_room → dialogue → storyboard → casting          │ claim
+   production(i2v/t2v) · editor · assemble                  ▼
+              │ via interfaces (recut.core.models)   Worker (recut.worker) — resumable
+              ▼                                       handlers: cast_reference, produce_film
+   Model Studio: Qwen-Max · Qwen-VL · Wan t2v/i2v ·         │ produces shots, voice, render
+   Qwen-Image · CosyVoice   (stub | qwen)                   ▼
+                                              render (recut.pipeline.render) → MP4 → OSS/MinIO
+   MCP server (recut.mcp): showrunner_develop/storyboard/cast/produce/scoreboard + pipeline tools
 ```
 
-## Token-budget discipline (the headline metric)
-`recut.core.timeline_ops.recompute_ledger` keeps `token_ledger` honest from slot state:
-real-footage seconds vs generated vs stand-in, tokens spent vs a naive
-full-generation baseline. The on-screen provenance panel and the `eval/` report read the
-same numbers.
+## Two cores
 
-## IP-safety, enforced in code
-- Recipes carry **structure only** (beats, durations, patterns) — never the reference's
-  footage. Reserved face/illustration slot types are coerced out of v1 recipes.
-- Upload-first ingestion; no source-footage reuse.
-- No bundled copyrighted audio; trending sound is added by the creator post-export.
-- Generated-face and voice cloning are consent-gated (post-v1).
+### 1. The drama document → the render timeline
+`recut.showrunner.schemas.Production` holds the `StyleLock`, `Character`/`Location`
+(each with a locked reference image = the consistency anchor), and `Scene`s of `Shot`s
+(the unit of generation, with written `script` dialogue placed into them). It's persisted
+as one JSON doc (`productions` table). `recut.showrunner.compile.compile_to_timeline`
+maps each Shot → a render `Slot` (+ title/end cards, scene-boundary fades), so the
+existing render (9:16, ASS captions, concat, audio mix, resumable) runs unchanged.
+
+### 2. The autonomous production loop (the orchestration centerpiece)
+`worker/handlers/showrunner.py:produce_film`, post-approval, async:
+```
+audio-fit (synth each line, set shot duration to fit it)        ── no truncated dialogue
+  ▼
+editor pass (pace silent shots; LOG cut decisions)              ── the "edit" stage
+  ▼  per shot:
+generate (i2v from locked character ref | continuity-chain | t2v)
+  ▼
+consistency critic (Qwen-VL: score vs reference; reason)
+  ▼  if drift: re-roll with NEW seed + corrective note (best-of-N, bounded)
+store shot · append director's-log decision · update scoreboard
+  ▼  then: per-shot voiceover → concat (aligned) → music bed → render → MP4
+```
+Resumable (done shots skipped), token-capped, and **render failure degrades gracefully**
+(generated shots stay playable; job returns a partial result).
+
+## Narrative pipeline (cheap, human-approved, before any video)
+`writers_room` (writer+critic, multi-round to a quality bar, climbing score) → `dialogue`
+(writer + dialogue critic writes/critiques the actual lines) → `storyboard` (beats → shots,
+shot/reverse-shot, dialogue placed) → `casting` (generate or upload + lock references).
+
+## Consistency (the hard problem), solved by
+locked reference still (generate via Qwen-Image OR upload) → Wan **image-to-video** seeds
+every shot from it → Qwen-VL **consistency critic** verifies identity per shot and
+re-rolls drift with a changed seed + the critic's specific correction → shot/reverse-shot
+keeps one consistent face per shot → last-frame chaining carries continuity across cuts.
+
+## Quality-per-token
+Plan locked with text/image only; **0 video tokens before human approval** (true by
+construction); critic re-rolls only drifted shots. `recut.showrunner.eval` + the
+`/eval` + `/scoreboard` endpoints report honest, countable units (video-seconds, shots,
+reference images, tts chars, re-rolls).
 
 ## Local-first → Alibaba
-Everything sits behind interfaces (`core/storage.py`, `core/queue.py`, `core/models.py`).
-Local: Postgres + MinIO + stub (or real) models via `docker-compose`. Alibaba: RDS + OSS
-+ Model Studio + (optionally) RocketMQ — a `.env` change, not a rewrite.
+All I/O behind interfaces (`core/storage.py`, `core/queue.py`, `core/models.py`). Local:
+Postgres + MinIO + stub/qwen via docker-compose. Alibaba: RDS + OSS + Model Studio +
+(optionally) RocketMQ — a `.env` change, not a rewrite.

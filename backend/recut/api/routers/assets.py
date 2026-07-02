@@ -39,6 +39,22 @@ async def upload_asset(project_id: str, kind: str = "upload", file: UploadFile =
     return asset
 
 
+@router.post("/uploads", status_code=201)
+async def upload_reference(kind: str = "style_ref", file: UploadFile = File(...)) -> dict:
+    """Project-less upload (e.g. a custom-style reference chosen on the premise screen,
+    before any production exists). Returns the model-usable storage URL and an asset id
+    the browser can render via /assets/{id}/raw."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "empty upload")
+    chash = content_hash(data)
+    key = f"uploads/{kind}/{chash}_{file.filename or 'image'}"
+    st = storage()
+    st.put(key, data, content_type=file.content_type or "image/png")
+    asset = repo.create_asset(kind=kind, storage_key=key, mime=file.content_type or "image/png", content_hash=chash)
+    return {"asset_id": asset["id"], "url": st.url(key)}
+
+
 @router.get("/assets/{asset_id}")
 def get_asset(asset_id: str) -> dict:
     a = repo.get_asset(asset_id)

@@ -1,18 +1,17 @@
 /**
- * Typed fetch client for the Recut backend.
+ * Typed fetch client for the Recut AI Showrunner backend.
  * All endpoints live under `${API_BASE}/api`. Media bytes stream from
  * `${API_BASE}/api/assets/{id}/raw`.
  */
 import type {
   Asset,
-  CaptionCoverResult,
-  CowriteReply,
-  DraftScriptResult,
   Job,
-  NewProject,
-  Project,
-  RefineResult,
-  Recipe,
+  Production,
+  ProductionEval,
+  ProductionSummary,
+  Scoreboard,
+  StyleLock,
+  StyleSummary,
   Timeline,
 } from "../types";
 
@@ -87,20 +86,173 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-/* ----------------------------- Projects ----------------------------- */
 export const api = {
-  listProjects: () => request<Project[]>("/projects"),
-  createProject: (body: NewProject) =>
-    request<Project>("/projects", { method: "POST", body }),
-  getProject: (id: string) => request<Project>(`/projects/${id}`),
-  patchProject: (
-    id: string,
-    body: Partial<Pick<Project, "name" | "stage" | "tone">>,
-  ) => request<Project>(`/projects/${id}`, { method: "PATCH", body }),
-  deleteProject: (id: string) =>
-    request<void>(`/projects/${id}`, { method: "DELETE" }),
+  /* ------------------------------- Styles ------------------------------- */
+  listStyles: () => request<StyleSummary[]>("/styles"),
+  /** Writing registers, decoupled from the visual style. */
+  listTones: () => request<{ name: string; register: string }[]>("/tones"),
 
-  /* ------------------------------ Assets ------------------------------ */
+  /**
+   * Create a CUSTOM style (LTX-style 'style element'): from your own description
+   * and/or reference images. The returned StyleLock is passed to createProduction;
+   * a hosted reference image also anchors every keyframe composition.
+   */
+  customStyle: (body: {
+    description?: string;
+    image_urls?: string[];
+    test_mode?: boolean;
+  }) => request<StyleLock>("/styles/custom", { method: "POST", body }),
+
+  /** Project-less upload (custom-style reference images on the premise screen). */
+  uploadReference: (file: File, kind = "style_ref") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ asset_id: string; url: string }>("/uploads", {
+      method: "POST",
+      body: fd,
+      query: { kind },
+    });
+  },
+
+  /* ------------------------------ Premise ------------------------------- */
+  suggestPremise: (premise = "") =>
+    request<{ premise: string }>("/premise/suggest", { method: "POST", body: { premise } }),
+
+  /* ---------------------------- Productions ----------------------------- */
+  createProduction: (body: {
+    premise: string;
+    target_seconds: number;
+    style: string;
+    /** Writing register, decoupled from the look ("" = match style). */
+    tone?: string;
+    /** A StyleLock from customStyle() — overrides the preset name. */
+    custom_style?: StyleLock | null;
+    /** Test drive: run the whole flow on stubs — zero provider tokens. */
+    test_mode?: boolean;
+  }) => request<Production>("/productions", { method: "POST", body }),
+  listProductions: () => request<ProductionSummary[]>("/productions"),
+  getProduction: (id: string) => request<Production>(`/productions/${id}`),
+  deleteProduction: (id: string) =>
+    request<void>(`/productions/${id}`, { method: "DELETE" }),
+  /** Persist all inline edits / autosave. Sends the full Production doc. */
+  saveProduction: (id: string, doc: Production) =>
+    request<Production>(`/productions/${id}`, { method: "PUT", body: doc }),
+
+  /**
+   * TABLE READ: speak the script aloud, each line in its character's voice.
+   * Cheap voice tokens, human-triggered. Async — poll the job; the result carries
+   * ordered {scene, character, line, asset_id} entries for karaoke playback.
+   */
+  tableRead: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/table-read`, { method: "POST" }),
+
+  storyboard: (id: string) =>
+    request<Production>(`/productions/${id}/storyboard`, { method: "POST" }),
+
+  /**
+   * Generate the shot board's stills — one composed frame (character in the locked
+   * location, doing the action, in the style) per shot missing one. Cheap image
+   * tokens; the human approves these exact frames before any video spend. Async.
+   */
+  boardStills: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/board`, { method: "POST" }),
+
+  /** Redo ONE shot's board still, steered by a note ("make it rain"). Async. */
+  shotStill: (id: string, sid: string, instruction = "") =>
+    request<{ job_id: string }>(`/productions/${id}/shots/${sid}/still`, {
+      method: "POST",
+      body: { instruction },
+    }),
+
+  /**
+   * Generate a character/location reference image. Async — poll the job.
+   * `instruction` is an optional regenerate note ("make him older, add a red scarf")
+   * that's woven into the reference prompt so the user steers the look.
+   */
+  cast: (
+    id: string,
+    target: "character" | "location",
+    targetId: string,
+    instruction = "",
+  ) =>
+    request<{ job_id: string }>(`/productions/${id}/cast`, {
+      method: "POST",
+      body: { target, target_id: targetId, instruction },
+    }),
+
+  /**
+   * Cast the WHOLE show bible in one consistent look (the first reference — or the
+   * custom style image — anchors every other one). Async — poll the job.
+   */
+  castAll: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/cast-all`, { method: "POST" }),
+
+  /**
+   * Rename a character — the backend propagates the new name across the whole
+   * script (logline, question, theme, scene beats, every dialogue line + action)
+   * and returns the FULL updated Production. Use this instead of the generic PUT
+   * for name changes so the propagation lands everywhere at once.
+   */
+  renameCharacter: (id: string, cid: string, name: string) =>
+    request<Production>(`/productions/${id}/characters/${cid}/rename`, {
+      method: "POST",
+      body: { name },
+    }),
+
+  /**
+   * Send a plain-English director's note to the writers' room ("make it noir",
+   * "merge the two sisters", "rename Eli to Mara and make her a botanist"). The
+   * writer rewrites the treatment consistently and returns the FULL updated
+   * Production (also appends to writers_room and may add a warnings entry).
+   */
+  reviseProduction: (id: string, instruction: string) =>
+    request<Production>(`/productions/${id}/revise`, {
+      method: "POST",
+      body: { instruction },
+    }),
+
+  /** Attach a human-uploaded reference image to a character. */
+  attachCharacterReference: (
+    id: string,
+    cid: string,
+    assetId: string,
+    referenceUrl?: string,
+  ) =>
+    request<Production>(`/productions/${id}/characters/${cid}/reference`, {
+      method: "POST",
+      body: { asset_id: assetId, reference_url: referenceUrl },
+    }),
+
+  /**
+   * Greenlight the NEXT EPISODE: the writers' room continues from this film's
+   * cliffhanger; the locked cast + location references carry over by name.
+   * Returns the new Production (at script stage).
+   */
+  nextEpisode: (id: string) =>
+    request<Production>(`/productions/${id}/next-episode`, { method: "POST" }),
+
+  produce: (id: string) =>
+    request<{ job_id: string }>(`/productions/${id}/produce`, {
+      method: "POST",
+    }),
+  regenerateShot: (id: string, sid: string) =>
+    request<{ job_id: string }>(
+      `/productions/${id}/shots/${sid}/regenerate`,
+      { method: "POST" },
+    ),
+
+  getTimeline: (id: string) =>
+    request<Timeline>(`/productions/${id}/timeline`),
+  getScoreboard: (id: string) =>
+    request<Scoreboard>(`/productions/${id}/scoreboard`),
+  /** Closing proof: narrative rubric + honest token facts + avg consistency. */
+  getEval: (id: string) =>
+    request<ProductionEval>(`/productions/${id}/eval`),
+
+  /* ------------------------------- Jobs --------------------------------- */
+  getJob: (id: string) => request<Job>(`/jobs/${id}`),
+
+  /* ------------------------------ Assets -------------------------------- */
   uploadAsset: (projectId: string, file: File, kind = "upload") => {
     const fd = new FormData();
     fd.append("file", file);
@@ -111,91 +263,6 @@ export const api = {
     });
   },
   getAsset: (id: string) => request<Asset>(`/assets/${id}`),
-
-  /* ------------------------------ Recipe ------------------------------ */
-  analyse: (projectId: string, assetId: string) =>
-    request<Recipe>(`/projects/${projectId}/analyse`, {
-      method: "POST",
-      body: { asset_id: assetId },
-    }),
-  getRecipe: (recipeId: string) => request<Recipe>(`/recipes/${recipeId}`),
-  recipeLibrary: () => request<Recipe[]>("/recipes/library"),
-  saveRecipe: (recipeId: string, saved: boolean) =>
-    request<Recipe>(`/recipes/${recipeId}/save`, {
-      method: "POST",
-      body: { saved },
-    }),
-
-  /* ----------------------------- Timeline ----------------------------- */
-  baseCut: (projectId: string, recipeId: string) =>
-    request<Timeline>(`/projects/${projectId}/base-cut`, {
-      method: "POST",
-      body: { recipe_id: recipeId },
-    }),
-  getTimeline: (projectId: string) =>
-    request<Timeline>(`/projects/${projectId}/timeline`),
-  getTimelineById: (id: string) => request<Timeline>(`/timelines/${id}`),
-  putTimeline: (id: string, doc: Timeline) =>
-    request<Timeline>(`/timelines/${id}`, { method: "PUT", body: doc }),
-  uploadToSlot: (timelineId: string, slotId: string, assetId: string) =>
-    request<Timeline>(`/timelines/${timelineId}/slots/${slotId}/upload`, {
-      method: "POST",
-      body: { asset_id: assetId },
-    }),
-  addSlot: (timelineId: string, afterSlotId: string, prompt: string) =>
-    request<Timeline>(`/timelines/${timelineId}/slots`, {
-      method: "POST",
-      body: { after_slot_id: afterSlotId, prompt },
-    }),
-
-  /* ------------------------------- Jobs ------------------------------- */
-  exportTimeline: (timelineId: string) =>
-    request<{ job_id: string }>(`/timelines/${timelineId}/export`, {
-      method: "POST",
-    }),
-  getJob: (id: string) => request<Job>(`/jobs/${id}`),
-  /**
-   * Queue AI generation. Omit slotId to generate a clip for every
-   * not-yet-replaced visual slot; pass slotId to regenerate just that one.
-   * Returns the queued job ids to poll via getJob.
-   */
-  generate: (
-    timelineId: string,
-    opts?: { slotId?: string; voiceover?: boolean },
-  ) =>
-    request<{ job_ids: string[]; queued: number }>(
-      `/timelines/${timelineId}/generate`,
-      {
-        method: "POST",
-        body: {
-          ...(opts?.slotId ? { slot_id: opts.slotId } : {}),
-          ...(opts?.voiceover !== undefined
-            ? { voiceover: opts.voiceover }
-            : {}),
-        },
-      },
-    ),
-
-  /* --------------------------- Agent / chat --------------------------- */
-  cowrite: (projectId: string, message: string, recipeId: string) =>
-    request<CowriteReply>(`/projects/${projectId}/cowrite`, {
-      method: "POST",
-      body: { message, recipe_id: recipeId },
-    }),
-  draftScript: (projectId: string, recipeId: string, story: string) =>
-    request<DraftScriptResult>(`/projects/${projectId}/draft-script`, {
-      method: "POST",
-      body: { recipe_id: recipeId, story },
-    }),
-  refineSlot: (timelineId: string, slotId: string, instruction: string) =>
-    request<RefineResult>(`/timelines/${timelineId}/slots/${slotId}/refine`, {
-      method: "POST",
-      body: { instruction },
-    }),
-  captionCover: (timelineId: string) =>
-    request<CaptionCoverResult>(`/timelines/${timelineId}/caption-cover`, {
-      method: "POST",
-    }),
 };
 
 export { request as __request, buildUrl as __buildUrl };

@@ -38,12 +38,23 @@ class Settings(BaseSettings):
     # Valid wan2.2-t2v-plus sizes: 1080*1920, 1920*1080, 1440*1440, 1632*1248,
     # 1248*1632, 480*832, 832*480, 624*624. Use 1080*1920 for 9:16 (480*832 = cheaper/faster).
     wan_size: str = "1080*1920"
+    wan_i2v_model: str = "wan2.2-i2v-plus"  # image-to-video (character consistency)
     qwen_image_model: str = "wanx2.1-t2i-turbo"
-    cosyvoice_model: str = "cosyvoice-v2"
-    cosyvoice_voice: str = "longxiaochun_v2"  # must match the cosyvoice model version
+    # qwen-image-edit composes the per-shot keyframe: same character, new location + style.
+    qwen_image_edit_model: str = "qwen-image-edit"
+    # TTS: qwen3-tts-flash is HTTP-based and served on the intl endpoint (CosyVoice's
+    # websocket API is China-region only and 'ModelNotFound's on dashscope-intl).
+    cosyvoice_model: str = "qwen3-tts-flash"
+    cosyvoice_voice: str = "Cherry"  # intl voices: Cherry, Serena, Ethan, Chelsie, ...
 
     # --- token / cost discipline ---
     project_token_cap: int = 200_000  # hard ceiling on generation tokens per project
+
+    # --- pacing: a shot budget derived from runtime so a 20s film is ~6 shots of ~3-4s,
+    # not 22 jump-cuts of 1s. seconds_per_shot sets the cadence; min/max clamp each shot.
+    seconds_per_shot: float = 4.0  # fewer, longer shots so dialogue lands (not jump-cuts)
+    min_shot_s: float = 3.0
+    max_shot_s: float = 8.0  # generous ceiling so a longer VO line is never clipped
 
     # --- generation model ---
     # ai_first  -> AI generates EVERY visual slot by default; the creator swaps in their

@@ -1,63 +1,64 @@
-# Recut — project guide for Claude
+# Recut Showrunner — project guide for Claude
 
-Guided short-video studio: borrow a reel's format, tell your story. Read this before
-touching code. Full design in `ARCHITECTURE.md`; decisions in `ASSUMPTIONS.md`.
+An AI agent that writes + directs a short drama (Qwen Cloud Hackathon Track 2). Read this
+before touching code. Design: `docs/ai-showrunner-design.md`; full system: `ARCHITECTURE.md`;
+loop history + decisions: `SPRINTLOG.md`. Active branch: `showrunner`.
 
 ## Layout
 ```
-web/                      React + Vite + TS editor (built from recut-prototype.html)
+web/                          React+Vite+TS — one flow: Premise→Script→Cast&Style→Storyboard→Produce→Film
 backend/recut/
-  core/      schemas (Recipe, Timeline), caption geometry, config, models(iface+stubs),
-             storage(iface), queue(Postgres), db (SQLAlchemy), repo, timeline_ops
-  pipeline/  analyse, draft_script, generate_*, render(ffmpeg), caption_ass, music sync
-  api/       FastAPI app + routers (projects/assets/recipes/timelines/jobs/analyse/agent/generation)
-  worker/    queue loop + handler registry (handlers/render.py, handlers/generate.py)
-  mcp/       MCP server exposing pipeline ops as tools
-shared/caption-style.json   anti-drift keystone (web + python both read this)
-eval/        recipe-quality + token-budget + time-to-first-cut harness
+  showrunner/                 THE DRAMA PRODUCT
+    schemas.py                Production · Character · Location · Scene · Shot · StyleLock · TokenLedger
+    compile.py                Production → render Timeline (+ title/end cards, scene fades)
+    eval.py                   narrative rubric · consistency separation · honest token facts
+    pipeline/                 writers_room · dialogue · storyboard · casting · production · editor · assemble
+  core/                       reused spine: schemas(Timeline/Slot), models(iface+stubs), qwen_clients,
+                              storage, queue, db, repo, caption, config
+  pipeline/render.py          ffmpeg render (reused unchanged), shots.py (ffmpeg shot detection/keyframes)
+  worker/handlers/showrunner.py   cast_reference · produce_film (the autonomous loop)
+  api/routers/productions.py  the Showrunner API
+  mcp/                        MCP server + tools (showrunner_* + pipeline ops) — scored
 ```
 
-## The two contracts everything depends on (do not break)
-1. **`recut.core.schemas.Recipe` / `Timeline`** — the canonical documents. The timeline
-   is the single source of truth read by both preview and export. Validate every write
-   through these models.
-2. **`shared/caption-style.json`** — caption geometry. The React preview and the Python
-   render BOTH derive positions from it. Invariant `canvas_px == preview_px * scale_factor`
-   is pinned by `tests/test_caption_parity.py` and `web` mirror test. Never hardcode
-   caption sizes/positions elsewhere.
-
-## How to extend (per lane)
-- **New job type:** write `recut/worker/handlers/<x>.py`, decorate with
-  `@register("<type>")`, import it in `worker/handlers/__init__.py`. Enqueue via
-  `recut.core.queue.enqueue`.
-- **New API endpoints:** add `recut/api/routers/<x>.py` exporting `router`. Spine routers
-  are always mounted; `analyse`, `agent`, `generation` are auto-mounted if present
-  (see `api/main.py`). Don't edit other routers.
-- **New model call:** go through `recut.core.models` interfaces; add a stub + the real
-  DashScope impl in `core/qwen_clients.py`. Never call DashScope directly elsewhere.
-- **Timeline edits:** use `recut.core.timeline_ops` (it keeps the token ledger honest).
+## Contracts (don't break)
+1. **`recut.showrunner.schemas.Production`** is the canonical drama doc (persisted JSON).
+   Validate every write through the model. `compile_to_timeline` is the only bridge to the
+   render `Timeline` — keep the render engine reuse intact.
+2. **Model access only via `recut.core.models` interfaces** (VisionAnalyzer incl.
+   `score_consistency` → `ConsistencyVerdict`, TextLLM, VideoGen incl.
+   `generate_from_image`, ImageGen, VoiceGen). Real impls in `core/qwen_clients.py`; stubs
+   are deterministic for offline tests/demo. Never call DashScope elsewhere.
+3. **Stage flow is human-approved**: premise→script→cast_style→storyboard→[approve]→
+   production→export. NO video tokens before approval. Generation is async via the queue.
 
 ## Invariants
-- Generation is gap-fill only, async, **kept slots only**, token-capped
-  (`settings.project_token_cap`). Use `timeline_ops.slots_to_generate`.
-- No model failure may produce a blank frame or a 500. Every gap → stand-in or last-good
-  value. Recipes always return (deterministic fallback on analysis failure).
-- v1 slot types only: text, talk, roll, broll. face/illus reserved but gated off.
-- IP-safety: recipes are structure-only; upload-first; no bundled copyrighted audio.
+- Consistency: a shot with a character → i2v from that character's locked reference, and
+  the consistency critic verifies it (re-roll drift with a NEW seed + the critic's reason,
+  best-of-N, bounded). Never fake-pass: critic failure → score None (skip), never 1.0.
+- Dialogue is WRITTEN + CRITIQUED (pipeline/dialogue.py) then PLACED into shots; the
+  narrative rubric scores the actual lines.
+- No model failure yields a blank/500: deterministic fallbacks; render failure → partial
+  film with ready shots preserved.
+- Token discipline: 0 video tokens pre-approval; re-roll only what drifts; honest counts.
+- LLM markers: stub routing keys on `showrunner:*` markers in the system prompt — keep
+  prompts' markers stable when editing pipeline prompts (and update the stub if adding one).
 
-## Testing
-- `cd backend && . .venv/bin/activate && python -m pytest -q`
-- TDD: write the test first. Tests run offline (SQLite + local storage + stub models).
-- ffmpeg-gated tests skip cleanly without ffmpeg; keep them that way.
-- Web: `cd web && npm test` (Vitest). Mirror the caption-parity test there.
+## Testing (TDD)
+- `cd backend && . .venv/bin/activate && RECUT_MODEL_BACKEND=stub python -m pytest` (126).
+  Offline: sqlite + local storage + stub models. ffmpeg-gated tests skip without ffmpeg.
+- `cd web && npm test` (52) · `npm run build`.
 
-## Run locally
-- `docker compose up` (Postgres + MinIO + api + worker), or run pieces directly:
-  `recut-api`, `recut-worker`, `recut-mcp`. Frontend: `cd web && npm run dev`.
-- Stub models need no keys. For real Qwen: set `RECUT_MODEL_BACKEND=qwen` +
-  `RECUT_DASHSCOPE_API_KEY` in `.env`.
+## Run
+- `RECUT_MODEL_BACKEND=stub ./scripts/dev-local.sh` (api+worker) + `cd web && npm run dev`.
+- Live: `RECUT_MODEL_BACKEND=qwen` + `RECUT_DASHSCOPE_API_KEY` in backend/.env; `recut-doctor` first.
+
+## Live model facts (validated on the Singapore/intl key)
+Wan t2v `wan2.2-t2v-plus` (size 1080*1920), Wan i2v `wan2.2-i2v-plus` (img_url + seed),
+image `wan2.2-t2i-flash` (sizes 1024*1024/720*1280/1280*720, NOT 1080*1920), Qwen-VL,
+Qwen-Max, CosyVoice v2 (needs `dashscope.base_websocket_api_url` for intl). certifi CA
+bundle set for the websocket.
 
 ## Style
-- Python: typed, pydantic v2, explicit over clever, named exceptions (no bare
-  `except Exception` except top-level worker boundary). Keep diffs minimal.
-- Comments: ASCII diagrams for pipelines/state machines. Keep them accurate.
+Typed, pydantic v2, explicit over clever, named exceptions (no bare except outside the
+worker boundary), minimal diff. ASCII diagrams for pipelines. Keep diagrams/docs accurate.

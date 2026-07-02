@@ -198,6 +198,8 @@ class Slot(BaseModel):
     status: SlotStatus = SlotStatus.ready
     generation: Generation | None = None
     kept: bool = True  # for auto slots: does the creator keep it (=> generate)?
+    fade_in: bool = False  # dip-from-black at clip start (scene opens / title)
+    fade_out: bool = False  # dip-to-black at clip end (scene closes / end card)
 
     @property
     def is_you(self) -> bool:

@@ -5,7 +5,9 @@ Each lane adds its handler module import here. Keep imports side-effect-only
 
 from recut.worker.handlers import render  # noqa: F401
 
-try:  # Lane D adds these; tolerate absence during early phases.
-    from recut.worker.handlers import generate  # noqa: F401
+try:
+    from recut.worker.handlers import generate  # noqa: F401  (legacy reel generation)
 except ImportError:
     pass
+
+from recut.worker.handlers import showrunner  # noqa: F401  (drama production)

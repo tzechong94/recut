@@ -12,7 +12,7 @@ function mockResponse(body: unknown, init: Partial<Response> = {}): Response {
   } as unknown as Response;
 }
 
-describe("api client request building", () => {
+describe("showrunner api client", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -24,75 +24,221 @@ describe("api client request building", () => {
     vi.restoreAllMocks();
   });
 
-  it("GET /projects hits the /api base with GET", async () => {
-    fetchMock.mockResolvedValueOnce(mockResponse([{ id: "p1" }]));
-    const res = await api.listProjects();
-    expect(res).toEqual([{ id: "p1" }]);
+  it("GET /styles hits the /api base with GET", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse([{ name: "noir" }]));
+    const res = await api.listStyles();
+    expect(res).toEqual([{ name: "noir" }]);
     const [url, opts] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_BASE}/api/projects`);
+    expect(url).toBe(`${API_BASE}/api/styles`);
     expect(opts.method).toBe("GET");
   });
 
-  it("POST /projects sends JSON body + content-type", async () => {
+  it("POST /productions sends JSON body + content-type", async () => {
     fetchMock.mockResolvedValueOnce(
-      mockResponse({ id: "p2", name: "X" }, { status: 201 }),
+      mockResponse({ id: "prod_1" }, { status: 201 }),
     );
-    await api.createProject({ name: "X", tone: "#fff" });
+    await api.createProduction({
+      premise: "A lighthouse keeper",
+      target_seconds: 45,
+      style: "noir",
+    });
     const [url, opts] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_BASE}/api/projects`);
+    expect(url).toBe(`${API_BASE}/api/productions`);
     expect(opts.method).toBe("POST");
     expect(opts.headers["Content-Type"]).toBe("application/json");
-    expect(JSON.parse(opts.body)).toEqual({ name: "X", tone: "#fff" });
+    expect(JSON.parse(opts.body)).toEqual({
+      premise: "A lighthouse keeper",
+      target_seconds: 45,
+      style: "noir",
+    });
   });
 
-  it("PATCH and DELETE use the right verbs", async () => {
-    fetchMock.mockResolvedValueOnce(mockResponse({ id: "p1", name: "Y" }));
-    await api.patchProject("p1", { name: "Y" });
-    expect(fetchMock.mock.calls[0][1].method).toBe("PATCH");
+  it("PUT /productions/{id} serializes the full doc", async () => {
+    const doc = { id: "prod_1", title: "X" } as never;
+    fetchMock.mockResolvedValueOnce(mockResponse({ id: "prod_1" }));
+    await api.saveProduction("prod_1", doc);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1`);
+    expect(opts.method).toBe("PUT");
+    expect(JSON.parse(opts.body).id).toBe("prod_1");
+  });
 
-    fetchMock.mockResolvedValueOnce(
-      mockResponse(undefined, { status: 204 }),
+  it("DELETE uses the right verb and handles 204", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse(undefined, { status: 204 }));
+    await api.deleteProduction("prod_1");
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${API_BASE}/api/productions/prod_1`,
     );
-    await api.deleteProject("p1");
-    expect(fetchMock.mock.calls[1][0]).toBe(`${API_BASE}/api/projects/p1`);
-    expect(fetchMock.mock.calls[1][1].method).toBe("DELETE");
+    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
+  });
+
+  it("POST /cast sends target + target_id + instruction", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j1" }));
+    const res = await api.cast("prod_1", "character", "char_1", "older, red scarf");
+    expect(res).toEqual({ job_id: "j1" });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/cast`);
+    expect(JSON.parse(opts.body)).toEqual({
+      target: "character",
+      target_id: "char_1",
+      instruction: "older, red scarf",
+    });
+  });
+
+  it("POST /styles/custom sends description + refs and returns a StyleLock", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ name: "custom", descriptors: "gouache", palette: "pastel", reference_urls: [] }),
+    );
+    const s = await api.customStyle({ description: "gouache storybook", test_mode: true });
+    expect(s.name).toBe("custom");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/styles/custom`);
+    expect(JSON.parse(opts.body)).toEqual({ description: "gouache storybook", test_mode: true });
+  });
+
+  it("GET /tones lists the writing registers", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse([{ name: "thriller", register: "x" }]));
+    const tones = await api.listTones();
+    expect(tones[0].name).toBe("thriller");
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE}/api/tones`);
+  });
+
+  it("POST /table-read queues the read job", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j9" }));
+    await api.tableRead("prod_1");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/table-read`);
+    expect(opts.method).toBe("POST");
+  });
+
+  it("POST /board queues the shot-board stills job", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j5" }));
+    const res = await api.boardStills("prod_1");
+    expect(res).toEqual({ job_id: "j5" });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/board`);
+    expect(opts.method).toBe("POST");
+  });
+
+  it("POST /shots/{sid}/still sends the steering note", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j6" }));
+    await api.shotStill("prod_1", "shot_9", "make it rain");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/shots/shot_9/still`);
+    expect(JSON.parse(opts.body)).toEqual({ instruction: "make it rain" });
+  });
+
+  it("POST /next-episode returns the continuation production", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ id: "prod_2", episode: 2, previous_production_id: "prod_1" }),
+    );
+    const res = await api.nextEpisode("prod_1");
+    expect(res.episode).toBe(2);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/next-episode`);
+    expect(opts.method).toBe("POST");
+  });
+
+  it("POST /shots/{sid}/regenerate hits the regenerate endpoint", async () => {
+    fetchMock.mockResolvedValueOnce(mockResponse({ job_id: "j2" }));
+    await api.regenerateShot("prod_1", "shot_9");
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      `${API_BASE}/api/productions/prod_1/shots/shot_9/regenerate`,
+    );
+    expect(opts.method).toBe("POST");
+  });
+
+  it("POST /characters/{cid}/rename sends the new name and returns the production", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ id: "prod_1", title: "X" }),
+    );
+    const res = await api.renameCharacter("prod_1", "char_1", "Mara");
+    expect(res).toEqual({ id: "prod_1", title: "X" });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      `${API_BASE}/api/productions/prod_1/characters/char_1/rename`,
+    );
+    expect(opts.method).toBe("POST");
+    expect(opts.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(opts.body)).toEqual({ name: "Mara" });
+  });
+
+  it("POST /revise sends the instruction and returns the production", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ id: "prod_1", logline: "noir now" }),
+    );
+    const res = await api.reviseProduction("prod_1", "make it noir");
+    expect(res).toEqual({ id: "prod_1", logline: "noir now" });
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/revise`);
+    expect(opts.method).toBe("POST");
+    expect(JSON.parse(opts.body)).toEqual({ instruction: "make it noir" });
+  });
+
+  it("GET /scoreboard returns the ledger payload", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({ tokens: { total: 10 }, shots_total: 3 }),
+    );
+    const sb = await api.getScoreboard("prod_1");
+    expect(sb.shots_total).toBe(3);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${API_BASE}/api/productions/prod_1/scoreboard`,
+    );
+  });
+
+  it("GET /eval returns the proof payload from the eval endpoint", async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse({
+        narrative: { overall: 0.88, scores: { stakes: 0.83 }, notes: "ok" },
+        tokens: {
+          total: 133000,
+          video_tokens: 120000,
+          video_tokens_pre_approval: 0,
+          rerolls: 2,
+          baseline_estimate: 400000,
+          estimated_saved: 267000,
+        },
+        avg_consistency: 0.91,
+      }),
+    );
+    const ev = await api.getEval("prod_1");
+    expect(ev.narrative.overall).toBe(0.88);
+    expect(ev.tokens.video_tokens_pre_approval).toBe(0);
+    expect(ev.avg_consistency).toBe(0.91);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_BASE}/api/productions/prod_1/eval`);
+    expect(opts.method).toBe("GET");
   });
 
   it("upload sends multipart FormData (no JSON content-type) with kind query", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({ id: "a1" }));
-    const file = new File(["data"], "clip.mp4", { type: "video/mp4" });
-    await api.uploadAsset("p1", file, "reference");
+    const file = new File(["data"], "ref.png", { type: "image/png" });
+    await api.uploadAsset("proj_1", file, "upload");
     const [url, opts] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_BASE}/api/projects/p1/assets?kind=reference`);
+    expect(url).toBe(`${API_BASE}/api/projects/proj_1/assets?kind=upload`);
     expect(opts.body).toBeInstanceOf(FormData);
     expect((opts.body as FormData).get("file")).toBeInstanceOf(File);
     expect(opts.headers["Content-Type"]).toBeUndefined();
   });
 
-  it("PUT /timelines/{id} serializes the full doc", async () => {
-    const doc = { timeline_id: "tl1", slots: [] } as never;
-    fetchMock.mockResolvedValueOnce(mockResponse({ timeline_id: "tl1" }));
-    await api.putTimeline("tl1", doc);
-    const [url, opts] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_BASE}/api/timelines/tl1`);
-    expect(opts.method).toBe("PUT");
-    expect(JSON.parse(opts.body).timeline_id).toBe("tl1");
-  });
-
   it("throws ApiError with detail on non-2xx", async () => {
     fetchMock.mockResolvedValueOnce(
-      mockResponse({ detail: "not found" }, { status: 404, statusText: "Not Found" }),
+      mockResponse(
+        { detail: "production not found" },
+        { status: 404, statusText: "Not Found" },
+      ),
     );
-    await expect(api.getProject("nope")).rejects.toMatchObject({
+    await expect(api.getProduction("nope")).rejects.toMatchObject({
       name: "ApiError",
       status: 404,
-      message: "not found",
+      message: "production not found",
     });
   });
 
   it("ApiError is the thrown type", async () => {
     fetchMock.mockResolvedValueOnce(mockResponse({}, { status: 500 }));
-    await expect(api.getRecipe("r")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.getScoreboard("x")).rejects.toBeInstanceOf(ApiError);
   });
 
   it("assetRawUrl points at the raw stream endpoint", () => {

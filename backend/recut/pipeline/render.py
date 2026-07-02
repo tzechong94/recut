@@ -121,6 +121,16 @@ def _build_slot_clip(
     ff = settings.ffmpeg_bin
     dur = f"{slot.duration_s:.3f}"
 
+    # Pacing: dip-from/-to black at scene boundaries (set by the compile step). Baked
+    # per-clip so the concat render stays simple — no cross-clip xfade.
+    fd = 0.4
+    fades = ""
+    if getattr(slot, "fade_in", False):
+        fades += f",fade=t=in:st=0:d={fd}"
+    if getattr(slot, "fade_out", False):
+        fades += f",fade=t=out:st={max(0.0, slot.duration_s - fd):.3f}:d={fd}"
+    sub = sub + fades
+
     if src_path and is_video:
         # Real footage / generated video: loop if shorter than the beat, trim to dur.
         vf = _fit_filter() + "," + sub
