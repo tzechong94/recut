@@ -21,17 +21,30 @@ QUALITY_BAR = 0.78
 _WRITER_SYS = (
     "showrunner:dialogue — You are a screenwriter writing the spoken lines for ONE scene. "
     "Return STRICT JSON {\"lines\":[{\"character\":str,\"line\":str}]}. Use ONLY the given "
-    "characters. Subtext over on-the-nose; each character must sound distinct (per their "
-    "want/flaw); keep it to 2-4 short lines that play the scene's beat. SCREEN TIME IS "
-    "PAID FOR: every line must be speakable in under 4 seconds (≈12 words max) — cut a "
-    "word before you add one. Total spoken time across the scene ≤ its share of the film."
+    "characters. SCREEN TIME IS PAID FOR: every line ≤12 words, speakable in one breath. "
+    "WHAT A GREAT LINE DOES: attacks or defends a WANT through a SPECIFIC concrete detail, "
+    "never states the theme. GOLD (steal this energy): "
+    "'The blender has your name on it, champ.' / "
+    "'You called it a loan. The lawyers called it theft.' / "
+    "'Don't. You'll say it kind, and I'll believe you again.' "
+    "BANNED FOREVER: apology-and-growth speeches ('I was blinded by...', 'Let's start fresh'), "
+    "saying the theme aloud ('this is about trust'), trailer-speak ('everything changes now'), "
+    "gratitude wrap-ups, any line that could belong to any character. The LAST line of the "
+    "scene must turn or wound — never resolve."
 )
 _CRITIC_SYS = (
     "showrunner:dialogue-critic — Score this scene's dialogue as STRICT JSON "
     "{\"scores\":{\"dialogue_quality\":f,\"subtext\":f,\"distinct_voices\":f},\"overall\":f,\"notes\":str}. "
-    "Be tough; 0.8+ only for lines with real subtext and distinct voices."
+    "HUNT these failure modes and cap overall at 0.5 if ANY appear: theme said aloud; "
+    "apology-and-growth speech; a line with no want colliding with another want; "
+    "trailer-speak; interchangeable voices; a scene that RESOLVES instead of turning. "
+    "Notes must quote the offending line and prescribe the fix. 0.8+ is rare."
 )
-_REVISER_SYS = "showrunner:dialogue reviser — Rewrite the lines to address the notes. Same JSON shape."
+_REVISER_SYS = (
+    "showrunner:dialogue reviser — Rewrite the lines to address the notes. Same JSON shape. "
+    "PUNCH-UP, not padding: each rewritten line ≤12 words, loaded with a concrete detail, "
+    "sayable in one breath; the scene's last line must turn or wound."
+)
 
 
 def write_dialogue(llm: TextLLM, prod: Production) -> Production:
@@ -68,9 +81,10 @@ def write_dialogue(llm: TextLLM, prod: Production) -> Production:
             if any(len((l.get("line") or "").split()) > 14 for l in draft):
                 short_text, t2 = llm.complete(
                     _REVISER_SYS,
-                    f"LINES: {json.dumps(draft)}\nNOTES: every line MUST be at most 12 words AND still "
-                    "a natural spoken sentence — rewrite, don't telegraph ('Clean. This hurts.' is a "
-                    "failure; 'I'm clean, and it hurts that you'd ask' is the standard).",
+                    f"LINES: {json.dumps(draft)}\nNOTES: punch-up pass — every line at most 12 words, "
+                    "a natural spoken sentence loaded with one concrete detail. Telegraphing "
+                    "('Clean. This hurts.') and padding are both failures; "
+                    "'I'm clean, and it hurts that you'd ask' is the standard.",
                     json_mode=True,
                 )
                 tokens += t2
