@@ -426,6 +426,11 @@ html,body{background:#0b0a0f;}
 .sr-testmode{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:12.5px;color:var(--soft);cursor:pointer;user-select:none;}
 .sr-tableread{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-weight:400;}
 .sr-castall-bar{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:rgba(224,138,60,.05);}
+/* model routing grid — talking vs silent, side by side */
+.sr-model-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px;}
+.sr-model-cell{display:flex;flex-direction:column;gap:5px;}
+.sr-model-label{font-size:11.5px;color:var(--ink);}
+.sr-model-label em{color:var(--soft);font-style:normal;font-size:10.5px;}
 /* cast card modal — full picture + full description */
 .sr-cardmodal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:grid;place-items:center;z-index:60;cursor:zoom-out;}
 .sr-cardmodal-body{display:flex;gap:18px;max-width:min(860px,92vw);max-height:86vh;background:var(--paper2);border:1px solid var(--line);border-radius:14px;padding:18px;cursor:default;}

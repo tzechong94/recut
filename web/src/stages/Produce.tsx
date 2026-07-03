@@ -194,25 +194,33 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
 
           <div className="sr-gate-controls">
             <label className="sr-gate-control">
-              Video quality
-              <select
-                value={p.video_quality === "ship" ? "ship" : "draft"}
-                aria-label="Mode"
-                onChange={(e) => ctl.update({ ...p, video_quality: e.target.value })}
-              >
-                <option value="draft">Draft — silent shots on Wan flash (cheap rehearsal)</option>
-                <option value="ship">Ship — silent shots on Wan plus (full quality)</option>
-              </select>
-              <select
-                value={p.dialogue_model ?? ""}
-                aria-label="Dialogue model"
-                data-testid="dialogue-model"
-                onChange={(e) => ctl.update({ ...p, dialogue_model: e.target.value })}
-              >
-                <option value="">Dialogue: wan2.6 — YOUR cast voices, lip-synced</option>
-                <option value="happyhorse-1.0-i2v">Dialogue: HappyHorse 1.0 — its own voice</option>
-                <option value="happyhorse-1.1-i2v">Dialogue: HappyHorse 1.1 — its own voice</option>
-              </select>
+              Models — every shot is either talking or silent
+              <div className="sr-model-grid">
+                <label className="sr-model-cell">
+                  <span className="sr-model-label">🗣 Talking shots <em>(needs a model that can speak + lip-sync)</em></span>
+                  <select
+                    value={p.dialogue_model ?? ""}
+                    aria-label="Talking shots model"
+                    data-testid="dialogue-model"
+                    onChange={(e) => ctl.update({ ...p, dialogue_model: e.target.value })}
+                  >
+                    <option value="">wan2.6 — YOUR cast voices, lip-synced</option>
+                    <option value="happyhorse-1.0-i2v">HappyHorse 1.0 — its own voice</option>
+                    <option value="happyhorse-1.1-i2v">HappyHorse 1.1 — its own voice</option>
+                  </select>
+                </label>
+                <label className="sr-model-cell">
+                  <span className="sr-model-label">🤫 Silent shots <em>(mute models — pure look/cost)</em></span>
+                  <select
+                    value={p.video_quality === "ship" ? "ship" : "draft"}
+                    aria-label="Silent shots model"
+                    onChange={(e) => ctl.update({ ...p, video_quality: e.target.value })}
+                  >
+                    <option value="draft">Wan flash — cheap rehearsal</option>
+                    <option value="ship">Wan plus — full quality</option>
+                  </select>
+                </label>
+              </div>
               {(p.dialogue_model ?? "") !== "" && (
                 <span className="sr-gate-hint">
                   ⚠ HappyHorse invents a voice per clip — your voice casting won't apply
