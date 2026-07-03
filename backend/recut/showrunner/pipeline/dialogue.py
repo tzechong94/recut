@@ -21,7 +21,9 @@ QUALITY_BAR = 0.78
 _WRITER_SYS = (
     "showrunner:dialogue — You are a screenwriter writing the spoken lines for ONE scene. "
     "Return STRICT JSON {\"lines\":[{\"character\":str,\"line\":str}]}. Use ONLY the given "
-    "characters. SCREEN TIME IS PAID FOR: every line ≤12 words, speakable in one breath. "
+    "characters. ATTRIBUTION IS SACRED: character = who SPEAKS the line; a line addressed "
+    "TO someone ('..., Maya.') is spoken by the OTHER person; alternate speakers in a "
+    "two-hander. SCREEN TIME IS PAID FOR: every line ≤12 words, speakable in one breath. "
     "WHAT A GREAT LINE DOES: attacks or defends a WANT through a SPECIFIC concrete detail, "
     "never states the theme. GOLD (steal this energy): "
     "'The blender has your name on it, champ.' / "
@@ -103,8 +105,14 @@ def write_dialogue(llm: TextLLM, prod: Production) -> Production:
 
 
 def _place_characters(lines: list[dict], prod: Production, scene) -> list[DialogueLine]:
-    """Resolve each line to a character: by name when the model named one, else round-robin
-    across the production's characters (so a stub with no names still attributes lines)."""
+    """Resolve each line to a character: by name when the model named one, else round-robin.
+    Two ATTRIBUTION GUARDS (live-hit: qwen labeled every diner line 'Ethan'):
+    1. a line that addresses its own speaker by name ('..., Ethan?') belongs to the
+       OTHER character in a two-hander;
+    2. if the writer pinned ALL lines on one speaker, alternate — a scene is a
+       collision, not a monologue."""
+    import re
+
     chars = prod.characters or []
     out: list[DialogueLine] = []
     rr = 0
@@ -117,7 +125,16 @@ def _place_characters(lines: list[dict], prod: Production, scene) -> list[Dialog
         if not c and chars:
             c = chars[rr % len(chars)]
             rr += 1
+        if c and len(chars) > 1:
+            # vocative self-address: "..., Ethan." / "Ethan, ..." spoken BY Ethan → swap
+            first = c.name.split()[0]
+            if re.search(rf"(^|[,\s]){re.escape(first)}[.,!?]", line_text) and not line_text.lower().startswith(("i'm " + first.lower(), "i am " + first.lower())):
+                c = next((o for o in chars if o.id != c.id), c)
         out.append(DialogueLine(character_id=c.id if c else None, character_name=c.name if c else name, line=line_text))
+    if len(chars) > 1 and len(out) > 1 and len({l.character_id for l in out}) == 1:
+        for i, l in enumerate(out):  # monologue collapse → alternate the two leads
+            c = chars[i % 2]
+            out[i] = DialogueLine(character_id=c.id, character_name=c.name, line=l.line)
     return out
 
 

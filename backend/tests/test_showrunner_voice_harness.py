@@ -71,3 +71,32 @@ def test_storyboard_leaves_dialogue_shots_uncut_end_to_end():
             if audio:
                 assert sh.duration_s + 0.05 >= min(15.0, audio), (
                     f"shot {sh.id}: {sh.duration_s}s slot vs {audio:.1f}s of speech")
+
+
+def test_dialogue_attribution_guards():
+    """Live-hit: the writer labeled every line of a two-hander 'Ethan'. Guards:
+    a vocative self-address swaps to the other lead; a full monologue alternates."""
+    from recut.showrunner.pipeline.dialogue import _place_characters
+    from recut.showrunner.schemas import Character
+
+    p = Production(title="T", characters=[
+        Character(name="Ethan", description="thief"), Character(name="Sarah", description="detective"),
+    ], scenes=[Scene(shots=[])])
+    eid = p.characters[0].id
+    sid = p.characters[1].id
+
+    # vocative self-address: "..., Ethan?" attributed to Ethan → belongs to Sarah
+    out = _place_characters([{"character": "Ethan", "line": "Why hand me your end, Ethan?"}], p, p.scenes[0])
+    assert out[0].character_id == sid
+
+    # "I'm Ethan" is a self-introduction, NOT a vocative — stays with Ethan
+    out = _place_characters([{"character": "Ethan", "line": "I'm Ethan, remember the name."}], p, p.scenes[0])
+    assert out[0].character_id == eid
+
+    # monologue collapse → alternates
+    out = _place_characters([
+        {"character": "Ethan", "line": "You brought the cuffs."},
+        {"character": "Ethan", "line": "I brought the truth."},
+        {"character": "Ethan", "line": "Then one of us lied twice."},
+    ], p, p.scenes[0])
+    assert len({l.character_id for l in out}) == 2
