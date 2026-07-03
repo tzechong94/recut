@@ -16,13 +16,14 @@ from recut.showrunner.schemas import Production, Shot
 
 
 def synth_shot_voice(models: ModelClients, prod: Production, shot: Shot) -> GenAsset | None:
-    """Synthesize this shot's spoken audio (dialogue in the speaker's voice, else
-    narration in a narrator voice). Returns None for silent shots."""
+    """Synthesize this shot's spoken DIALOGUE in the speaker's cast voice — the words
+    only, never the speaker's name (caption is name-free by construction). No dialogue
+    → silent shot (narration is dead: dialogue-only format)."""
     text = shot.caption
-    if not text:
+    if not text or not shot.dialogue:
         return None
-    voice = "longwan_v2"  # narrator default
-    if shot.dialogue and shot.dialogue[0].character_id:
+    voice = "longwan_v2"  # deterministic roster fallback for unattributed lines
+    if shot.dialogue[0].character_id:
         c = prod.character(shot.dialogue[0].character_id)
         if c and c.voice:
             voice = c.voice

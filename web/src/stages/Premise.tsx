@@ -193,7 +193,7 @@ export function Premise({ open }: PremiseProps) {
           </div>
           <textarea
             className="sr-premise-input"
-            placeholder="A lighthouse keeper discovers the light is talking back…"
+            placeholder="Gym-bro Banana accuses Strawberry of juicing before the Mr. Fruit finals — but the blender in his locker isn't his…"
             value={premise}
             onChange={(e) => setPremise(e.target.value)}
             rows={3}

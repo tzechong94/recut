@@ -19,14 +19,14 @@ from recut.worker.main import process_once
 from recut.worker.registry import build_context
 
 
-def test_caption_names_the_speaker():
+def test_caption_is_name_free_dialogue():
     sh = Shot(action="x", dialogue=[
         DialogueLine(character_name="Mara", line="It was you."),
         DialogueLine(character_name="Vince", line="Prove it."),
     ])
-    assert sh.caption == "Mara: It was you.\nVince: Prove it."
+    assert sh.caption == "It was you. Prove it."  # words only — never the names
     sh2 = Shot(action="x", narration="The city never sleeps.")
-    assert sh2.caption == "The city never sleeps."
+    assert sh2.caption == ""  # narration is dead: silent beat
 
 
 def test_compile_adds_title_and_end_cards():

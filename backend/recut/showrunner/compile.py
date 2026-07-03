@@ -65,7 +65,8 @@ def shot_to_slot(shot: Shot, *, style_name: str = "", stills: bool = False,
         asset_id=asset_id,
         text=caption,
         text_role=TextRole.on_screen_text if caption else TextRole.none,
-        style=SlotStyle(font=Font.clean, size=Size.m, align=Align.center),
+        # size S: a one-line subtitle in the lower third, never a wall over the frame
+        style=SlotStyle(font=Font.clean, size=Size.s, align=Align.center),
         status=status,
         kept=True,
     )

@@ -24,11 +24,11 @@ def test_single_scene_compiles_with_fades():
     assert tl.slots[1].fade_in and tl.slots[-2].fade_out          # only scene opens + closes
 
 
-def test_all_narration_no_dialogue_captions():
+def test_narration_is_ignored_silent_beat():
+    """Dialogue-only format: legacy narration neither burns nor speaks."""
     p = Production(title="N", scenes=[Scene(shots=[Shot(action="x", duration_s=3, narration="The tide came in.")])])
     tl = compile_to_timeline(p)
-    body = [s for s in tl.slots if s.id.startswith("shot")]
-    assert tl.slots[1].text == "The tide came in."  # narration burns as caption
+    assert tl.slots[1].text == ""  # a silent beat, not a caption
 
 
 def test_casting_skipped_falls_back_to_t2v():

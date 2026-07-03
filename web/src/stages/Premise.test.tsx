@@ -102,7 +102,7 @@ describe("Premise · AI suggest button", () => {
     expect(btn).toHaveTextContent(/surprise me/i); // empty -> generate
     await userEvent.click(btn);
     await waitFor(() => expect(spy).toHaveBeenCalledWith(""));
-    const box = screen.getByPlaceholderText(/lighthouse keeper/i) as HTMLTextAreaElement;
+    const box = screen.getByPlaceholderText(/Mr. Fruit finals/i) as HTMLTextAreaElement;
     await waitFor(() => expect(box.value).toMatch(/diver finds her own name/i));
     expect(await screen.findByTestId("suggest-premise")).toHaveTextContent(/refine with ai/i); // now has text
   });

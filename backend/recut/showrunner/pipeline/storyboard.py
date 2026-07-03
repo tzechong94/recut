@@ -26,7 +26,9 @@ _SYS = (
     "{\"shots\":[{\"action\":str(what we SEE — the visual, for an image/video model),"
     "\"shot_type\":\"wide|medium|close_up|insert|two_shot\",\"camera\":\"static|pan|push_in|pull_out|handheld|aerial\","
     "\"duration_s\":number,\"character_names\":[str],\"location_name\":str,"
-    "\"dialogue\":[{\"character\":str,\"line\":str}],\"narration\":str}]}. "
+    "\"dialogue\":[{\"character\":str,\"line\":str}]}]}. "
+    "NO narration — this is dialogue-only vertical drama: a shot either has a spoken "
+    "line or plays SILENT (silent beats are good pacing). "
     "FEWER, LONGER shots beat many micro-cuts: each shot should hold ~3-4 seconds and earn "
     "its place. Action lines must be vivid and filmable. "
     "IMPORTANT for visual consistency: for dialogue, use SHOT/REVERSE-SHOT — each speaking "
@@ -197,7 +199,7 @@ def _to_shot(sd: dict, prod: Production) -> Shot:
         character_ids=char_ids,
         location_id=loc.id if loc else None,
         dialogue=dialogue,
-        narration=sd.get("narration", "") or "",
+        narration="",  # narration is dead — dialogue-only format (field kept for legacy docs)
         status=ShotStatus.planned,
     )
 
