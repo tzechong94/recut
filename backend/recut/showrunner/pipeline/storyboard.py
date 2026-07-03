@@ -98,6 +98,7 @@ def build_storyboard(llm: TextLLM, prod: Production) -> Production:
         if dropped:
             prod.warnings.append(
                 f"{dropped} line(s) in '{scene.heading}' didn't fit the shot budget and were cut — pacing over cramming")
+    _enforce_line_budget(prod)  # a 30s film affords ~5 spoken beats, not 12
     _enforce_budget(prod, budget)  # hard cap if the model over-produced
     _fit_durations(prod)  # …and honor the TARGET RUNTIME, not just the shot count
     prod.token_ledger.text_tokens += total
@@ -149,6 +150,32 @@ def _enforce_budget(prod: Production, budget: int) -> None:
         _place_dialogue(scene)  # re-home any lines that were on a removed shot
 
 
+def _enforce_line_budget(prod) -> None:
+    """THE LINE BUDGET: a spoken beat costs ~6s of screen time all-in (line + air),
+    so a 30s film affords ~5 lines total. Live runs proved unbudgeted dialogue blows
+    the runtime 2-3x past target. Trims the SCENE SCRIPTS (the source of truth —
+    shot placement re-derives from them), always keeping each scene's LAST line
+    (the turn/cliffhanger lives there), dropping earliest-first. Re-places after."""
+    budget = max(3, round((prod.target_seconds or 60) / 6))
+    total = sum(len(sc.script or []) for sc in prod.scenes)
+    if total <= budget:
+        return
+    excess = total - budget
+    for sc in prod.scenes:
+        if excess <= 0:
+            break
+        script = sc.script or []
+        keep_last = script[-1:] if sc is prod.scenes[-1] or len(script) > 1 else script
+        cuttable = script[:-1] if len(script) > 1 else []
+        cut = min(excess, len(cuttable))
+        sc.script = cuttable[cut:] + keep_last if len(script) > 1 else script
+        excess -= cut
+    for sc in prod.scenes:
+        _place_dialogue(sc)  # re-home from the trimmed scripts
+    prod.warnings.append(
+        f"dialogue trimmed to the line budget ({budget} spoken beats for {prod.target_seconds}s) — pacing over volume")
+
+
 def _place_dialogue(scene) -> int:
     """Distribute the scene's written, critiqued dialogue onto its shots (shot/reverse-
     shot). ONE line per shot — a shot is one beat: captions stay readable (no subtitle
@@ -172,7 +199,10 @@ def _place_dialogue(scene) -> int:
 
     dropped = 0
     for line in scene.script:
-        target = pick(line, cap=1) or pick(line, cap=2)
+        # STRICTLY one line per shot: a second line means a second SPEAKER sharing
+        # the first speaker's voice and a caption pile-up (live-verified) — drop
+        # over cram, always.
+        target = pick(line, cap=1)
         if not target:
             dropped += 1
             continue

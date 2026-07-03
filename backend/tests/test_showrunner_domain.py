@@ -70,7 +70,10 @@ def test_compile_to_timeline_maps_shots_to_slots():
     assert len(tl.slots) == 2
     assert tl.slots[0].id == p.shots[0].id  # shot id preserved for render cache
     assert tl.slots[0].source == SlotSource.generated and tl.slots[0].asset_id == "a_gen"
-    assert tl.slots[0].text == "It was you."  # the line, name-free (lip-sync attributes)
+    assert tl.slots[0].text == ""  # captions OFF by default — the cast speaks the lines
+    p.burn_captions = True
+    tl2 = compile_to_timeline(p, with_cards=False)
+    assert tl2.slots[0].text == "It was you."  # opt-in burn: the line, name-free
     assert tl.slots[1].source == SlotSource.standin
     assert all(s.type == SlotType.broll for s in tl.slots)
     assert tl.duration_s == 7.0

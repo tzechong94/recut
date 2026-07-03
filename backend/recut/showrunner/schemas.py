@@ -329,6 +329,9 @@ class Production(BaseModel):
     # model in BOTH modes (the pilot pass is the cheap dialogue rehearsal). Legacy
     # values "final"/"happyhorse" upgrade to "ship" on read.
     video_quality: str = "draft"
+    # Burn dialogue as on-screen subtitles. OFF by default: the cast SPEAKS the
+    # lines (embedded TTS + lip-sync) — burned text just blocks the frame.
+    burn_captions: bool = False
     version: int = 1
     created_at: float = Field(default_factory=_now)
 

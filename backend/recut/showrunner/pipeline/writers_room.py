@@ -128,13 +128,38 @@ def develop_treatment(
     return prod
 
 
+_MALE_CUES = (" he ", " his ", " him ", "male", " man", " mr", " boy", " bro", " father", " dad",
+              " king", " prince", " grandpa", " uncle", " gentleman")
+
+
+def _assign_voices(raw_chars: list[dict]) -> list[str]:
+    """Distinct roster voices, GENDER-AWARE: male-coded characters get Ethan (the
+    roster's one male voice) first; everyone else rotates the female voices. Still
+    guarantees no two cast members share a voice (up to 4)."""
+    female = ["Cherry", "Serena", "Chelsie"]
+    out: list[str] = []
+    male_taken = False
+    for c in raw_chars:
+        blob = f" {c.get('name', '')} {c.get('description', '')} {c.get('role', '')} ".lower()
+        is_male = any(cue in blob for cue in _MALE_CUES)
+        if is_male and not male_taken:
+            out.append("Ethan")
+            male_taken = True
+        elif female:
+            out.append(female.pop(0))
+        else:
+            out.append("Ethan")  # 5th+ character: collisions unavoidable on a 4-voice roster
+    return out
+
+
 def _build_production(t: dict, premise: str, target_seconds: int, style_name: str, project_id: str | None) -> Production:
     style = STYLE_PRESETS.get(style_name, STYLE_PRESETS["cinematic"]).model_copy()
     chars = []
+    voices = _assign_voices(t.get("characters", []))
     for i, c in enumerate(t.get("characters", [])):
         chars.append(Character(
             name=c.get("name", "Character"), description=c.get("description", ""), role=c.get("role", ""),
-            want=c.get("want", ""), flaw=c.get("flaw", ""), voice=_VOICE_POOL[i % len(_VOICE_POOL)],
+            want=c.get("want", ""), flaw=c.get("flaw", ""), voice=voices[i],
         ))
     locs = [Location(name=l.get("name", "Location"), description=l.get("description", "")) for l in t.get("locations", [])]
     scenes = [Scene(heading=s.get("heading", ""), summary=s.get("summary", "")) for s in t.get("scenes", [])]

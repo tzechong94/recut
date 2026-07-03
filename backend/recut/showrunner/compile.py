@@ -43,11 +43,12 @@ _STATUS_MAP = {
 
 
 def shot_to_slot(shot: Shot, *, style_name: str = "", stills: bool = False,
-                 duration_override: float | None = None) -> Slot:
+                 duration_override: float | None = None, burn_captions: bool = False) -> Slot:
     """One shot → one render slot. In STILLS mode (the animatic) the slot sources the
     shot's board still instead of its video take — the render's image path (-loop 1)
-    plays it for the beat's duration; $0 video tokens."""
-    caption = shot.caption
+    plays it for the beat's duration; $0 video tokens. Captions burn only when the
+    production opts in (the cast speaks the lines — text on the frame is optional)."""
+    caption = shot.caption if burn_captions else ""
     if stills and shot.keyframe_asset_id:
         asset_id, source, status = shot.keyframe_asset_id, SlotSource.generated, SlotStatus.ready
     elif stills:
@@ -91,17 +92,19 @@ def compile_to_timeline(prod: Production, *, with_cards: bool = True, stills: bo
     the ANIMATIC (board stills instead of video takes, $0 video); `duration_overrides`
     fits animatic beats to the voice job-locally without mutating the Production."""
     overrides = duration_overrides or {}
+    burn = bool(getattr(prod, "burn_captions", False)) or stills  # the animatic keeps
+    # captions: its stills don't lip-sync, so the text carries the read-along
     slots: list[Slot] = []
     for scene in prod.scenes:
         for i, sh in enumerate(scene.shots):
             slot = shot_to_slot(sh, style_name=prod.style.name, stills=stills,
-                                duration_override=overrides.get(sh.id))
+                                duration_override=overrides.get(sh.id), burn_captions=burn)
             slot.fade_in = i == 0  # dip-from-black as each scene opens
             slot.fade_out = i == len(scene.shots) - 1  # dip-to-black as it closes
             slots.append(slot)
     if not slots:  # productions without scenes (e.g. tests) still compile
         slots = [shot_to_slot(sh, style_name=prod.style.name, stills=stills,
-                              duration_override=overrides.get(sh.id)) for sh in prod.shots]
+                              duration_override=overrides.get(sh.id), burn_captions=burn) for sh in prod.shots]
     if with_cards and slots:
         title = prod.title or "Untitled"
         end_text = (prod.title or "An AI Showrunner film")  # reprise the title, not the theme label

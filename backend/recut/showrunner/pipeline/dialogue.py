@@ -45,8 +45,16 @@ def write_dialogue(llm: TextLLM, prod: Production) -> Production:
             text, t = llm.complete(_WRITER_SYS, user, json_mode=True)
             tokens += t
             draft = _parse(text).get("lines", [])
-            # HARD pacing guard: live models drift past the 12-word instruction; one
-            # targeted revise brings long lines down (screen time is paid for)
+            crit_text, t = llm.complete(_CRITIC_SYS, json.dumps({"scene": scene.summary, "lines": draft}), json_mode=True)
+            tokens += t
+            crit = _parse(crit_text)
+            overall = float(crit.get("overall", 0.0))
+            if overall < QUALITY_BAR:
+                rev_text, t = llm.complete(_REVISER_SYS, f"LINES: {json.dumps(draft)}\nNOTES: {crit.get('notes','')}", json_mode=True)
+                tokens += t
+                draft = _parse(rev_text).get("lines", draft) or draft
+            # HARD pacing guard LAST (the quality revise above loves to re-expand):
+            # live models drift past the 12-word instruction; one targeted pass cuts
             if any(len((l.get("line") or "").split()) > 14 for l in draft):
                 short_text, t2 = llm.complete(
                     _REVISER_SYS,
@@ -60,14 +68,6 @@ def write_dialogue(llm: TextLLM, prod: Production) -> Production:
                     draft = shortened
                 if any(len((l.get("line") or "").split()) > 18 for l in draft):
                     prod.warnings.append(f"lines in '{scene.heading}' run long despite revision — pacing may stretch")
-            crit_text, t = llm.complete(_CRITIC_SYS, json.dumps({"scene": scene.summary, "lines": draft}), json_mode=True)
-            tokens += t
-            crit = _parse(crit_text)
-            overall = float(crit.get("overall", 0.0))
-            if overall < QUALITY_BAR:
-                rev_text, t = llm.complete(_REVISER_SYS, f"LINES: {json.dumps(draft)}\nNOTES: {crit.get('notes','')}", json_mode=True)
-                tokens += t
-                draft = _parse(rev_text).get("lines", draft) or draft
             best_overall.append(overall)
             scene.script = _place_characters(draft, prod, scene)
             prod.writers_room.append({"role": "dialogue", "text": f"{scene.heading}: {len(scene.script)} lines (dialogue score {overall:.2f})", "score": round(overall, 2)})
