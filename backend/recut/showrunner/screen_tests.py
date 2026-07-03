@@ -45,6 +45,15 @@ SCREEN_TESTS: list[dict] = [
         "style": "cinematic", "tone": "tragic", "target_seconds": 30,
     },
     {
+        "key": "the_return_counter",
+        "premise": (
+            "A customer returns a robot vacuum that salutes him and calls him 'Commander' "
+            "— the clerk, reading from the manual, insists loyalty is a premium feature "
+            "and the real problem is that the customer isn't saluting back."
+        ),
+        "style": "claymation", "tone": "comedy", "target_seconds": 25,
+    },
+    {
         "key": "courtroom_turn",
         "premise": (
             "A star witness recants on the stand; the prosecutor realizes mid-question "
