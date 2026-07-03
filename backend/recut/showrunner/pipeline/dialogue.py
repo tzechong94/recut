@@ -39,8 +39,18 @@ def write_dialogue(llm: TextLLM, prod: Production) -> Production:
     cast = "; ".join(f"{c.name} (wants: {c.want or '?'}; flaw: {c.flaw or '?'})" for c in prod.characters)
     tokens = 0
     best_overall: list[float] = []
-    for scene in prod.scenes:
-        user = f"REGISTER: {register}\nCHARACTERS: {cast}\nSCENE: {scene.heading} — {scene.summary}\nWrite the lines."
+    # WRITE TO THE BUDGET: a spoken beat costs ~6s of screen time, so a 30s film
+    # affords ~5 lines TOTAL. Allocating per scene here (remainder to later scenes —
+    # the climax earns extra) means the writer crafts exactly the lines the film can
+    # hold, instead of over-writing and having the storyboard amputate the best ones.
+    budget = max(3, round((prod.target_seconds or 60) / 6))
+    n_scenes = max(1, len(prod.scenes))
+    base, rem = divmod(budget, n_scenes)
+    allocs = [max(1, base + (1 if i >= n_scenes - rem else 0)) for i in range(n_scenes)]
+    for scene, alloc in zip(prod.scenes, allocs):
+        user = (f"REGISTER: {register}\nCHARACTERS: {cast}\nSCENE: {scene.heading} — {scene.summary}\n"
+                f"Write EXACTLY {alloc} line{'s' if alloc != 1 else ''} — this scene's entire spoken "
+                f"allowance. Each line must carry the scene's turn; alternate speakers when possible.")
         try:
             text, t = llm.complete(_WRITER_SYS, user, json_mode=True)
             tokens += t
@@ -58,8 +68,9 @@ def write_dialogue(llm: TextLLM, prod: Production) -> Production:
             if any(len((l.get("line") or "").split()) > 14 for l in draft):
                 short_text, t2 = llm.complete(
                     _REVISER_SYS,
-                    f"LINES: {json.dumps(draft)}\nNOTES: every line MUST be at most 12 words — "
-                    "cut ruthlessly, keep the meaning and each character's voice.",
+                    f"LINES: {json.dumps(draft)}\nNOTES: every line MUST be at most 12 words AND still "
+                    "a natural spoken sentence — rewrite, don't telegraph ('Clean. This hurts.' is a "
+                    "failure; 'I'm clean, and it hurts that you'd ask' is the standard).",
                     json_mode=True,
                 )
                 tokens += t2

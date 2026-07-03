@@ -128,20 +128,24 @@ def develop_treatment(
     return prod
 
 
-_MALE_CUES = (" he ", " his ", " him ", "male", " man", " mr", " boy", " bro", " father", " dad",
-              " king", " prince", " grandpa", " uncle", " gentleman")
+import re as _re
+
+_MALE_CUES = _re.compile(
+    r"\b(he|his|him|male|man|men|mr|boy|bro|bros|guy|dude|father|dad|king|prince|"
+    r"grandpa|uncle|gentleman|beard|mustache|moustache)\b")
 
 
 def _assign_voices(raw_chars: list[dict]) -> list[str]:
     """Distinct roster voices, GENDER-AWARE: male-coded characters get Ethan (the
     roster's one male voice) first; everyone else rotates the female voices. Still
-    guarantees no two cast members share a voice (up to 4)."""
+    guarantees no two cast members share a voice (up to 4). Word-boundary regex —
+    'gym-bro' matches, 'woman'/'broken' don't."""
     female = ["Cherry", "Serena", "Chelsie"]
     out: list[str] = []
     male_taken = False
     for c in raw_chars:
         blob = f" {c.get('name', '')} {c.get('description', '')} {c.get('role', '')} ".lower()
-        is_male = any(cue in blob for cue in _MALE_CUES)
+        is_male = bool(_MALE_CUES.search(blob))
         if is_male and not male_taken:
             out.append("Ethan")
             male_taken = True
