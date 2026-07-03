@@ -426,6 +426,18 @@ html,body{background:#0b0a0f;}
 .sr-testmode{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:12.5px;color:var(--soft);cursor:pointer;user-select:none;}
 .sr-tableread{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-weight:400;}
 .sr-castall-bar{display:flex;align-items:center;gap:12px;margin:0 0 16px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:rgba(224,138,60,.05);}
+/* cast card modal — full picture + full description */
+.sr-cardmodal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:grid;place-items:center;z-index:60;cursor:zoom-out;}
+.sr-cardmodal-body{display:flex;gap:18px;max-width:min(860px,92vw);max-height:86vh;background:var(--paper2);border:1px solid var(--line);border-radius:14px;padding:18px;cursor:default;}
+.sr-cardmodal-body img{max-height:70vh;max-width:46vw;border-radius:10px;object-fit:contain;background:#000;}
+.sr-cardmodal-text{display:flex;flex-direction:column;gap:10px;min-width:200px;max-width:320px;}
+.sr-cardmodal-text h3{font-family:var(--display);font-size:19px;}
+.sr-cardmodal-text p{color:var(--soft);font-size:13px;line-height:1.55;overflow-y:auto;}
+.sr-bible-desc{cursor:pointer;}
+.sr-bible-img{cursor:zoom-in;}
+/* drama-kind picker — the first creative choice */
+.sr-kind-row{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}
+.sr-kind{font-size:12px;padding:5px 10px;}
 /* voice casting chips */
 .sr-voice-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:2px 0 8px;}
 .sr-voice-label{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft);}

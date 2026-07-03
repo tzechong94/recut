@@ -198,7 +198,8 @@ def handle_animatic(job: Job, ctx: WorkerContext) -> dict:
             if sp:
                 vo_paths[shot.id] = str(sp)
                 vdur = probe_duration(str(sp)) or dur
-                dur = round(max(lo, min(hi, vdur + 0.4)), 2)
+                # NEVER cut a line mid-word: audio sets the floor, not max_shot_s
+                dur = round(max(lo, min(15.0, vdur + 0.4)), 2)
         fits[shot.id] = dur
         queue.update_progress(job.id, (i + 1) / (len(shots) or 1) * 0.5)
     repo.save_production(prod)  # honest ledger + warnings
@@ -516,6 +517,8 @@ def _fit_durations_to_voice(prod, ctx, src_dir, force: frozenset = frozenset()) 
                 dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
                 # the clip embeds this exact wav — duration must cover the full line
                 shot.duration_s = float(max(3, min(15, int(dur + 1.0))))
+                if dur + 1.0 > 15:
+                    prod.warnings.append("a line runs past the 15s clip ceiling — shorten it or split the shot")
             else:
                 shot.duration_s = float(max(3, min(15, round(len(shot.caption) * 0.07 + 1.2))))
             continue
@@ -526,7 +529,8 @@ def _fit_durations_to_voice(prod, ctx, src_dir, force: frozenset = frozenset()) 
             vo_paths[shot.id] = str(existing)
             if chosen is None:
                 dur = probe_duration(str(existing)) or shot.duration_s
-                shot.duration_s = round(max(lo, min(hi, dur + 0.4)), 2)
+                # NEVER cut a line mid-word: audio sets the floor, not max_shot_s
+                shot.duration_s = round(max(lo, min(15.0, dur + 0.4)), 2)
             continue
         if not shot.caption:
             if chosen is None:
@@ -548,7 +552,8 @@ def _fit_durations_to_voice(prod, ctx, src_dir, force: frozenset = frozenset()) 
         prod.token_ledger.voice_tokens += va.tokens
         if chosen is None:
             dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
-            shot.duration_s = round(max(lo, min(hi, dur + 0.4)), 2)  # small tail pad
+            # NEVER cut a line mid-word: audio sets the floor, not max_shot_s
+            shot.duration_s = round(max(lo, min(15.0, dur + 0.4)), 2)
     return vo_paths, vo_urls
 
 

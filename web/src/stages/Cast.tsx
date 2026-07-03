@@ -353,11 +353,35 @@ function RefCard({
 }: RefCardProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [note, setNote] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const has = !!assetId;
 
   return (
     <div className={"sr-bible-card" + (has ? " is-locked" : "")}>
-      <div className="sr-bible-img">
+      {expanded && (
+        <div
+          className="sr-cardmodal"
+          role="dialog"
+          aria-label={`${name} details`}
+          onClick={() => setExpanded(false)}
+        >
+          <div className="sr-cardmodal-body" onClick={(e) => e.stopPropagation()}>
+            {has && <img src={assetRawUrl(assetId!)} alt={name} />}
+            <div className="sr-cardmodal-text">
+              <h3>{name}</h3>
+              <p>{description}</p>
+              <button className="sr-mini ghost" onClick={() => setExpanded(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div
+        className="sr-bible-img"
+        onClick={() => (has || description) && setExpanded(true)}
+        title="Click for the full picture + description"
+      >
         {has ? (
           <img src={assetRawUrl(assetId!)} alt={name} />
         ) : busy ? (
@@ -385,7 +409,14 @@ function RefCard({
         onCommit={onRename}
         aria-label={`${kind} name`}
       />
-      <p className="sr-bible-desc">{description}</p>
+      <p
+        className="sr-bible-desc"
+        onClick={() => setExpanded(true)}
+        title="Click to read the full description"
+        data-testid={`desc-${name}`}
+      >
+        {description}
+      </p>
       {voiceRow}
 
       {error && <div className="rc-err">{error}</div>}

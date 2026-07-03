@@ -120,12 +120,26 @@ STYLE_PRESETS: dict[str, StyleLock] = {
 
 # Writing-register TONES, decoupled from the visual style ("" = match the style's default).
 TONE_REGISTERS: dict[str, str] = {
+    "brainrot": (
+        "Absurdist meme-brainrot: anthropomorphic objects/foods/animals in dead-serious "
+        "high-stakes drama (gym rivalries, betrayal at the smoothie bar, forbidden love "
+        "across the produce aisle). Deadpan sincerity about ridiculous stakes — the comedy "
+        "IS the commitment. Punchy meme cadence, unhinged reveals, zero winking at camera. "
+        "Characters MUST be non-human things with one absurd defining trait each."
+    ),
+    "melodrama": (
+        "ReelShort-style melodrama: secret identities, revenge, a contract with a cruel "
+        "clause, the despised one is secretly powerful. Big emotions played straight, "
+        "gasp-worthy reveals, every scene ends on a slap or a bombshell."
+    ),
     "thriller": "Tense and propulsive: short lines, rising dread, information used as a weapon.",
-    "heartfelt": "Warm and sincere: small human details, earned feeling, no cynicism.",
+    "mystery": "A puzzle with teeth: every scene plants or pays a clue; the answer recontextualizes everything.",
     "comedy": "Dry, quick, character-driven humor; jokes come from want vs flaw, never puns.",
+    "romance": "Charged subtext, near-misses, what's unsaid matters more than what's said.",
+    "horror": "Creeping wrongness: the mundane turns hostile, dread over gore, the last shot lingers.",
+    "heartfelt": "Warm and sincere: small human details, earned feeling, no cynicism.",
     "tragic": "Weighty and inevitable: choices cost, silences speak, no rescue arrives.",
     "hopeful": "Against-the-odds warmth: hard circumstances, stubborn light, an ending that lifts.",
-    "romance": "Charged subtext, near-misses, what's unsaid matters more than what's said.",
 }
 
 

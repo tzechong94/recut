@@ -39,7 +39,31 @@ const STYLE_SWATCH: Record<string, string> = {
   paper_craft: "linear-gradient(150deg,#f4e8c1,#a0c1b8)",
 };
 
-const TONES = ["", "thriller", "heartfelt", "comedy", "tragic", "hopeful", "romance"];
+/** What KIND of drama — the first creative choice, steers the writers' room. */
+const DRAMA_KINDS: { key: string; label: string; hint: string }[] = [
+  { key: "brainrot", label: "🧠 Brainrot", hint: "absurd objects, dead-serious stakes" },
+  { key: "melodrama", label: "👑 Melodrama", hint: "secret heirs, revenge, bombshells" },
+  { key: "thriller", label: "😱 Thriller", hint: "dread, secrets, ticking clocks" },
+  { key: "mystery", label: "🔍 Mystery", hint: "clues that recontextualize" },
+  { key: "comedy", label: "😂 Comedy", hint: "want vs flaw, dry and quick" },
+  { key: "romance", label: "💘 Romance", hint: "charged subtext, near-misses" },
+  { key: "horror", label: "🫥 Horror", hint: "the mundane turns hostile" },
+  { key: "heartfelt", label: "❤️ Heartfelt", hint: "small details, earned feeling" },
+  { key: "", label: "✨ Match style", hint: "let the visual style set the register" },
+];
+
+const KIND_PLACEHOLDERS: Record<string, string> = {
+  brainrot:
+    "Gym-bro Banana accuses Strawberry of juicing before the Mr. Fruit finals — but the blender in his locker isn't his…",
+  melodrama:
+    "The cleaner they fired at dawn inherits the hotel by noon — her first act: audit the manager who fired her…",
+  thriller: "The night-shift nurse recognizes her new patient: the hit-and-run driver no one ever caught…",
+  mystery: "Every clock in town stopped at 3:07 — except the one the locksmith's father built…",
+  comedy: "A wedding planner books two weddings, one venue, one bride who invited both grooms…",
+  romance: "Two rival food-truck owners keep stealing each other's customers — and glances…",
+  horror: "The apartment's previous tenant left one rule taped inside the pantry: never answer the delivery knock twice…",
+  heartfelt: "A retiring bus driver's last route collects every passenger whose life he quietly changed…",
+};
 
 /** A premise needs at least a sentence's worth to give the writers' room something. */
 const MIN_PREMISE_CHARS = 12;
@@ -52,7 +76,7 @@ export function Premise({ open }: PremiseProps) {
   const [premise, setPremise] = useState("");
   const [seconds, setSeconds] = useState(45);
   const [style, setStyle] = useState("cinematic");
-  const [tone, setTone] = useState("");
+  const [tone, setTone] = useState("brainrot");  // the demo-est default — user picks their drama kind up top
   const [testMode, setTestMode] = useState(false);
   // Custom style (LTX-style "style element"): built from a description and/or refs.
   const [customOpen, setCustomOpen] = useState(false);
@@ -191,9 +215,24 @@ export function Premise({ open }: PremiseProps) {
               {suggesting ? "Thinking…" : premise.trim() ? "Refine with AI" : "Surprise me"}
             </button>
           </div>
+          <div className="sr-kind-row" data-testid="drama-kinds">
+            {DRAMA_KINDS.map((k) => (
+              <button
+                key={k.key || "match"}
+                className={"sr-chip sr-kind" + (tone === k.key ? " is-on" : "")}
+                title={k.hint}
+                onClick={() => setTone(k.key)}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
           <textarea
             className="sr-premise-input"
-            placeholder="Gym-bro Banana accuses Strawberry of juicing before the Mr. Fruit finals — but the blender in his locker isn't his…"
+            placeholder={
+              KIND_PLACEHOLDERS[tone] ??
+              "A lighthouse keeper discovers the light is talking back…"
+            }
             value={premise}
             onChange={(e) => setPremise(e.target.value)}
             rows={3}
@@ -320,21 +359,6 @@ export function Premise({ open }: PremiseProps) {
                 aria-label="Target length in seconds"
                 onChange={(e) => setSeconds(Number(e.target.value))}
               />
-            </div>
-            <div className="sr-control">
-              <label className="sr-field-label">Tone</label>
-              <select
-                className="sr-tone-select"
-                value={tone}
-                aria-label="Writing tone"
-                onChange={(e) => setTone(e.target.value)}
-              >
-                {TONES.map((t) => (
-                  <option key={t} value={t}>
-                    {t === "" ? "match the style" : t}
-                  </option>
-                ))}
-              </select>
             </div>
             <label className="sr-testmode" data-testid="test-mode-toggle">
               <input

@@ -25,7 +25,10 @@ from recut.showrunner.schemas import (
 QUALITY_BAR = 0.8
 MAX_ROUNDS = 2  # writer + up to 2 critic/revise rounds — keeps live latency ~40-50s while
                 # still a visible multi-round debate (stops early once the bar is met)
-_VOICE_POOL = ["longxiaochun_v2", "longshu_v2", "longwan_v2", "longcheng_v2", "longhua_v2"]
+# The ACTUAL qwen3-tts roster, assigned round-robin so every cast member gets a
+# DISTINCT voice (legacy pool ids hashed onto the roster and collided — two
+# characters could sound identical). Alternates female/male for contrast.
+_VOICE_POOL = ["Cherry", "Ethan", "Serena", "Chelsie"]
 
 _REGISTER = {
     "noir": "Hard-boiled noir: terse, cynical, shadowed, morally grey. Clipped dialogue with subtext.",
