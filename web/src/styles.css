@@ -354,7 +354,9 @@ html,body{background:#0b0a0f;}
 .sr-edit{background:transparent;border:1px solid transparent;border-radius:8px;color:var(--ink);font-size:14px;font-family:var(--ui);padding:7px 9px;width:100%;transition:border-color .12s,background .12s;}
 .sr-edit:hover{background:rgba(255,255,255,.03);border-color:var(--line);}
 .sr-edit:focus{outline:none;background:rgba(224,138,60,.08);border-color:var(--violet);}
-.sr-edit-multi{resize:none;line-height:1.5;overflow:hidden;}
+/* auto-grows via JS; if that ever misses (hidden mount, font swap), the text
+   stays reachable: cap + scroll. field-sizing is the native fix where supported. */
+.sr-edit-multi{resize:none;line-height:1.5;overflow-y:auto;max-height:220px;field-sizing:content;}
 .sr-strong{font-weight:700;font-size:15px;}
 .sr-role{font-family:var(--mono);font-size:11px;color:var(--soft);max-width:140px;text-align:right;}
 .sr-heading{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--violet);text-transform:uppercase;}

@@ -26,12 +26,15 @@ export function Editable({
 
   useEffect(() => setDraft(value), [value]);
 
-  useEffect(() => {
+  const grow = () => {
     if (multiline && ref.current) {
       ref.current.style.height = "auto";
       ref.current.style.height = ref.current.scrollHeight + "px";
     }
-  }, [draft, multiline]);
+  };
+  // re-measure on content change AND on focus — a field that mounted hidden
+  // (collapsed card, late font) has scrollHeight 0 and would stay clipped
+  useEffect(grow, [draft, multiline]);
 
   function commit() {
     if (draft !== value) onCommit(draft);
@@ -45,6 +48,7 @@ export function Editable({
         value={draft}
         placeholder={placeholder}
         onChange={(e) => setDraft(e.target.value)}
+        onFocus={grow}
         onBlur={commit}
         rows={1}
         {...rest}
