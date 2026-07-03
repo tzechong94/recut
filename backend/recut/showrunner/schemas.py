@@ -332,6 +332,10 @@ class Production(BaseModel):
     # Burn dialogue as on-screen subtitles. OFF by default: the cast SPEAKS the
     # lines (embedded TTS + lip-sync) — burned text just blocks the frame.
     burn_captions: bool = False
+    # Dialogue model override ("" = the default, wan2.6 + your cast's TTS voices).
+    # HappyHorse options generate their OWN voice per clip — no cast-voice
+    # consistency; offered because the Track 2 brief names both model families.
+    dialogue_model: str = ""
     version: int = 1
     created_at: float = Field(default_factory=_now)
 

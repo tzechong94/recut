@@ -118,3 +118,39 @@ def test_take_staleness_triple():
     shot.keyframe_asset_id = "still_A"
     shot.dialogue[0].line = "A new line entirely."  # edited dialogue
     assert take_is_stale(shot, take) is True
+
+
+def test_dialogue_model_override_routes_speaking_shots():
+    """The production-level dialogue model override (HappyHorse selectable again —
+    Track 2 names both families) wins over the settings default for speaking shots."""
+    from recut.core.config import get_settings
+    from recut.showrunner.pipeline.production import route_shot_model, speaking
+
+    p = _prod()
+    speaking_shot = next(s for s in p.shots if speaking(s))
+    s = get_settings()
+    assert route_shot_model(speaking_shot, p, s) == s.dialogue_i2v_model
+    p.dialogue_model = "happyhorse-1.0-i2v"
+    assert route_shot_model(speaking_shot, p, s) == "happyhorse-1.0-i2v"
+
+
+def test_happyhorse_dialogue_skips_tts_no_double_audio():
+    """HappyHorse speaks with its OWN voice: pre-synthing TTS would double the
+    audio. Voice-fit must skip TTS for it (text-estimated int duration instead)."""
+    import tempfile
+
+    from recut.worker.handlers.showrunner import _fit_durations_to_voice
+    from recut.worker.registry import build_context
+
+    p = _prod()
+    p.dialogue_model = "happyhorse-1.0-i2v"
+    ctx = build_context()
+    with tempfile.TemporaryDirectory() as d:
+        vo_paths, vo_urls = _fit_durations_to_voice(p, ctx, d)
+    from recut.showrunner.pipeline.production import speaking
+
+    for sh in p.shots:
+        if speaking(sh):
+            assert sh.id not in vo_paths and sh.id not in vo_urls
+            assert float(sh.duration_s).is_integer() and 3 <= sh.duration_s <= 15
+    assert p.token_ledger.voice_tokens == 0

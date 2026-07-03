@@ -221,6 +221,11 @@ export interface Production {
   /** MODE: "draft" (cheap silent-shot rehearsal) or "ship". Speaking shots film on
    *  the dialogue model (our voice + lip-sync) in BOTH modes. */
   video_quality?: string;
+  /** Dialogue model override ("" = wan2.6 + your cast's voices). HappyHorse
+   *  generates its OWN voice per clip — no cast-voice consistency. */
+  dialogue_model?: string;
+  /** Burn dialogue as subtitles on the film (off by default — the cast speaks). */
+  burn_captions?: boolean;
   version: number;
   created_at?: number;
 }

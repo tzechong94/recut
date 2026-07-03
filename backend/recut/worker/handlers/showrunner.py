@@ -478,7 +478,7 @@ def _fit_durations_to_voice(prod, ctx, src_dir, force: frozenset = frozenset()) 
     line (clamped), so dialogue is never truncated mid-word. Returns shot_id -> vo path."""
     from recut.pipeline.shots import probe_duration
 
-    from recut.showrunner.pipeline.production import is_native_audio_model, route_shot_model, speaking
+    from recut.showrunner.pipeline.production import accepts_input_audio, is_native_audio_model, route_shot_model, speaking
 
     vo_paths: dict[str, str] = {}
     vo_urls: dict[str, str] = {}  # HOSTED tts urls — native i2v embeds this exact track
@@ -498,6 +498,12 @@ def _fit_durations_to_voice(prod, ctx, src_dir, force: frozenset = frozenset()) 
         native_speaker = chosen is None and speaking(shot) and is_native_audio_model(route)
         lo, hi = ctx.settings.min_shot_s, ctx.settings.max_shot_s
         chash = content_hash(shot.caption.encode())[:8] if shot.caption else "silent"
+        if native_speaker and not accepts_input_audio(route):
+            # HappyHorse speaks with its OWN generated voice — pre-synthing TTS here
+            # would double the audio. Text-estimate the duration; the worker extracts
+            # the clip's performance into the VO track after generation.
+            shot.duration_s = float(max(3, min(15, round(len(shot.caption) * 0.07 + 1.2))))
+            continue
         if native_speaker:
             # input-audio dialogue: synth FRESH (the hosted url is short-lived and the
             # clip must embed this exact waveform); the local copy doubles as the VO

@@ -42,14 +42,21 @@ def is_native_audio_model(model: str) -> bool:
     return model.startswith(("happyhorse", "wan2.5", "wan2.6"))
 
 
+def accepts_input_audio(model: str) -> bool:
+    """Models that EMBED a provided audio track (our TTS → cast-voice consistency).
+    HappyHorse is native-audio but generates its OWN voice — never send it TTS."""
+    return model.startswith(("wan2.5", "wan2.6"))
+
+
 def route_shot_model(shot: Shot, prod: Production, settings, *, master: bool = False) -> str:
     """THE ROUTING RULE (fidelity contract §1): speaking → dialogue model in both
-    modes; silent → flash (draft) / plus (ship). Master models are reachable ONLY via
+    modes (production override first — the Track 2 brief names HappyHorse too);
+    silent → flash (draft) / plus (ship). Master models are reachable ONLY via
     the master-cut action — and a master cut can never silence dialogue."""
     if master:
         return settings.master_dialogue_i2v_model if speaking(shot) else settings.master_i2v_model
     if speaking(shot):
-        return settings.dialogue_i2v_model
+        return prod.dialogue_model or settings.dialogue_i2v_model
     return settings.wan_i2v_draft_model if prod.video_quality == "draft" else settings.wan_i2v_model
 
 

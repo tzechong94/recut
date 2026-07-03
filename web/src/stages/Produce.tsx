@@ -203,9 +203,21 @@ export function ProduceStage({ ctl, onAdvance, onExport }: StageProps) {
                 <option value="draft">Draft — silent shots on Wan flash (cheap rehearsal)</option>
                 <option value="ship">Ship — silent shots on Wan plus (full quality)</option>
               </select>
-              <span className="sr-gate-hint">
-                dialogue always speaks — your cast voices, lip-synced
-              </span>
+              <select
+                value={p.dialogue_model ?? ""}
+                aria-label="Dialogue model"
+                data-testid="dialogue-model"
+                onChange={(e) => ctl.update({ ...p, dialogue_model: e.target.value })}
+              >
+                <option value="">Dialogue: wan2.6 — YOUR cast voices, lip-synced</option>
+                <option value="happyhorse-1.0-i2v">Dialogue: HappyHorse 1.0 — its own voice</option>
+                <option value="happyhorse-1.1-i2v">Dialogue: HappyHorse 1.1 — its own voice</option>
+              </select>
+              {(p.dialogue_model ?? "") !== "" && (
+                <span className="sr-gate-hint">
+                  ⚠ HappyHorse invents a voice per clip — your voice casting won't apply
+                </span>
+              )}
             </label>
             <label className="sr-gate-control">
               Pilot
