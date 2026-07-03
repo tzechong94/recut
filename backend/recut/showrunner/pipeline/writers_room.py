@@ -87,19 +87,35 @@ def develop_treatment(
     tokens = 0
 
     user = f"PREMISE: {premise}\nTARGET LENGTH: {target_seconds}s\nWrite the treatment."
-    draft_text, t = llm.complete(_writer_sys(register), user, json_mode=True)
-    tokens += t
-    draft = _parse(draft_text)
-    # Guard a degenerate treatment (malformed/empty) — retry once with an explicit nudge.
-    if not draft.get("scenes") or not draft.get("characters"):
-        draft_text, t = llm.complete(
-            _writer_sys(register),
-            user + "\nThe premise may be terse — invent specifics. You MUST return at least "
-            "2 characters and 3 scenes.",
-            json_mode=True,
-        )
+    # INVARIANT: no model failure yields a blank/500 — a dead network during the
+    # writer call (live-hit: ConnectionResetError mid-create, user saw a stuck
+    # button then a 500) falls back to the deterministic stub treatment. The user
+    # gets an editable script + a warning instead of a dead end.
+    fallback_warning: str | None = None
+    try:
+        draft_text, t = llm.complete(_writer_sys(register), user, json_mode=True)
         tokens += t
-        draft = _parse(draft_text) or draft
+        draft = _parse(draft_text)
+        # Guard a degenerate treatment (malformed/empty) — retry once with an explicit nudge.
+        if not draft.get("scenes") or not draft.get("characters"):
+            draft_text, t = llm.complete(
+                _writer_sys(register),
+                user + "\nThe premise may be terse — invent specifics. You MUST return at least "
+                "2 characters and 3 scenes.",
+                json_mode=True,
+            )
+            tokens += t
+            draft = _parse(draft_text) or draft
+    except Exception as exc:  # noqa: BLE001 — network/provider outage during create
+        draft = {}
+        fallback_warning = f"the writers' room couldn't reach the model ({type(exc).__name__}); a starter script was drafted offline — edit it or press the writers' room again"
+    if not draft.get("scenes") or not draft.get("characters"):
+        from recut.core.models import StubTextLLM
+
+        stub_text, _ = StubTextLLM().complete(_writer_sys(register), user, json_mode=True)
+        draft = _parse(stub_text)
+        fallback_warning = fallback_warning or (
+            "the model returned an unusable treatment; a starter script was drafted offline — edit it or press the writers' room again")
     transcript.append({"role": "writer", "text": _summ(draft)})
 
     for rnd in range(1, MAX_ROUNDS + 1):
@@ -125,6 +141,8 @@ def develop_treatment(
     prod.style.tone = tone
     prod.writers_room = transcript
     prod.token_ledger.text_tokens += tokens
+    if fallback_warning:
+        prod.warnings.append(fallback_warning)
     return prod
 
 

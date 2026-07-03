@@ -74,3 +74,18 @@ def test_editing_a_line_resynths_only_that_shot():
     process_once(build_context())
     v2 = repo.get_production(p.id).token_ledger.voice_tokens
     assert v2 > v1  # the edited line was re-synthesized (changed caption hash); others reused
+
+
+def test_writers_room_survives_a_dead_network():
+    """INVARIANT (live-hit): a connection reset during the writer call must NOT 500
+    the create — the user gets an editable starter script + an honest warning."""
+    from recut.showrunner.pipeline.writers_room import develop_treatment
+
+    class DeadLLM:
+        def complete(self, system, user, json_mode=False):
+            raise ConnectionResetError(54, "Connection reset by peer")
+
+    p = develop_treatment(DeadLLM(), "a custom style premise", target_seconds=30,
+                          style_name="custom", tone="thriller")
+    assert len(p.characters) >= 2 and len(p.scenes) >= 3  # offline starter script
+    assert any("offline" in w for w in p.warnings)
