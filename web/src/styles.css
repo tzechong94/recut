@@ -442,6 +442,10 @@ html,body{background:#0b0a0f;}
 .sr-cardmodal-text p{color:var(--soft);font-size:13px;line-height:1.55;overflow-y:auto;}
 .sr-bible-desc{cursor:pointer;}
 .sr-bible-img{cursor:zoom-in;}
+/* storyboard dialogue editor */
+.sr-dialogue-speaker{font-family:var(--mono);font-size:10.5px;background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--violet);padding:2px 4px;max-width:92px;}
+.sr-add-line{align-self:flex-start;padding:3px 8px;font-size:10.5px;background:transparent;border:1px dashed var(--line);color:var(--soft);}
+.sr-add-line:hover{color:var(--violet);border-color:var(--violet);}
 /* drama-kind picker — the first creative choice */
 .sr-kind-row{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}
 .sr-kind{font-size:12px;padding:5px 10px;}
@@ -818,7 +822,7 @@ html,body{background:#0b0a0f;}
 .sr-warnings-body{flex:1;min-width:0;}
 .sr-warnings-title{font-weight:700;font-size:12.5px;color:var(--ink);font-family:var(--display);}
 .sr-warnings-list{margin:5px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:3px;}
-.sr-warnings-list li{font-size:12.5px;line-height:1.45;color:var(--soft);}
+.sr-warnings-list li{font-size:12.5px;line-height:1.45;color:var(--soft);overflow-wrap:anywhere;white-space:normal;}
 .sr-warnings-dismiss{flex-shrink:0;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--soft);}
 .sr-warnings-dismiss:hover{background:rgba(255,255,255,.06);color:var(--ink);}
 

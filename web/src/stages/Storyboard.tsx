@@ -505,41 +505,69 @@ function ShotCard({
           aria-label="Shot action"
         />
 
-        {shot.dialogue.length > 0 && (
-          <div className="sr-shot-dialogue">
-            {shot.dialogue.map((d, di) => (
-              <div className="sr-dialogue-line" key={di}>
-                <span className="sr-dialogue-name">
-                  {d.character_name || "—"}
-                </span>
-                <Editable
-                  value={d.line}
-                  onCommit={(v) =>
-                    onChange({
-                      dialogue: shot.dialogue.map((x, xi) =>
-                        xi === di ? { ...x, line: v } : x,
-                      ),
-                    })
-                  }
-                  placeholder="line…"
-                  aria-label="Dialogue line"
-                />
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="sr-shot-dialogue">
+          {shot.dialogue.map((d, di) => (
+            <div className="sr-dialogue-line" key={di}>
+              <select
+                className="sr-dialogue-speaker"
+                value={d.character_id ?? ""}
+                aria-label="Speaker"
+                onChange={(e) => {
+                  const c = production.characters.find((x) => x.id === e.target.value);
+                  onChange({
+                    dialogue: shot.dialogue.map((x, xi) =>
+                      xi === di
+                        ? { ...x, character_id: c?.id ?? null, character_name: c?.name ?? "" }
+                        : x,
+                    ),
+                  });
+                }}
+              >
+                <option value="">—</option>
+                {production.characters.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <Editable
+                value={d.line}
+                onCommit={(v) =>
+                  onChange({
+                    dialogue: shot.dialogue.map((x, xi) =>
+                      xi === di ? { ...x, line: v } : x,
+                    ),
+                  })
+                }
+                placeholder="line…"
+                aria-label="Dialogue line"
+              />
+              <button
+                className="rc-iconbtn sm"
+                aria-label={`Remove line ${di + 1}`}
+                onClick={() =>
+                  onChange({ dialogue: shot.dialogue.filter((_, xi) => xi !== di) })
+                }
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          ))}
+          <button
+            className="sr-mini sm sr-add-line"
+            data-testid={`add-line-${shot.id}`}
+            onClick={() => {
+              const c = production.characters[0];
+              onChange({
+                dialogue: [
+                  ...shot.dialogue,
+                  { character_id: c?.id ?? null, character_name: c?.name ?? "", line: "" },
+                ],
+              });
+            }}
+          >
+            + line
+          </button>
+        </div>
 
-        {(shot.narration || shot.dialogue.length === 0) && (
-          <div className="sr-shot-narration">
-            <span className="sr-narr-tag">narration</span>
-            <Editable
-              value={shot.narration}
-              onCommit={(v) => onChange({ narration: v })}
-              placeholder="Voiceover over this shot…"
-              aria-label="Narration"
-            />
-          </div>
-        )}
       </div>
 
       <div className="sr-shot-side">

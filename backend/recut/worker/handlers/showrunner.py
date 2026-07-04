@@ -422,10 +422,14 @@ def _pad_and_host_audio(sp: Path, model: str, settings) -> str | None:
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(sp),
                         "-af", "apad=whole_dur=3.4", str(padded)],
                        check=True, capture_output=True)
+        import dashscope
         from dashscope.utils.oss_utils import upload_file
 
+        if settings.dashscope_base_url:  # intl key: cert endpoint must match region
+            dashscope.base_http_api_url = settings.dashscope_base_url
         base_model = model.split("@", 1)[0]
-        url = upload_file(base_model, str(padded), settings.dashscope_api_key)
+        # upload_file silently returns None without the file:// scheme (live-hit)
+        url = upload_file(base_model, f"file://{padded}", settings.dashscope_api_key)
         return url or None
     except Exception:  # noqa: BLE001 — hosting is best-effort; prompt-speech covers
         return None
@@ -880,7 +884,7 @@ def handle_produce_film(job: Job, ctx: WorkerContext) -> dict:
         if vo:
             vo_paths[shot.id] = vo
     vo_segments = [(vo_paths.get(shot.id, ""), shot.duration_s) for shot in shots]
-    timeline = compile_to_timeline(prod)
+    timeline = compile_to_timeline(prod, with_cards=False)  # user call: no title/end cards
     assets = {a_id: AssetMeta(storage_key=r["storage_key"], mime=r["mime"], duration_s=r["duration_s"], width=r["width"], height=r["height"])
               for a_id, r in repo.assets_by_ids([s.asset_id for s in shots if s.asset_id]).items()}
 
