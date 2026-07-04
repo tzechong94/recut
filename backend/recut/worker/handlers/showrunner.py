@@ -410,6 +410,27 @@ def _mux_voice_into_clip(data: bytes, vo_path: str, src_dir, shot_id: str, durat
         return data
 
 
+def _pad_and_host_audio(sp: Path, model: str, settings) -> str | None:
+    """wan2.6 rejects input audio shorter than ~3s ('audio duration is out of
+    range' — live-hit on a 1.1s 'Porn? Pfft. No.'). Pad with trailing silence to
+    3.4s and host the padded file on DashScope OSS. Returns the oss:// url, or
+    None (caller falls back to prompt-speech for that shot)."""
+    import subprocess
+
+    try:
+        padded = sp.with_name(sp.stem + "_pad.wav")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(sp),
+                        "-af", "apad=whole_dur=3.4", str(padded)],
+                       check=True, capture_output=True)
+        from dashscope.utils.oss_utils import upload_file
+
+        base_model = model.split("@", 1)[0]
+        url = upload_file(base_model, str(padded), settings.dashscope_api_key)
+        return url or None
+    except Exception:  # noqa: BLE001 — hosting is best-effort; prompt-speech covers
+        return None
+
+
 def _vertical_blur_fill(data: bytes, src_dir, shot_id: str) -> bytes:
     """Native-audio models are landscape-locked (probed); a landscape clip in a 9:16
     film would letterbox. Composite it the way vertical platforms do: blurred
@@ -517,10 +538,18 @@ def _fit_durations_to_voice(prod, ctx, src_dir, force: frozenset = frozenset()) 
                 sp = Path(src_dir) / f"vo_{shot.id}_{chash}.{ext}"
                 sp.write_bytes(va.data)
                 vo_paths[shot.id] = str(sp)
-                if va.url:
-                    vo_urls[shot.id] = va.url
                 prod.token_ledger.voice_tokens += va.tokens
                 dur = probe_duration(str(sp)) or va.duration_s or shot.duration_s
+                if dur < 3.2:
+                    # wan2.6 rejects audio < ~3s — pad + re-host, else prompt-speech
+                    hosted = _pad_and_host_audio(sp, route, ctx.settings)
+                    if hosted:
+                        vo_urls[shot.id] = hosted
+                    else:
+                        prod.warnings.append(
+                            f"a short line ({dur:.1f}s) couldn't be padded for lip-sync; the model voices that shot")
+                elif va.url:
+                    vo_urls[shot.id] = va.url
                 # the clip embeds this exact wav — duration must cover the full line
                 shot.duration_s = float(max(3, min(15, int(dur + 1.0))))
                 if dur + 1.0 > 15:

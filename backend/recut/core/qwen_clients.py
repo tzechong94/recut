@@ -366,6 +366,9 @@ class QwenVideoGen(VideoGen):
         base = (self.s.dashscope_base_url or "https://dashscope-intl.aliyuncs.com/api/v1").rstrip("/")
         headers = {"Authorization": f"Bearer {self.s.dashscope_api_key}",
                    "Content-Type": "application/json", "X-DashScope-Async": "enable"}
+        if (audio_url or "").startswith("oss://") or image_url.startswith("oss://"):
+            # dashscope-hosted uploads (our padded audio) need explicit resolution
+            headers["X-DashScope-OssResourceResolve"] = "enable"
         dur = int(max(3, min(15, round(duration_s))))
         model = self.s.wan_i2v_model
         res = self.s.happyhorse_resolution
