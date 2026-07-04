@@ -41,7 +41,6 @@ const STYLE_SWATCH: Record<string, string> = {
 
 /** What KIND of drama — the first creative choice, steers the writers' room. */
 const DRAMA_KINDS: { key: string; label: string; hint: string }[] = [
-  { key: "brainrot", label: "🧠 Brainrot", hint: "absurd objects, dead-serious stakes" },
   { key: "melodrama", label: "👑 Melodrama", hint: "secret heirs, revenge, bombshells" },
   { key: "thriller", label: "😱 Thriller", hint: "dread, secrets, ticking clocks" },
   { key: "mystery", label: "🔍 Mystery", hint: "clues that recontextualize" },
@@ -53,8 +52,6 @@ const DRAMA_KINDS: { key: string; label: string; hint: string }[] = [
 ];
 
 const KIND_PLACEHOLDERS: Record<string, string> = {
-  brainrot:
-    "Gym-bro Banana accuses Strawberry of juicing before the Mr. Fruit finals — but the blender in his locker isn't his…",
   melodrama:
     "The cleaner they fired at dawn inherits the hotel by noon — her first act: audit the manager who fired her…",
   thriller: "The night-shift nurse recognizes her new patient: the hit-and-run driver no one ever caught…",
@@ -76,7 +73,7 @@ export function Premise({ open }: PremiseProps) {
   const [premise, setPremise] = useState("");
   const [seconds, setSeconds] = useState(45);
   const [style, setStyle] = useState("cinematic");
-  const [tone, setTone] = useState("brainrot");  // the demo-est default — user picks their drama kind up top
+  const [tone, setTone] = useState("comedy");  // user picks their drama kind up top
   const [testMode, setTestMode] = useState(false);
   // Custom style (LTX-style "style element"): built from a description and/or refs.
   const [customOpen, setCustomOpen] = useState(false);

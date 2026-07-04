@@ -120,13 +120,6 @@ STYLE_PRESETS: dict[str, StyleLock] = {
 
 # Writing-register TONES, decoupled from the visual style ("" = match the style's default).
 TONE_REGISTERS: dict[str, str] = {
-    "brainrot": (
-        "Absurdist meme-brainrot: anthropomorphic objects/foods/animals in dead-serious "
-        "high-stakes drama (gym rivalries, betrayal at the smoothie bar, forbidden love "
-        "across the produce aisle). Deadpan sincerity about ridiculous stakes — the comedy "
-        "IS the commitment. Punchy meme cadence, unhinged reveals, zero winking at camera. "
-        "Characters MUST be non-human things with one absurd defining trait each."
-    ),
     "melodrama": (
         "ReelShort-style melodrama: secret identities, revenge, a contract with a cruel "
         "clause, the despised one is secretly powerful. Big emotions played straight, "
