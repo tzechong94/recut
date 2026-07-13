@@ -72,3 +72,20 @@ walk asserts 4 candidates, capability badge not model-id, complete provenance, e
 and aborts any external request = zero network).
 
 **Spend so far: $1.39 of $8** (spike $1.14 + demo fixtures $0.25).
+
+## 2026-07-13 — Sprint 2 (compiler + rigs) — compiler core + live rig preview SHIPPED
+
+- Pure compiler core: camera.ts (vertical-FOV shot-size math), lighting.ts (named-setup
+  detection + contrast + colour), lens.ts (body×family×stock table). 24 golden tests over
+  every boundary. Byte-deterministic. compile() delegates to all three.
+- Rig control surface (components/rigs/RigControls) with LIVE compiled-prompt preview —
+  compile() runs client-side (pure, no node deps), so dragging a slider re-derives shot size,
+  angle, DoF, lighting setup, and the cinematography sentence with zero server round-trip.
+  This is the demo money shot.
+- e2e rig.spec: dragging focal 50→200mm changes the prompt + detected shot size; moving the
+  key light to 90° azimuth flips the detected setup to 'split'.
+
+**Remaining in Sprint 2:** live eval:ui ≥7 on the rig screen (VLM screenshot scoring, pennies);
+optional full R3F 3D draggable scene (sliders are the control surface today; 3D is a visual
+layer on the same typed state). Gates green: typecheck, 39/39 unit, build, e2e 3/3.
+**Spend $1.64/$8.**
