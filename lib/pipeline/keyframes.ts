@@ -1,9 +1,9 @@
-import type { Project, Shot, Take } from '../domain/types.js';
-import { compile } from '../compiler/compile.js';
-import { selectModel, type Preference } from '../gateway/router.js';
-import { Gateway } from '../gateway/jobs.js';
-import { jobHash } from '../gateway/hash.js';
-import { dashscopeImageCall } from '../../adapters/dashscope.js';
+import type { Project, Shot, Take } from '../domain/types';
+import { compile } from '../compiler/compile';
+import { selectModel, type Preference } from '../gateway/router';
+import { Gateway } from '../gateway/jobs';
+import { jobHash } from '../gateway/hash';
+import { dashscopeImageCall } from '../../adapters/dashscope';
 
 export interface KeyframeOptions {
   gateway?: Gateway;

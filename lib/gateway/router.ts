@@ -1,5 +1,5 @@
-import type { Capability, ModelManifest } from './types.js';
-import { MANIFESTS } from '../../manifests/index.js';
+import type { Capability, ModelManifest } from './types';
+import { MANIFESTS } from '../../manifests/index';
 
 export type Preference = 'quality' | 'speed' | 'cost';
 

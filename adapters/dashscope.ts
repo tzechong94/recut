@@ -2,7 +2,7 @@
 // Gateway's `live` thunk — never called in replay mode. Sync image path (multimodal-generation):
 // the endpoint returns the image url directly in output.choices[0].message.content.
 
-import type { ProviderPayload } from '../lib/gateway/types.js';
+import type { ProviderPayload } from '../lib/gateway/types';
 
 export interface ImageResult {
   imageUrl: string;

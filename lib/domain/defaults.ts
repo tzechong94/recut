@@ -1,4 +1,4 @@
-import type { CameraRigState, LightRigState } from './types.js';
+import type { CameraRigState, LightRigState } from './types';
 
 // Neutral rig defaults so a shot compiles before any rig UI exists (Sprint 2 adds the UI).
 export function defaultCamera(): CameraRigState {

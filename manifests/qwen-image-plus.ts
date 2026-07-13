@@ -1,8 +1,8 @@
 // The ONLY place the model-id string 'qwen-image-plus' may appear (hard rule 1).
 // Confirmed live on the intl key; used to generate the canonical entity portrait (t2i).
 
-import type { ModelManifest } from '../lib/gateway/types.js';
-import { serializeImageGenerate } from '../serializers/dashscope.js';
+import type { ModelManifest } from '../lib/gateway/types';
+import { serializeImageGenerate } from '../serializers/dashscope';
 
 export const qwenImagePlus: ModelManifest = {
   id: 'qwen-image-plus',

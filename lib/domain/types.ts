@@ -2,7 +2,7 @@
 // Entities are REFERENCED by shots, never copied. The Shot is the unit of work; the
 // Take is the unit of iteration (many takes, one accepted).
 
-import type { AssetRef, CompiledPrompt, Capability, ProviderPayload } from '../gateway/types.js';
+import type { AssetRef, CompiledPrompt, Capability, ProviderPayload } from '../gateway/types';
 
 export type EntityKind = 'character' | 'prop' | 'location' | 'vehicle';
 

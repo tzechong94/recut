@@ -1,4 +1,4 @@
-import { BudgetGovernor } from '../lib/gateway/budget.js';
+import { BudgetGovernor } from '../lib/gateway/budget';
 
 // `pnpm budget` — prints cumulative spend and asserts it is under cap.
 const gov = new BudgetGovernor();

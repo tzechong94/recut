@@ -3,9 +3,9 @@
 // Sprint 2 replaces the interim mappings below with real cinematography math
 // (camera.ts / lighting.ts / lens.ts) behind the same CompiledPrompt shape.
 
-import type { CameraRigState, LightRigState, SeriesBible, Shot } from '../domain/types.js';
-import type { CompiledPrompt } from '../gateway/types.js';
-import { injectRefs, subjectDescription } from '../bible/inject.js';
+import type { CameraRigState, LightRigState, SeriesBible, Shot } from '../domain/types';
+import type { CompiledPrompt } from '../gateway/types';
+import { injectRefs, subjectDescription } from '../bible/inject';
 
 function shotSizeFromDistance(distanceM: number): CompiledPrompt['camera']['shotSize'] {
   // interim: distance buckets. Sprint 2 does vertical-FOV coverage from focal+subject height.

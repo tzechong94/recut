@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { BudgetExceeded, BudgetUnset } from './errors.js';
+import { BudgetExceeded, BudgetUnset } from './errors';
 
 /**
  * The spend governor. Cumulative spend is persisted to a machine-local ledger

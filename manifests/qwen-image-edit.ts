@@ -2,8 +2,8 @@
 // Confirmed live on the intl key (ap-southeast-1); the identity spike validated it as the
 // image.edit path (the plan's qwen-image-2.0-pro is absent — see docs/BLOCKED.md).
 
-import type { ModelManifest } from '../lib/gateway/types.js';
-import { serializeImageEdit } from '../serializers/dashscope.js';
+import type { ModelManifest } from '../lib/gateway/types';
+import { serializeImageEdit } from '../serializers/dashscope';
 
 export const qwenImageEdit: ModelManifest = {
   id: 'qwen-image-edit',

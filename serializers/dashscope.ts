@@ -2,7 +2,7 @@
 // The adapter wraps this with the model id + endpoint; the serialized output is also the
 // cache-key material, so it must be deterministic.
 
-import type { CompiledPrompt, ProviderPayload } from '../lib/gateway/types.js';
+import type { CompiledPrompt, ProviderPayload } from '../lib/gateway/types';
 
 const SHOT_SIZE_WORDS: Record<CompiledPrompt['camera']['shotSize'], string> = {
   ECU: 'extreme close-up',

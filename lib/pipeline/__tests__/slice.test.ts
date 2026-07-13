@@ -2,14 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Project, Shot } from '../../domain/types.js';
-import { defaultCamera, defaultLight } from '../../domain/defaults.js';
-import { compile } from '../../compiler/compile.js';
-import { injectRefs } from '../../bible/inject.js';
-import { selectModel, NoModelForCapability } from '../../gateway/router.js';
-import { Gateway } from '../../gateway/jobs.js';
-import { jobHash } from '../../gateway/hash.js';
-import { generateKeyframes, acceptTake } from '../keyframes.js';
+import type { Project, Shot } from '../../domain/types';
+import { defaultCamera, defaultLight } from '../../domain/defaults';
+import { compile } from '../../compiler/compile';
+import { injectRefs } from '../../bible/inject';
+import { selectModel, NoModelForCapability } from '../../gateway/router';
+import { Gateway } from '../../gateway/jobs';
+import { jobHash } from '../../gateway/hash';
+import { generateKeyframes, acceptTake } from '../keyframes';
 
 function demoProject(): Project {
   const shot: Shot = {

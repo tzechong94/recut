@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, appendFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { jobHash } from './hash.js';
-import { BudgetGovernor } from './budget.js';
-import { GatewayCacheMiss } from './errors.js';
+import { jobHash } from './hash';
+import { BudgetGovernor } from './budget';
+import { GatewayCacheMiss } from './errors';
 
 export type RecutMode = 'replay' | 'live';
 

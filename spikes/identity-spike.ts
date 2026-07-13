@@ -18,7 +18,7 @@
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BudgetGovernor } from '../lib/gateway/budget.js';
+import { BudgetGovernor } from '../lib/gateway/budget';
 
 const BASE = (process.env.RECUT_DASHSCOPE_BASE_URL ?? 'https://dashscope-intl.aliyuncs.com/api/v1').replace(/\/$/, '');
 const KEY = process.env.RECUT_DASHSCOPE_API_KEY ?? '';

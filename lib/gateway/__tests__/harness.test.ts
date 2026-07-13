@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Gateway } from '../jobs.js';
-import { BudgetGovernor } from '../budget.js';
-import { jobHash } from '../hash.js';
-import { GatewayCacheMiss, BudgetExceeded, BudgetUnset } from '../errors.js';
+import { Gateway } from '../jobs';
+import { BudgetGovernor } from '../budget';
+import { jobHash } from '../hash';
+import { GatewayCacheMiss, BudgetExceeded, BudgetUnset } from '../errors';
 
 let dir: string;
 let fixturesDir: string;

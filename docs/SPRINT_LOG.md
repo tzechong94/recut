@@ -48,3 +48,27 @@ Vitest 3.2.4, Tailwind 4.1.16, Playwright 1.56.1).
   Budget reserved: ~$6.86 remains under the cap.
 
 **Spend so far: $1.14.**
+
+## 2026-07-13 — Sprint 1 (one shot, end to end) — SHIPPED
+
+Vertical slice proven: `script → Shot → SeriesBible(entity refs injected) → camera/light
+defaults → compile() → CompiledPrompt → router → manifest → serializer → adapter(replay) →
+4 keyframe candidates → canvas node → accept Take → provenance → export`.
+
+- `lib/domain` (Project/Entity/Scene/Shot/Take/Provenance), `lib/bible/inject` (refs injected,
+  weight-ordered, dangling-safe), `lib/compiler/compile` (PURE, byte-deterministic — Sprint 2
+  hardens the cinematography math), gateway `router` + `manifests/` (model-ids confined here:
+  qwen-image-edit, qwen-image-plus) + `serializers/dashscope` + `adapters/dashscope`,
+  `lib/pipeline/keyframes` (4 candidates w/ full provenance; acceptTake never drops takes).
+- UI: `app/produce` (server, runs pipeline in replay) + `components/canvas/ProduceBoard`
+  (client: candidate grid, capability badge, cost, cached status, accept, provenance, export).
+- **Golden fixtures generated live + committed** (0.4, previously deferred): Mei portrait +
+  4 keyframes. Real images verified (on-brief: red scarf, charcoal jacket, cinematic). Take
+  images stored locally under public/takes so replay renders offline.
+- Import specifiers switched to extensionless (Next webpack can't resolve `.js`→`.ts`).
+
+**Gates:** typecheck clean · test 15/15 · build OK (/produce dynamic) · test:e2e 2/2 (slice
+walk asserts 4 candidates, capability badge not model-id, complete provenance, export link,
+and aborts any external request = zero network).
+
+**Spend so far: $1.39 of $8** (spike $1.14 + demo fixtures $0.25).

@@ -1,5 +1,5 @@
-import type { SeriesBible, Shot } from '../domain/types.js';
-import type { AssetRef } from '../gateway/types.js';
+import type { SeriesBible, Shot } from '../domain/types';
+import type { AssetRef } from '../gateway/types';
 
 /**
  * Entities are referenced, never copied. At compile time a shot's entityIds resolve to
