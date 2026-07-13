@@ -15,6 +15,8 @@ export interface Entity {
   refs: AssetRef[];
   /** VL-extracted, user-editable attribute block (hair, wardrobe, …) */
   attributes: Record<string, string>;
+  /** bible version at which this entity last changed; drives the stale flag */
+  version?: number;
 }
 
 export interface SeriesBible {

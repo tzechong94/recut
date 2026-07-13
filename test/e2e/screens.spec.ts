@@ -8,6 +8,7 @@ const SCREENS = [
   { name: 'landing', path: '/' },
   { name: 'produce', path: '/produce' },
   { name: 'rig', path: '/rig' },
+  { name: 'studio', path: '/studio' },
 ];
 
 test.use({ viewport: { width: 1440, height: 900 } });

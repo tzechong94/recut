@@ -119,3 +119,18 @@ Note: manifests/serializers/adapters/polyfills live at repo root (plan sketches 
 lib/gateway/); the single-source-of-model-ids contract holds either way.
 
 **Gates:** typecheck · 45/45 unit · build. Spend $1.69/$8 (no live spend this sprint).
+
+## 2026-07-13 — Sprint 4 (Series Bible) — SHIPPED (CRITICAL, the product)
+
+- lib/bible/version: editEntity bumps bible version + stamps the entity; isTakeStale/staleTakeIds
+  flag every take that compiled against an older version of a referenced entity — instantly.
+- lib/bible/extract: VL attribute auto-extraction (injected vision fn, strict-JSON parse).
+- lib/canvas/node: switchModel PRESERVES the CompiledPrompt (never a string), re-serialises via
+  the new manifest — the thing TapNow gets wrong. Typed ports: canConnect refuses image→audio etc.
+- UI: app/studio + components/canvas/StudioClient (React Flow, dark, entity + shot nodes,
+  capability badges, cost, status) + bible panel. Demo beat: click scarf red→blue → bible v1→v2,
+  all 4 takes flag stale, the accepted shot node turns amber — instantly.
+- @xyflow/react 12.11.2 added.
+
+**Gates:** typecheck · 51/51 unit (stale propagation, model-switch, typed ports, extract) ·
+build · e2e 8/8 (studio stale beat) · eval:ui overall 7.75, studio 7.29 (≥7). Spend $1.71/$8.
