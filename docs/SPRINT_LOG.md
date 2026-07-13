@@ -173,3 +173,19 @@ are proven. Colour grading never touches a model (hard rule 5).
 
 **Gates:** typecheck · 70/70 unit (incl. real ffmpeg export) · build · e2e 12/12 (timeline
 LUT zero-network asserted) · eval:ui 7.69 (timeline 7.29 ≥7). Spend $1.89/$8.
+
+## 2026-07-13 — Sprint 7 (convergence) — CONVERGED → STOP GATE 2
+
+- Convergence loop run: applied the judge's recurring highest-leverage fixes (typography scale +
+  tabular numerals across rig/produce/timeline; studio entity-node density with live wardrobe +
+  colour dot). Overall UI mean hovered 7.64–7.90 across iterations — run-to-run VLM judge
+  variance (~±0.2) exceeds the per-iteration delta, which is the plan's documented CONVERGENCE
+  stop condition (3 iters < 0.2). Stopped at ~7.7 (every screen ≥7) rather than chase a
+  stochastic 8.5.
+- docs/EVAL.md written: continuity rubric + weights + threshold, the deliberate-break matrix
+  (wardrobe 1.00→0.30), auto-repair recovery (+0.21), UI scores, honest caveats, spend.
+- Pre-cache verified: fixtures/MISSING.md clean — every demo beat is a replay cache hit, zero
+  network. Demo path ran cold 3× (12/12 e2e each, ~16s incl. rebuild) — stable, well under 3 min.
+
+**Final gates:** typecheck · 70/70 unit · build · e2e 12/12 · eval:continuity PASS · eval:ui
+~7.7 (all screens ≥7). **Total live spend $1.92 / $8 cap.**

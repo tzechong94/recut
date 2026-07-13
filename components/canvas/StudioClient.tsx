@@ -7,7 +7,7 @@ import type { Project } from '../../lib/domain/types';
 import { editEntity, staleTakeIds } from '../../lib/bible/version';
 
 type ShotData = { title: string; capability: string; cost: number; thumb: string | null; stale: boolean; seed: number | null };
-type EntityData = { name: string; kind: string; thumb: string; version: number };
+type EntityData = { name: string; kind: string; thumb: string; version: number; wardrobe: string; dot: string };
 
 function EntityNode({ data }: NodeProps) {
   const d = data as unknown as EntityData;
@@ -19,7 +19,13 @@ function EntityNode({ data }: NodeProps) {
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={d.thumb} alt={d.name} className="h-32 w-full object-cover" />
-      <div className="px-3 py-2 text-sm font-medium text-neutral-100">{d.name}</div>
+      <div className="space-y-1 px-3 py-2">
+        <div className="text-sm font-semibold text-neutral-100">{d.name}</div>
+        <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: d.dot }} />
+          {d.wardrobe}
+        </div>
+      </div>
       <Handle type="source" position={Position.Right} className="!bg-fuchsia-400" />
     </div>
   );
@@ -64,7 +70,7 @@ export function StudioClient({ initialProject }: { initialProject: Project }) {
       id: `entity-${entity.id}`,
       type: 'entity',
       position: { x: 40, y: 120 },
-      data: { name: entity.name, kind: entity.kind, thumb: '/refs/mei.png', version: project.bible.version } satisfies EntityData as unknown as Record<string, unknown>,
+      data: { name: entity.name, kind: entity.kind, thumb: '/refs/mei.png', version: project.bible.version, wardrobe: entity.attributes.wardrobe ?? '', dot: scarf } satisfies EntityData as unknown as Record<string, unknown>,
     };
     const shotNodes: Node[] = project.shots.map((shot, i) => {
       const accepted = project.takes.find((t) => t.shotId === shot.id && t.accepted) ?? project.takes.find((t) => t.shotId === shot.id);
@@ -84,7 +90,7 @@ export function StudioClient({ initialProject }: { initialProject: Project }) {
       };
     });
     return [entityNode, ...shotNodes];
-  }, [project, stale, entity]);
+  }, [project, stale, entity, scarf]);
 
   const edges: Edge[] = useMemo(
     () =>
