@@ -154,3 +154,22 @@ build · e2e 8/8 (studio stale beat) · eval:ui overall 7.75, studio 7.29 (≥7)
 
 **Gates:** typecheck · 64/64 unit · build · e2e 10/10 · eval:continuity PASS · eval:ui 7.69
 (report 7.57 ≥7). Spend $1.86/$8.
+
+## 2026-07-13 — Sprint 6 (video, timeline, grade, export) — SHIPPED
+
+- lib/post/lut: 8-LUT LookBook, each with a committed .cube (baked on export) + a CSS filter
+  for INSTANT preview. scripts/gen-luts generated them (17^3 analytic looks).
+- lib/post/export: ffmpeg arg builders — concat clips + lut3d + 1080p / 9:16 crop; Ken Burns
+  keyframe→clip (video = animation of an approved keyframe, hard rule 6). No ffmpeg.wasm.
+- Fixture clips: scripts/gen-clips animated the approved keyframes into 3×3s 1080p mp4s (video
+  is never cold-called; the demo replays these).
+- Timeline UI (app/timeline + components/timeline/Timeline): clip strip + LookBook selector.
+  Changing the series LUT restyles every clip instantly via CSS filter — zero API calls.
+- ffmpeg-gated test: assembles 3 clips + bakes teal-orange LUT → a real 1080p h264 mp4
+  (ffprobe-verified). Pure arg-builder tests cover concat/lut3d/vertical.
+
+Note: video.i2v manifest/adapter deferred (post-hackathon); the clip contract + post pipeline
+are proven. Colour grading never touches a model (hard rule 5).
+
+**Gates:** typecheck · 70/70 unit (incl. real ffmpeg export) · build · e2e 12/12 (timeline
+LUT zero-network asserted) · eval:ui 7.69 (timeline 7.29 ≥7). Spend $1.89/$8.

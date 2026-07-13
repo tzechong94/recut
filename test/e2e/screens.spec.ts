@@ -10,6 +10,7 @@ const SCREENS = [
   { name: 'rig', path: '/rig' },
   { name: 'studio', path: '/studio' },
   { name: 'report', path: '/report' },
+  { name: 'timeline', path: '/timeline' },
 ];
 
 test.use({ viewport: { width: 1440, height: 900 } });
