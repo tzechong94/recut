@@ -12,3 +12,5 @@ playwright-report/
 .DS_Store
 # runtime spend ledger — machine-local, not committed
 .recut/spend.json
+spikes/spike-run.log
+.recut/

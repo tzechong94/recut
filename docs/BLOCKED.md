@@ -21,3 +21,19 @@ internally consistent; only the install + gate-run is blocked. Zero dollars spen
 2. Get `next` + the public-npm graph mirrored / the token scoped in Artifactory so the
    sanctioned registry serves them.
 3. Build in an environment where public npm is the default (e.g. a container).
+
+**RESOLVED:** user switched `~/.npmrc` to public npm; installs succeed.
+
+## 2026-07-13 — Sprint 0 — 0.4 golden fixture set deferred to Sprint 1 (descoped, not blocked)
+
+The content-addressed cache key is `sha256(modelId + serializedPayload + seed)`. The serialized
+payload only exists once the compiler (Sprint 2) and serializer (Sprint 3) are built, so the
+demo fixture hashes cannot be computed during Sprint 0. Deferring golden-fixture generation to
+the first real compiled payloads (Sprint 1 vertical slice), generated live under the same $8
+governor (~$6.86 remaining). Not critical to Sprint 0's harness gates; the replay layer +
+`fixtures/MISSING.md` mechanism is the machinery that makes on-demand generation safe.
+
+## 2026-07-13 — Sprint 0 — model-id substitution (resolved, logged for Sprint 3)
+
+Plan's `qwen-image-2.0-pro` / `wan2.7-image-pro` are absent on the intl key. image.edit maps to
+`qwen-image-edit` in the Sprint 3 manifest. Identity spike validated this substitution (HOLDS).

@@ -30,11 +30,21 @@ corporate Synapxe Artifactory (401/403 on `next`, `picomatch`, …). User switch
 public npm; installs then succeeded. Pinned exact versions (Next 15.5.4, React 19.1.1, TS 5.9.3,
 Vitest 3.2.4, Tailwind 4.1.16, Playwright 1.56.1).
 
-**Money step (0.1 spike, 0.4 fixtures): HELD at STOP GATE 1.**
-- Spike is written + guarded (RECUT_MODE=live + `--confirm` + cheap model-id preflight).
-- Reason for holding the costly loop: the plan's model ids (`qwen-image-2.0-pro`,
-  `wan2.7-image-pro`) are flagged "confirm in console." Firing the full 6-state × 3-ref loop
-  blind risks the budget on unverified ids. Preflight confirms ids first; the costly loop runs
-  only after sign-off.
+**Money step (0.1 spike): RUN — verdict HOLDS. Spend $1.14 of $8 cap.**
+- Preflight found the plan's image models ABSENT on the intl key (`qwen-image-2.0-pro`,
+  `wan2.7-image-pro` → empty). Confirmed working: `qwen-image-edit` (ref-based edit — the exact
+  capability), `qwen-image-plus` (t2i), `qwen3-vl-plus` (judge). Model ids are a Sprint 3
+  manifest concern; the spike tests the capability, so it ran on `qwen-image-edit`.
+- Result: 18/18 re-renders (6 camera states × 3 ref-counts) passed, mean identity 0.95–0.98,
+  wardrobe ~1.00. `spikes/RESULTS.md` written with an unsoftened verdict + caveat (uniformly
+  high scores may mean the edit under-applies angle / lenient judge — verified in Sprint 2's rig).
+- Finding: 1 reference beats 2–3. Bible needs only ONE locked reference per entity.
 
-**Spend so far: $0.00.**
+**0.4 golden fixture set: SEQUENCING DEFERRED to Sprint 1 (logged in BLOCKED.md).**
+- The cache key is `sha256(modelId + serializedPayload + seed)`; the serialized payload is
+  produced by the compiler (Sprint 2) + serializer (Sprint 3), which don't exist yet. Fixture
+  hashes can't be computed before payloads are defined. The replay harness + `MISSING.md` flow
+  generates them on-demand as the first real compiled payloads appear (Sprint 1 vertical slice).
+  Budget reserved: ~$6.86 remains under the cap.
+
+**Spend so far: $1.14.**
