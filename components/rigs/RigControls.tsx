@@ -16,8 +16,8 @@ function Slider({
   return (
     <label className="block">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-xs text-neutral-400">{label}</span>
-        <span className="text-xs tabular-nums text-neutral-200" data-testid={`${testid}-val`}>
+        <span className="text-[13px] font-medium text-neutral-400">{label}</span>
+        <span className="text-[13px] font-semibold tabular-nums text-neutral-100 slashed-zero" data-testid={`${testid}-val`}>
           {value}
           {unit}
         </span>
@@ -68,7 +68,7 @@ export function RigControls({
             <Slider label="Elevation" testid="cam-elevation" value={cam.elevationDeg} min={-45} max={80} step={5} unit="°" onChange={(v) => setCam((c) => ({ ...c, elevationDeg: v }))} />
             <Slider label="Distance" testid="cam-distance" value={cam.distanceM} min={0.6} max={12} step={0.1} unit="m" onChange={(v) => setCam((c) => ({ ...c, distanceM: v }))} />
             <Slider label="Focal length" testid="cam-focal" value={cam.focalMm} min={14} max={200} step={1} unit="mm" onChange={(v) => setCam((c) => ({ ...c, focalMm: v }))} />
-            <Slider label="Aperture" testid="cam-aperture" value={cam.aperture} min={1.2} max={16} step={0.1} unit=" f" onChange={(v) => setCam((c) => ({ ...c, aperture: v }))} />
+            <Slider label="Aperture f/" testid="cam-aperture" value={cam.aperture} min={1.2} max={16} step={0.1} unit="" onChange={(v) => setCam((c) => ({ ...c, aperture: v }))} />
           </div>
         </div>
         <div>
@@ -104,8 +104,8 @@ export function RigControls({
 function Chip({ label, value, testid }: { label: string; value: string; testid: string }) {
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2">
-      <div className="text-[10px] tracking-wide text-neutral-500 uppercase">{label}</div>
-      <div className="text-sm font-medium text-sky-300" data-testid={testid}>{value}</div>
+      <div className="text-[10px] font-medium tracking-wide text-neutral-500 uppercase">{label}</div>
+      <div className="text-[13px] font-semibold tabular-nums text-sky-300" data-testid={testid}>{value}</div>
     </div>
   );
 }

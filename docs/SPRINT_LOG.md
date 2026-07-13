@@ -89,3 +89,16 @@ and aborts any external request = zero network).
 optional full R3F 3D draggable scene (sliders are the control surface today; 3D is a visual
 layer on the same typed state). Gates green: typecheck, 39/39 unit, build, e2e 3/3.
 **Spend $1.64/$8.**
+
+## 2026-07-13 — Sprint 2 COMPLETE
+
+- eval:ui now real + reliable: Playwright-managed screenshot capture (test/e2e/screens.spec)
+  → qwen3-vl-plus scores each screen on the 7-axis rubric. Fixed a zombie-server race that
+  produced blank captures. Applied the judge's highest-leverage fix to the rig (strict type
+  scale + tabular numerals): rig 6.86 → **7.86 (gate ≥7 PASS)**. produce 7.43, landing 8.43,
+  overall 7.90.
+- Deferred (non-critical polish): full R3F 3D draggable scene. The rig is a working control
+  surface (sliders → live compile, the money shot); 3D is a visual layer on the same typed
+  state, revisitable in Sprint 7 convergence.
+
+**Gates:** typecheck · 39/39 unit · build · e2e 3/3 + capture · eval:ui 7.90 PASS. Spend $1.69/$8.
