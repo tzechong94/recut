@@ -134,3 +134,23 @@ lib/gateway/); the single-source-of-model-ids contract holds either way.
 
 **Gates:** typecheck · 51/51 unit (stale propagation, model-switch, typed ports, extract) ·
 build · e2e 8/8 (studio stale beat) · eval:ui overall 7.75, studio 7.29 (≥7). Spend $1.71/$8.
+
+## 2026-07-13 — Sprint 5 (agent + continuity critic) — SHIPPED (CRITICAL, the differentiator)
+
+- lib/agent/critic: qwen3-vl-plus judges a take vs the bible refs + intent → schema-constrained
+  ContinuityVerdict (6 axes); weighted composite = Continuity Score; NEVER fake-passes (parse
+  fail → verdict "unknown", score 0). Model-id lives in manifests/qwen-vl-critic.
+- lib/agent/repair: auto-repair loop — append the critic's repair instruction, re-render,
+  re-critique, cap 2 retries, never regress.
+- lib/agent/plan: coverage pass (editorial grammar: establishing/master/coverage/insert/reaction).
+- lib/agent/agent: showrunner runner — state IS the graph; tools (create_scene/cast_entity/
+  create_shot/set_camera/set_light/plan_coverage/delete_shot) mutate transactionally; guardrails
+  = spend cap stops at 80%, NEVER deletes a user-accepted take.
+- **Critic proven on REAL images** (committed fixtures, replay-free): good take wardrobe 1.00;
+  scarf edited red→BLUE → wardrobe 0.30 (verified the image is genuinely blue, same pose);
+  auto-repair back to red → wardrobe 1.00, score +0.21. eval:continuity PASS.
+- Report card UI (app/report + components/canvas/ReportCard): per-take axis grid, colour-coded,
+  Continuity Score column. The break row is visibly rose/off-model.
+
+**Gates:** typecheck · 64/64 unit · build · e2e 10/10 · eval:continuity PASS · eval:ui 7.69
+(report 7.57 ≥7). Spend $1.86/$8.

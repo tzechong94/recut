@@ -1,0 +1,20 @@
+{
+  "hash": "a3ef3226046119fb2be0984482452eec0c1c551a07af64f238acb2085223136c",
+  "modelId": "qwen3-vl-plus",
+  "seed": 0,
+  "costUsd": 0.005,
+  "latencyMs": 3492,
+  "payload": {
+    "identity_match": 0.95,
+    "wardrobe_match": 1,
+    "prop_match": 0,
+    "location_match": 1,
+    "palette_match": 0.98,
+    "framing_match": 0.97,
+    "artifacts": [
+      "no letter visible in FINAL image despite script specifying 'Mei looks up from the letter'"
+    ],
+    "verdict": "repair",
+    "repair_instruction": "the letter prop is missing; add a folded paper letter in Mei's hands, positioned as if she has just looked up from reading it. Preserve pose, lighting, scarf, jacket, and background exactly as in the locked reference."
+  }
+}

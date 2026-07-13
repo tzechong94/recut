@@ -1,0 +1,29 @@
+[
+  {
+    "name": "good",
+    "takeUrl": "/takes/1000.png",
+    "refUrls": [
+      "/refs/mei.png"
+    ],
+    "intent": "Mei looks up from the letter — same identity, red scarf, charcoal jacket",
+    "expect": "pass"
+  },
+  {
+    "name": "break-wardrobe",
+    "takeUrl": "/takes/blue.png",
+    "refUrls": [
+      "/refs/mei.png"
+    ],
+    "intent": "Mei looks up from the letter — same identity, red scarf, charcoal jacket",
+    "expect": "wardrobe<0.5"
+  },
+  {
+    "name": "repaired",
+    "takeUrl": "/takes/repaired.png",
+    "refUrls": [
+      "/refs/mei.png"
+    ],
+    "intent": "Mei looks up from the letter — same identity, red scarf, charcoal jacket",
+    "expect": "pass"
+  }
+]

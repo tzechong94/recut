@@ -1,0 +1,22 @@
+{
+  "hash": "79bc2b955c34f4cf74f4471683c05e867c1d5d7e543f438c83ab96ae653414dc",
+  "modelId": "qwen3-vl-plus",
+  "seed": 0,
+  "costUsd": 0.005,
+  "latencyMs": 4338,
+  "payload": {
+    "identity_match": 1,
+    "wardrobe_match": 0.3,
+    "prop_match": 0,
+    "location_match": 1,
+    "palette_match": 0.2,
+    "framing_match": 0.9,
+    "artifacts": [
+      "scarf color changed from red to blue",
+      "letter prop missing (critical for 'looks up from the letter' action)",
+      "facial expression altered (neutral smile → upward gaze with wistful look, inconsistent with 'looking up from letter' context)"
+    ],
+    "verdict": "reject",
+    "repair_instruction": "the scarf is blue; it must be red. A letter prop must be visible in Mei's hands or just below frame to justify 'looks up from the letter'. Preserve pose, lighting, and location, but restore the red scarf and add the letter. Expression should be neutral-to-soft smile, not upward gazing."
+  }
+}

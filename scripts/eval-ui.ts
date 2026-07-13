@@ -12,7 +12,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BudgetGovernor } from '../lib/gateway/budget';
 
-const SCREENS = ['landing', 'produce', 'rig', 'studio'] as const;
+const SCREENS = ['landing', 'produce', 'rig', 'studio', 'report'] as const;
 const AXES = ['visual_hierarchy', 'density', 'typography', 'node_legibility', 'state_clarity', 'craft', 'professional_trust'] as const;
 
 const base = (process.env.RECUT_DASHSCOPE_BASE_URL ?? 'https://dashscope-intl.aliyuncs.com/api/v1').replace(/\/$/, '');
