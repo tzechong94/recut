@@ -102,3 +102,20 @@ layer on the same typed state). Gates green: typecheck, 39/39 unit, build, e2e 3
   state, revisitable in Sprint 7 convergence.
 
 **Gates:** typecheck · 39/39 unit · build · e2e 3/3 + capture · eval:ui 7.90 PASS. Spend $1.69/$8.
+
+## 2026-07-13 — Sprint 3 (gateway abstraction) — SHIPPED
+
+- polyfills/inpaint (Qwen has no mask-inpaint): crop mask bbox + 25% context, edit the crop,
+  feather-composite back — pixels OUTSIDE the feathered region are bit-identical (asserted).
+- polyfills/outpaint: expand canvas + neutral-grey fill + "extend into the grey" instruction.
+- Abstraction proof: manifests/_example-kling (fictional provider, NOT in the live registry —
+  the disabled flag) + serializers/kling. Test shows selectModel routes to kling-v1 with zero
+  changes outside those two files.
+- Test asserts no model-id string appears in product code (lib/app/components/serializers/
+  adapters) outside manifests/. (scripts/ + spikes/ are tooling and may name the VL judge; the
+  Sprint 5 critic will route qwen3-vl-plus through a vision.critique manifest.)
+
+Note: manifests/serializers/adapters/polyfills live at repo root (plan sketches them under
+lib/gateway/); the single-source-of-model-ids contract holds either way.
+
+**Gates:** typecheck · 45/45 unit · build. Spend $1.69/$8 (no live spend this sprint).
