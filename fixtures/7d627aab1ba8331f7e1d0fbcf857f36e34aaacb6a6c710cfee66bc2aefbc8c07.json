@@ -1,9 +1,9 @@
 {
-  "hash": "8a97c8bc714dd7e1a5c9cf2c79ce65efb77f36c01b9d7b5496dc27730dde3df8",
+  "hash": "7d627aab1ba8331f7e1d0fbcf857f36e34aaacb6a6c710cfee66bc2aefbc8c07",
   "modelId": "qwen-image-edit",
   "seed": 1003,
   "costUsd": 0.05,
-  "latencyMs": 16126,
+  "latencyMs": 15904,
   "payload": {
     "imageUrl": "/takes/1003.png"
   }
