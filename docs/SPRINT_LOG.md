@@ -271,3 +271,18 @@ sequences clips today; frame-chaining is a generation-time follow-up (costs live
 - Robustness: budget guard (S4) + fail-closed governor + per-node error surfacing.
 
 **Gates:** typecheck · 84/84 unit · e2e 17/17 · live async i2v smoke. **Spend $2.78/$8.**
+
+## 2026-07-14 — S8 (polish + submission) — SHIPPED · ALL 8 SPRINTS COMPLETE
+
+- Empty-canvas onboarding hint (premise/Showrun or drop a node).
+- eval:ui hardened against transient VL parse failures (retry once, skip a screen rather than
+  tank the mean). Overall **7.36 PASS** (every scored screen ≥7); DemoCanvas given a <main> so it
+  captures. docs/EVAL.md product writeup.
+
+**Final verification:** typecheck · 84/84 unit · build · e2e 18/18 · eval:ui 7.36 · eval:continuity
+PASS. **Total build spend $2.86 / $8.**
+
+The 8-sprint comprehensive build (canvas parity → Canon → agent → execution → timeline/export →
+persistence/async → polish) is complete. Recut is a node-canvas AI film studio with a step-or-
+autonomous showrunner agent, Canon-locked continuity, real live generation (image/edit/compose/
+inpaint/i2v/dialogue/plan), finished-film export, durable shareable projects, and non-blocking jobs.

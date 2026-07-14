@@ -43,7 +43,7 @@ function Inner({ allNodes, allEdges }: { allNodes: Node<RecutNodeData>[]; allEdg
   const prev = () => setStep((s) => Math.max(0, s - 1));
 
   return (
-    <div className="flex h-screen flex-col">
+    <main className="flex h-screen flex-col">
       <header className="z-10 flex items-center justify-between gap-4 border-b border-neutral-800 bg-neutral-950 px-4 py-2.5">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-sm font-semibold text-neutral-100">Recut</Link>
@@ -123,7 +123,7 @@ function Inner({ allNodes, allEdges }: { allNodes: Node<RecutNodeData>[]; allEdg
           )}
         </aside>
       </div>
-    </div>
+    </main>
   );
 }
 

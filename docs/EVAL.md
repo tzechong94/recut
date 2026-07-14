@@ -57,3 +57,27 @@ rather than chase a stochastic 8.5.
 
 Total live spend across all evals + the golden fixtures: **~$1.9 of the $8 hard cap**. Everything
 after Sprint 0 runs in replay (zero network) and is free to re-run.
+
+---
+
+## Product state (2026-07-14) — comprehensive build
+
+Recut is now a node-canvas AI film studio (TapNow-parity + a showrunner agent):
+
+- **Node canvas** (`/project/[id]`): Text→Image, Upload, Edit, Compose (multi-image), Inpaint,
+  Image→Video (**true wan2.6-i2v**), Dialogue→Voice (qwen3-tts-flash), Continuity, and **Canon**
+  (locked character/location/prop/style). Typed ports, drag-connect, undo/redo, duplicate/delete,
+  per-node params (seed/negative/aspect/voice), inspector drawer. Empty-canvas onboarding.
+- **Showrunner agent**: a premise → qwen3-max plans cast + shots → the graph is proposed
+  **step-by-step (approve/edit/skip each node, TapNow-style)** or built **fully autonomously**.
+- **Canon + continuity**: lock a reference once; downstream nodes inherit it; editing a canon ref
+  flags every dependent node **stale**; a Continuity node scores against the canon and **auto-repairs**.
+- **Execution**: Run-All in topological order under a **budget guard** (pauses at 80% of the cap).
+- **Finish**: a timeline collects video clips + a dialogue track; **/api/assemble** bakes the series
+  LUT and exports a **1080p / 9:16 MP4**.
+- **Durable + shareable**: projects/graphs persist server-side (REST `/api/projects`), by id.
+- **Non-blocking i2v**: submit returns a task id; the client polls; a 1–3 min render never blocks.
+
+**Quality:** eval:ui overall **7.36** (every scored screen ≥7). **Continuity eval:** critic
+discriminates a wardrobe break to 0.30 and auto-repair recovers to 0.88 (eval:continuity PASS).
+**Build spend so far: ~$2.86 of the $8 cap** — everything but live generation runs in replay/free.

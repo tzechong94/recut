@@ -115,7 +115,16 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
       {pausedReason && <div className="border-b border-amber-900 bg-amber-950/50 px-4 py-1.5 text-xs text-amber-300" data-testid="paused">⏸ {pausedReason}</div>}
 
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
+          {nodes.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-center" data-testid="empty-hint">
+              <p className="text-sm font-medium text-neutral-400">Blank canvas</p>
+              <p className="max-w-sm text-xs text-neutral-600">
+                Type a premise up top and <span className="text-sky-400">Showrun</span> — the agent proposes each shot.
+                Or drop a node from the toolbar and wire outputs into inputs.
+              </p>
+            </div>
+          )}
           <ReactFlow
             nodes={nodes}
             edges={edges}
