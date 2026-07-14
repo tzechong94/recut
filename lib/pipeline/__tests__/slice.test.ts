@@ -80,7 +80,7 @@ describe('router', () => {
     expect(selectModel('image.edit').id).toBe('qwen-image-edit');
   });
   it('throws for an unsatisfiable capability', () => {
-    expect(() => selectModel('audio.tts')).toThrow(NoModelForCapability);
+    expect(() => selectModel('audio.asr')).toThrow(NoModelForCapability);
   });
 });
 

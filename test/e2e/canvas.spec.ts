@@ -9,18 +9,27 @@ test('create a project → add nodes on the canvas', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/project\/[a-z0-9]+/);
 
-  // toolbar adds nodes
+  // toolbar adds nodes (titles appear on both the node and the inspector → use .first())
   await page.getByTestId('add-text2image').click();
-  await expect(page.getByText('Text → Image')).toBeVisible();
+  await expect(page.getByText('Text → Image').first()).toBeVisible();
   await expect(page.getByPlaceholder('describe the image…')).toBeVisible();
 
-  await page.getByTestId('add-edit').click();
-  await expect(page.getByText('Edit', { exact: true })).toBeVisible();
+  await page.getByTestId('add-compose').click();
+  await expect(page.getByText('Compose').first()).toBeVisible();
+
+  await page.getByTestId('add-dialogue').click();
+  await expect(page.getByText('Dialogue → Voice').first()).toBeVisible();
 
   await page.getByTestId('add-video').click();
-  await expect(page.getByText('Image → Video')).toBeVisible();
+  await expect(page.getByText('Image → Video').first()).toBeVisible();
 
   // the prompt persists as you type (node state)
   await page.getByPlaceholder('describe the image…').fill('a lighthouse at dusk');
   await expect(page.getByPlaceholder('describe the image…')).toHaveValue('a lighthouse at dusk');
+
+  // node inspector opens on selection with editable params
+  await expect(page.getByTestId('node-inspector')).toBeVisible();
+
+  // undo removes the last added node
+  await page.keyboard.press('Meta+z');
 });

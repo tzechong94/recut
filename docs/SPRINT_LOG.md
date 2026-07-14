@@ -189,3 +189,16 @@ LUT zero-network asserted) · eval:ui 7.69 (timeline 7.29 ≥7). Spend $1.89/$8.
 
 **Final gates:** typecheck · 70/70 unit · build · e2e 12/12 · eval:continuity PASS · eval:ui
 ~7.7 (all screens ≥7). **Total live spend $1.92 / $8 cap.**
+
+## 2026-07-14 — S1 (canvas parity: node system) — SHIPPED
+
+- Store: undo/redo history, delete/duplicate, multi-input resolution (compose consumes N
+  images), per-node params (seed/negative/aspect/voice), selection.
+- New node kinds: **compose** (multi-image→1, verified live), **inpaint** (region edit),
+  **dialogue** (TTS qwen3-tts-flash, verified live → durable .wav). Manifests: qwen-tts.
+- Node inspector drawer (editable prompt/seed/negative/aspect/voice, model shown, duplicate/
+  delete). Editor: 8-kind toolbar, undo/redo buttons + keyboard (⌘Z/⌘⇧Z/⌘D/Delete).
+- /api/generate: compose, inpaint, dialogue handlers; aspect hint on text2image.
+
+**Gates:** typecheck · 70/70 unit · e2e 14/14 · live smoke (dialogue $0.002 + compose $0.05).
+**Spend $2.42/$8.**

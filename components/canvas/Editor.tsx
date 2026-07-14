@@ -1,27 +1,33 @@
 'use client';
 
 import '@xyflow/react/dist/style.css';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react';
 import { useCanvas, type RecutNodeKind } from '../../lib/canvas/store';
 import { RecutNode } from './RecutNode';
+import { NodeInspector } from './NodeInspector';
 
 const nodeTypes = { recut: RecutNode };
 
 const TOOLS: Array<{ kind: RecutNodeKind; label: string }> = [
-  { kind: 'text2image', label: '＋ Text→Image' },
-  { kind: 'upload', label: '＋ Upload' },
-  { kind: 'edit', label: '＋ Edit' },
-  { kind: 'video', label: '＋ Video' },
-  { kind: 'critique', label: '＋ Continuity' },
+  { kind: 'text2image', label: 'Text→Image' },
+  { kind: 'upload', label: 'Upload' },
+  { kind: 'edit', label: 'Edit' },
+  { kind: 'compose', label: 'Compose' },
+  { kind: 'inpaint', label: 'Inpaint' },
+  { kind: 'video', label: 'Video' },
+  { kind: 'dialogue', label: 'Dialogue' },
+  { kind: 'critique', label: 'Continuity' },
 ];
 
 export function Editor({ projectId, title }: { projectId: string; title: string }) {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, load, reset, spentUsd, lastError } = useCanvas();
+  const {
+    nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, load, reset, spentUsd, lastError,
+    selectedId, select, deleteNode, duplicateNode, undo, redo, past, future,
+  } = useCanvas();
   const key = `recut:project:${projectId}`;
 
-  // load once on mount
   useEffect(() => {
     reset();
     try {
@@ -36,7 +42,6 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  // persist on change
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify({ nodes, edges }));
@@ -45,7 +50,31 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
     }
   }, [nodes, edges, key]);
 
-  const add = (kind: RecutNodeKind) => addNode(kind, { x: 140 + (nodes.length % 6) * 36, y: 120 + (nodes.length % 6) * 36 });
+  // keyboard: delete / duplicate / undo / redo
+  const onKey = useCallback(
+    (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        e.shiftKey ? redo() : undo();
+      } else if (meta && e.key.toLowerCase() === 'd' && selectedId) {
+        e.preventDefault();
+        duplicateNode(selectedId);
+      } else if ((e.key === 'Backspace' || e.key === 'Delete') && selectedId) {
+        e.preventDefault();
+        deleteNode(selectedId);
+      }
+    },
+    [selectedId, undo, redo, duplicateNode, deleteNode],
+  );
+  useEffect(() => {
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onKey]);
+
+  const add = (kind: RecutNodeKind) => addNode(kind, { x: 160 + (nodes.length % 6) * 40, y: 130 + (nodes.length % 6) * 40 });
 
   return (
     <div className="flex h-screen flex-col">
@@ -54,44 +83,43 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
           <Link href="/" className="text-sm font-semibold text-neutral-100">Recut</Link>
           <span className="text-xs text-neutral-500">/ {title}</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1">
           {TOOLS.map((t) => (
-            <button
-              key={t.kind}
-              onClick={() => add(t.kind)}
-              data-testid={`add-${t.kind}`}
-              className="rounded-md border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:border-neutral-500 hover:bg-neutral-800"
-            >
-              {t.label}
+            <button key={t.kind} onClick={() => add(t.kind)} data-testid={`add-${t.kind}`} className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] font-medium text-neutral-300 hover:border-neutral-500 hover:bg-neutral-800">
+              ＋{t.label}
             </button>
           ))}
+          <span className="mx-1 h-4 w-px bg-neutral-800" />
+          <button onClick={undo} disabled={past.length === 0} title="Undo (⌘Z)" className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">↶</button>
+          <button onClick={redo} disabled={future.length === 0} title="Redo (⌘⇧Z)" className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">↷</button>
         </div>
-        <div className="text-xs tabular-nums text-neutral-500" data-testid="spend">
-          spend ${spentUsd.toFixed(3)}
-        </div>
+        <div className="text-xs tabular-nums text-neutral-500" data-testid="spend">spend ${spentUsd.toFixed(3)}</div>
       </header>
 
-      {lastError && (
-        <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{lastError}</div>
-      )}
+      {lastError && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{lastError}</div>}
 
-      <div className="min-h-0 flex-1">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          fitView
-          proOptions={{ hideAttribution: true }}
-          colorMode="dark"
-          defaultEdgeOptions={{ animated: true }}
-        >
-          <Background />
-          <Controls />
-          <MiniMap pannable className="!bg-neutral-900" />
-        </ReactFlow>
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={(_, node) => select(node.id)}
+            onPaneClick={() => select(null)}
+            nodeTypes={nodeTypes}
+            fitView
+            proOptions={{ hideAttribution: true }}
+            colorMode="dark"
+            defaultEdgeOptions={{ animated: true }}
+          >
+            <Background />
+            <Controls />
+            <MiniMap pannable className="!bg-neutral-900" />
+          </ReactFlow>
+        </div>
+        {selectedId && <NodeInspector nodeId={selectedId} onDelete={() => deleteNode(selectedId)} onDuplicate={() => duplicateNode(selectedId)} />}
       </div>
     </div>
   );

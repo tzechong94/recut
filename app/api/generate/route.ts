@@ -11,16 +11,21 @@ import { buildCritiquePayload, parseVerdict, continuityScore } from '../../../li
 import { buildKenBurnsArgs } from '../../../lib/post/export';
 import { submitI2V, pollI2V } from '../../../adapters/dashscope-video';
 import { WAN_I2V, I2V_MODEL_ID } from '../../../manifests/wan-i2v';
+import { TTS_MODEL_ID } from '../../../manifests/qwen-tts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 interface Body {
-  kind: 'text2image' | 'edit' | 'video' | 'critique';
+  kind: 'text2image' | 'edit' | 'compose' | 'inpaint' | 'video' | 'critique' | 'dialogue';
   prompt?: string;
   image?: string; // data URI or http(s) url — the primary input
+  images?: string[]; // multiple inputs (compose)
   refs?: string[]; // reference images for critique
   negative?: string;
+  seed?: number;
+  aspect?: string;
+  voice?: string;
 }
 
 const NEGATIVE = 'lowres, deformed, extra fingers, watermark, text';
@@ -57,23 +62,36 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     if (body.kind === 'text2image') {
-      const model = selectModel('image.generate').id;
-      const cost = selectModel('image.generate').cost.amount;
-      gov.assertCanSpend(cost);
-      const payload = { messages: [{ role: 'user', content: [{ text: `${body.prompt ?? ''}. Avoid: ${body.negative ?? NEGATIVE}.` }] }] };
-      const r = await dashscopeImageCall(model, payload);
-      gov.record(cost);
+      const manifest = selectModel('image.generate');
+      gov.assertCanSpend(manifest.cost.amount);
+      const aspectHint = body.aspect === '9:16' ? ' vertical 9:16 composition,' : body.aspect === '16:9' ? ' widescreen 16:9 composition,' : '';
+      const payload = { messages: [{ role: 'user', content: [{ text: `${body.prompt ?? ''}.${aspectHint} Avoid: ${body.negative ?? NEGATIVE}.` }] }] };
+      const r = await dashscopeImageCall(manifest.id, payload);
+      gov.record(manifest.cost.amount);
       return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent() });
     }
 
-    if (body.kind === 'edit') {
-      if (!body.image) return Response.json({ error: 'edit needs an input image' }, { status: 400 });
-      const model = selectModel('image.edit', 'quality', { minRefImages: 1 }).id;
-      const cost = selectModel('image.edit', 'quality', { minRefImages: 1 }).cost.amount;
-      gov.assertCanSpend(cost);
-      const payload = { messages: [{ role: 'user', content: [{ image: body.image }, { text: body.prompt ?? 'edit the image' }] }] };
-      const r = await dashscopeImageCall(model, payload);
-      gov.record(cost);
+    if (body.kind === 'edit' || body.kind === 'inpaint') {
+      if (!body.image) return Response.json({ error: `${body.kind} needs an input image` }, { status: 400 });
+      const manifest = selectModel('image.edit', 'quality', { minRefImages: 1 });
+      gov.assertCanSpend(manifest.cost.amount);
+      const instruction = body.kind === 'inpaint'
+        ? `In the described region only, ${body.prompt ?? 'edit'}. Leave the rest of the image unchanged.`
+        : body.prompt ?? 'edit the image';
+      const payload = { messages: [{ role: 'user', content: [{ image: body.image }, { text: instruction }] }] };
+      const r = await dashscopeImageCall(manifest.id, payload);
+      gov.record(manifest.cost.amount);
+      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent() });
+    }
+
+    if (body.kind === 'compose') {
+      const imgs = (body.images ?? []).slice(0, 3);
+      if (imgs.length < 2) return Response.json({ error: 'compose needs 2+ connected image inputs' }, { status: 400 });
+      const manifest = selectModel('image.edit', 'quality', { minRefImages: 2 });
+      gov.assertCanSpend(manifest.cost.amount);
+      const payload = { messages: [{ role: 'user', content: [...imgs.map((i) => ({ image: i })), { text: body.prompt ?? 'combine these images into one coherent composition' }] }] };
+      const r = await dashscopeImageCall(manifest.id, payload);
+      gov.record(manifest.cost.amount);
       return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent() });
     }
 
@@ -123,6 +141,30 @@ export async function POST(req: Request): Promise<Response> {
       const text = Array.isArray(content) ? content.map((p) => (p as { text?: string }).text ?? '').join(' ') : String(content ?? '');
       const verdict = parseVerdict(text);
       return Response.json({ verdict, score: continuityScore(verdict), spentUsd: gov.spent() });
+    }
+
+    if (body.kind === 'dialogue') {
+      const text = body.prompt?.trim();
+      if (!text) return Response.json({ error: 'dialogue needs a line of text' }, { status: 400 });
+      const voice = body.voice || 'Cherry';
+      gov.assertCanSpend(0.002);
+      const res = await fetch(`${(process.env.RECUT_DASHSCOPE_BASE_URL ?? 'https://dashscope-intl.aliyuncs.com/api/v1').replace(/\/$/, '')}/services/aigc/multimodal-generation/generation`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.RECUT_DASHSCOPE_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: TTS_MODEL_ID, input: { text, voice } }),
+      });
+      const j = (await res.json()) as { code?: string; message?: string; output?: { audio?: { url?: string } } };
+      if (!res.ok || j.code || !j.output?.audio?.url) {
+        return Response.json({ error: `tts ${res.status} ${j.code ?? ''}: ${String(j.message ?? 'no audio').slice(0, 120)}` }, { status: 500 });
+      }
+      gov.record(0.002);
+      // download for durability (the hosted url is short-lived)
+      const genDir = resolve(process.cwd(), 'public/generated');
+      mkdirSync(genDir, { recursive: true });
+      const name = `${randomUUID()}.wav`;
+      const dl = await fetch(j.output.audio.url);
+      writeFileSync(join(genDir, name), Buffer.from(await dl.arrayBuffer()));
+      return Response.json({ audioUrl: `/generated/${name}`, spentUsd: gov.spent() });
     }
 
     return Response.json({ error: 'unknown kind' }, { status: 400 });

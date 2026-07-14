@@ -12,7 +12,7 @@ import {
 import type { Capability } from '../gateway/types';
 import { canConnect } from './node';
 
-export type RecutNodeKind = 'text2image' | 'upload' | 'edit' | 'video' | 'critique';
+export type RecutNodeKind = 'text2image' | 'upload' | 'edit' | 'compose' | 'inpaint' | 'video' | 'critique' | 'dialogue';
 
 export interface DemoDetail {
   caption: string;
@@ -26,9 +26,15 @@ export interface RecutNodeData {
   prompt: string;
   imageUrl?: string;
   videoUrl?: string;
+  audioUrl?: string;
   score?: number;
   status: 'idle' | 'running' | 'done' | 'error';
   error?: string;
+  // per-node params (editable in the inspector)
+  seed?: number;
+  negative?: string;
+  aspect?: '1:1' | '9:16' | '16:9';
+  voice?: string;
   // demo mode: read-only node with pre-filled fixtures + an inspectable detail block
   demo?: boolean;
   step?: number;
@@ -38,22 +44,37 @@ export interface RecutNodeData {
 
 export type RecutNode = Node<RecutNodeData>;
 
-/** Node kind → the gateway capability it represents, for typed-port validation. */
 export const KIND_CAPABILITY: Record<RecutNodeKind, Capability> = {
   text2image: 'image.generate',
   upload: 'image.generate',
   edit: 'image.edit',
+  compose: 'image.edit',
+  inpaint: 'image.edit',
   video: 'video.i2v',
   critique: 'vision.critique',
+  dialogue: 'audio.tts',
 };
 
 const KIND_TITLE: Record<RecutNodeKind, string> = {
   text2image: 'Text → Image',
   upload: 'Upload',
   edit: 'Edit',
+  compose: 'Compose',
+  inpaint: 'Inpaint',
   video: 'Image → Video',
   critique: 'Continuity',
+  dialogue: 'Dialogue → Voice',
 };
+
+/** kinds that take an incoming connection (consume an upstream output) */
+export const CONSUMES: RecutNodeKind[] = ['edit', 'compose', 'inpaint', 'video', 'critique'];
+/** kinds that emit an image (can be an upstream source) */
+export const PRODUCES_IMAGE: RecutNodeKind[] = ['text2image', 'upload', 'edit', 'compose', 'inpaint'];
+
+interface Snapshot {
+  nodes: RecutNode[];
+  edges: Edge[];
+}
 
 export interface CanvasState {
   nodes: RecutNode[];
@@ -61,15 +82,27 @@ export interface CanvasState {
   nextId: number;
   spentUsd: number;
   lastError: string | null;
+  selectedId: string | null;
+  past: Snapshot[];
+  future: Snapshot[];
 
   onNodesChange: (c: NodeChange[]) => void;
   onEdgesChange: (c: EdgeChange[]) => void;
   onConnect: (c: Connection) => void;
+  select: (id: string | null) => void;
   addNode: (kind: RecutNodeKind, position: { x: number; y: number }) => void;
   updateNode: (id: string, patch: Partial<RecutNodeData>) => void;
+  deleteNode: (id: string) => void;
+  duplicateNode: (id: string) => void;
   runNode: (id: string) => Promise<void>;
+  undo: () => void;
+  redo: () => void;
   load: (nodes: RecutNode[], edges: Edge[]) => void;
   reset: () => void;
+}
+
+function snapshot(s: CanvasState): Snapshot {
+  return { nodes: s.nodes.map((n) => ({ ...n, data: { ...n.data } })), edges: s.edges.map((e) => ({ ...e })) };
 }
 
 export const useCanvas = create<CanvasState>((set, get) => ({
@@ -78,48 +111,69 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   nextId: 1,
   spentUsd: 0,
   lastError: null,
+  selectedId: null,
+  past: [],
+  future: [],
 
   onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) as RecutNode[] }),
   onEdgesChange: (changes) => set({ edges: applyEdgeChanges(changes, get().edges) }),
+  select: (id) => set({ selectedId: id }),
 
   onConnect: (conn) => {
-    const nodes = get().nodes;
-    const from = nodes.find((n) => n.id === conn.source);
-    const to = nodes.find((n) => n.id === conn.target);
+    const s = get();
+    const from = s.nodes.find((n) => n.id === conn.source);
+    const to = s.nodes.find((n) => n.id === conn.target);
     if (!from || !to) return;
     const check = canConnect(KIND_CAPABILITY[from.data.kind], KIND_CAPABILITY[to.data.kind]);
     if (!check.ok) {
       set({ lastError: check.reason ?? 'invalid connection' });
       return;
     }
-    set({ edges: addEdge({ ...conn, animated: true }, get().edges), lastError: null });
+    set({ past: [...s.past, snapshot(s)], future: [], edges: addEdge({ ...conn, animated: true }, s.edges), lastError: null });
   },
 
   addNode: (kind, position) => {
-    const id = `n${get().nextId}`;
-    const node: RecutNode = {
-      id,
-      type: 'recut',
-      position,
-      data: { kind, title: KIND_TITLE[kind], prompt: '', status: 'idle' },
-    };
-    set({ nodes: [...get().nodes, node], nextId: get().nextId + 1 });
+    const s = get();
+    const id = `n${s.nextId}`;
+    const node: RecutNode = { id, type: 'recut', position, data: { kind, title: KIND_TITLE[kind], prompt: '', status: 'idle' } };
+    set({ past: [...s.past, snapshot(s)], future: [], nodes: [...s.nodes, node], nextId: s.nextId + 1, selectedId: id });
   },
 
   updateNode: (id, patch) =>
     set({ nodes: get().nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)) }),
+
+  deleteNode: (id) => {
+    const s = get();
+    set({
+      past: [...s.past, snapshot(s)],
+      future: [],
+      nodes: s.nodes.filter((n) => n.id !== id),
+      edges: s.edges.filter((e) => e.source !== id && e.target !== id),
+      selectedId: s.selectedId === id ? null : s.selectedId,
+    });
+  },
+
+  duplicateNode: (id) => {
+    const s = get();
+    const src = s.nodes.find((n) => n.id === id);
+    if (!src) return;
+    const nid = `n${s.nextId}`;
+    const copy: RecutNode = { ...src, id: nid, position: { x: src.position.x + 40, y: src.position.y + 40 }, data: { ...src.data } };
+    set({ past: [...s.past, snapshot(s)], future: [], nodes: [...s.nodes, copy], nextId: s.nextId + 1, selectedId: nid });
+  },
 
   runNode: async (id) => {
     const { nodes, edges, updateNode } = get();
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
 
-    // resolve the input image from the connected upstream node's output
-    const inEdge = edges.find((e) => e.target === id);
-    const upstream = inEdge ? nodes.find((n) => n.id === inEdge.source) : undefined;
-    const inputImage = upstream?.data.imageUrl;
-
-    if ((node.data.kind === 'edit' || node.data.kind === 'video' || node.data.kind === 'critique') && !inputImage) {
+    // resolve ALL connected upstream image outputs (compose consumes several)
+    const inEdges = edges.filter((e) => e.target === id);
+    const images = inEdges
+      .map((e) => nodes.find((n) => n.id === e.source)?.data.imageUrl)
+      .filter((u): u is string => typeof u === 'string');
+    const needsInput: RecutNodeKind[] = ['edit', 'compose', 'inpaint', 'video', 'critique'];
+    if (needsInput.includes(node.data.kind) && images.length === 0) {
       updateNode(id, { status: 'error', error: 'connect an image node to this input first' });
       return;
     }
@@ -129,20 +183,42 @@ export const useCanvas = create<CanvasState>((set, get) => ({
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: node.data.kind, prompt: node.data.prompt, image: inputImage }),
+        body: JSON.stringify({
+          kind: node.data.kind,
+          prompt: node.data.prompt,
+          image: images[0],
+          images,
+          seed: node.data.seed,
+          negative: node.data.negative,
+          aspect: node.data.aspect,
+          voice: node.data.voice,
+        }),
       });
-      const j = (await res.json()) as { imageUrl?: string; videoUrl?: string; score?: number; error?: string; spentUsd?: number };
+      const j = (await res.json()) as { imageUrl?: string; videoUrl?: string; audioUrl?: string; score?: number; error?: string; spentUsd?: number };
       if (!res.ok) {
         updateNode(id, { status: 'error', error: j.error ?? `HTTP ${res.status}` });
         return;
       }
-      updateNode(id, { status: 'done', imageUrl: j.imageUrl, videoUrl: j.videoUrl, score: j.score });
+      updateNode(id, { status: 'done', imageUrl: j.imageUrl, videoUrl: j.videoUrl, audioUrl: j.audioUrl, score: j.score });
       if (typeof j.spentUsd === 'number') set({ spentUsd: j.spentUsd });
     } catch (e) {
       updateNode(id, { status: 'error', error: String(e).slice(0, 120) });
     }
   },
 
-  load: (nodes, edges) => set({ nodes, edges, nextId: nodes.length + 1 }),
-  reset: () => set({ nodes: [], edges: [], nextId: 1, lastError: null }),
+  undo: () => {
+    const s = get();
+    if (s.past.length === 0) return;
+    const prev = s.past[s.past.length - 1]!;
+    set({ past: s.past.slice(0, -1), future: [snapshot(s), ...s.future], nodes: prev.nodes, edges: prev.edges });
+  },
+  redo: () => {
+    const s = get();
+    if (s.future.length === 0) return;
+    const next = s.future[0]!;
+    set({ future: s.future.slice(1), past: [...s.past, snapshot(s)], nodes: next.nodes, edges: next.edges });
+  },
+
+  load: (nodes, edges) => set({ nodes, edges, nextId: nodes.length + 1, past: [], future: [], selectedId: null }),
+  reset: () => set({ nodes: [], edges: [], nextId: 1, lastError: null, past: [], future: [], selectedId: null }),
 }));

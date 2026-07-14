@@ -6,8 +6,9 @@ import { qwenImageEdit } from './qwen-image-edit';
 import { qwenImagePlus } from './qwen-image-plus';
 import { WAN_I2V } from './wan-i2v';
 import { VISION_CRITIC } from './qwen-vl-critic';
+import { QWEN_TTS } from './qwen-tts';
 
-export const MANIFESTS: ModelManifest[] = [qwenImageEdit, qwenImagePlus, WAN_I2V, VISION_CRITIC];
+export const MANIFESTS: ModelManifest[] = [qwenImageEdit, qwenImagePlus, WAN_I2V, VISION_CRITIC, QWEN_TTS];
 
 export function manifestById(id: string): ModelManifest | undefined {
   return MANIFESTS.find((m) => m.id === id);
