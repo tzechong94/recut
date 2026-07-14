@@ -72,6 +72,9 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
         <div className="flex items-center gap-3">
           <Link href="/" className="text-sm font-semibold text-neutral-100">Recut</Link>
           <span className="text-xs text-neutral-500">/ {title}</span>
+          <Link href={`/project/${projectId}/edit`} data-testid="finish-film" className="rounded-md border border-neutral-700 px-2.5 py-1 text-[11px] font-medium text-neutral-300 hover:border-neutral-500 hover:bg-neutral-800">
+            🎬 Finish film →
+          </Link>
         </div>
         <div className="flex items-center gap-2">
           <AddNodeMenu />
