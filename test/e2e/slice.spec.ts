@@ -17,8 +17,13 @@ test('produce: 4 candidates → accept a Take → provenance + export', async ({
   await expect(page.getByTestId('capability-badge')).toHaveText('image.edit');
   await expect(page.getByTestId('status')).toHaveText('cached');
 
-  // pick one, accept it
+  // selecting a candidate reveals the exact prompt sent to the model
   await candidates.first().click();
+  const prompt = page.getByTestId('prompt-panel');
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText('camera framing'); // the real instruction text
+
+  // accept it
   await page.getByTestId('accept').click();
 
   // provenance is complete

@@ -14,6 +14,14 @@ function money(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** The exact instruction text sent to the model (from the serialized provider payload). */
+function promptOf(take: Take): string {
+  const messages = (take.provenance.serializedPayload as { messages?: Array<{ content?: Array<{ text?: string }> }> })?.messages;
+  const content = messages?.[0]?.content;
+  const textPart = Array.isArray(content) ? content.find((p) => typeof p.text === 'string') : undefined;
+  return textPart?.text ?? '';
+}
+
 export function ProduceBoard({ shotAction, sceneTitle, entityName, takes }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [acceptedId, setAcceptedId] = useState<string | null>(null);
@@ -97,6 +105,18 @@ export function ProduceBoard({ shotAction, sceneTitle, entityName, takes }: Prop
 
       {/* Provenance / export */}
       <aside className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 text-sm">
+        {/* Prompt — visible as soon as you select a candidate */}
+        {(selected ?? accepted) ? (
+          <div className="mb-5" data-testid="prompt-panel">
+            <h2 className="mb-2 text-xs font-semibold tracking-widest text-neutral-500 uppercase">
+              Prompt sent {selected && !accepted ? `· seed ${selected.provenance.seed}` : ''}
+            </h2>
+            <p className="max-h-40 overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-950/60 p-3 font-mono text-[11px] leading-relaxed text-neutral-300">
+              {promptOf((accepted ?? selected)!)}
+            </p>
+          </div>
+        ) : null}
+
         <h2 className="mb-3 text-xs font-semibold tracking-widest text-neutral-500 uppercase">Provenance</h2>
         {accepted ? (
           <dl data-testid="provenance" className="space-y-2 text-neutral-300">
@@ -118,7 +138,7 @@ export function ProduceBoard({ shotAction, sceneTitle, entityName, takes }: Prop
             </a>
           </dl>
         ) : (
-          <p className="text-neutral-500">Select a candidate and accept it as the Take to see full provenance and export.</p>
+          <p className="text-neutral-500">Select a candidate to see its exact prompt; accept it as the Take for full provenance and export.</p>
         )}
       </aside>
     </div>
