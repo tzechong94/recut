@@ -25,13 +25,15 @@ export interface PlanGraph {
 export function buildGraphFromPlan(plan: StoryPlan): PlanGraph {
   const nodes: PlanNode[] = [];
   const edges: { from: string; to: string }[] = [];
+  // one style spine appended to every image prompt → consistent look across the whole film
+  const styleSuffix = plan.style ? `. ${plan.style}` : '';
 
   // cast column: each character is a locked Canon entity generated from its description
   const charKey = new Map<string, string>();
   plan.characters.forEach((c, i) => {
     const key = `c${i}`;
     charKey.set(c.name, key);
-    nodes.push({ key, kind: 'text2image', prompt: `${c.description}. Character portrait, consistent, photorealistic.`, name: c.name, x: 40, y: 80 + i * 240, inputs: [], note: `Cast ${c.name}` });
+    nodes.push({ key, kind: 'text2image', prompt: `${c.description}. Full-body character portrait, plain background${styleSuffix}`, name: c.name, x: 40, y: 80 + i * 240, inputs: [], note: `Cast ${c.name}` });
   });
 
   plan.shots.forEach((shot, j) => {
@@ -42,7 +44,7 @@ export function buildGraphFromPlan(plan: StoryPlan): PlanGraph {
     if (featured.length >= 2) kind = 'compose';
     else if (featured.length === 1) kind = 'edit';
     else kind = 'text2image';
-    nodes.push({ key: shotKey, kind, prompt: shot.description, x: 420, y, inputs: featured, note: `Shot ${j + 1}: ${shot.description.slice(0, 40)}` });
+    nodes.push({ key: shotKey, kind, prompt: `${shot.description}${styleSuffix}`, x: 420, y, inputs: featured, note: `Shot ${j + 1}: ${shot.description.slice(0, 40)}` });
     for (const f of featured) edges.push({ from: f, to: shotKey });
 
     if (shot.animate) {

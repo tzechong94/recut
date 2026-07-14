@@ -3,18 +3,20 @@
 
 export interface StoryPlan {
   title: string;
+  style: string;
   characters: { name: string; description: string }[];
   shots: { description: string; characters: string[]; animate: boolean; dialogue?: string }[];
 }
 
 export function planSystem(): string {
   return (
-    'You are a film showrunner. Given a premise, break it into a shootable plan: a small cast of ' +
-    'characters (each with a vivid visual description) and an ordered list of shots. Each shot has a ' +
-    'cinematic visual description (shot size, angle, action, lighting), the names of characters featured ' +
-    '(subset of the cast), whether it should be animated into video, and an optional spoken line. Keep it ' +
+    'You are a film showrunner. Given a premise, break it into a shootable plan: ONE consistent visual ' +
+    'style for the whole film (medium, palette, lighting mood — e.g. "soft Studio Ghibli watercolor, warm ' +
+    'palette"), a small cast of characters (each with a vivid, specific visual description), and an ordered ' +
+    'list of shots. Each shot has a cinematic description (shot size, angle, action), the names of ' +
+    'characters featured (subset of the cast), whether to animate it, and an optional spoken line. Keep it ' +
     'tight: 1-3 characters, 3-6 shots. Return STRICT JSON only, no prose:\n' +
-    '{"title": str, "characters": [{"name": str, "description": str}], ' +
+    '{"title": str, "style": str, "characters": [{"name": str, "description": str}], ' +
     '"shots": [{"description": str, "characters": [str], "animate": bool, "dialogue": str|null}]}'
   );
 }
@@ -42,5 +44,5 @@ export function parsePlan(text: string): StoryPlan {
         }))
     : [];
   if (shots.length === 0) throw new Error('plan has no shots');
-  return { title: String(raw.title ?? 'Untitled'), characters, shots };
+  return { title: String(raw.title ?? 'Untitled'), style: String(raw.style ?? ''), characters, shots };
 }

@@ -71,13 +71,18 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
+    // Consistency directive: the #1 lever for character/style consistency across shots is telling
+    // the edit model to PRESERVE the reference exactly and only change what's asked.
+    const KEEP = 'CRITICAL: keep the character(s) from the reference image(s) EXACTLY — identical face, ' +
+      'body proportions, colours, wardrobe, and art style. Do not restyle or redraw them.';
+
     if (body.kind === 'edit' || body.kind === 'inpaint') {
       if (!body.image) return Response.json({ error: `${body.kind} needs an input image` }, { status: 400 });
       const manifest = selectModel('image.edit', 'quality', { minRefImages: 1 });
       gov.assertCanSpend(manifest.cost.amount);
       const instruction = body.kind === 'inpaint'
-        ? `In the described region only, ${body.prompt ?? 'edit'}. Leave the rest of the image unchanged.`
-        : body.prompt ?? 'edit the image';
+        ? `In the described region only, ${body.prompt ?? 'edit'}. Leave the rest of the image unchanged. ${KEEP}`
+        : `${KEEP} Change only the scene, pose, and framing as follows: ${body.prompt ?? 'edit the image'}`;
       const payload = { messages: [{ role: 'user', content: [{ image: body.image }, { text: instruction }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
@@ -89,7 +94,8 @@ export async function POST(req: Request): Promise<Response> {
       if (imgs.length < 2) return Response.json({ error: 'compose needs 2+ connected image inputs' }, { status: 400 });
       const manifest = selectModel('image.edit', 'quality', { minRefImages: 2 });
       gov.assertCanSpend(manifest.cost.amount);
-      const payload = { messages: [{ role: 'user', content: [...imgs.map((i) => ({ image: i })), { text: body.prompt ?? 'combine these images into one coherent composition' }] }] };
+      const instruction = `Compose the characters from the reference images into ONE coherent scene. ${KEEP} Scene: ${body.prompt ?? 'the characters together in one scene'}`;
+      const payload = { messages: [{ role: 'user', content: [...imgs.map((i) => ({ image: i })), { text: instruction }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
       return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
