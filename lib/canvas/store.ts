@@ -45,6 +45,11 @@ export interface RecutNodeData {
   stale?: boolean;
   // critique nodes carry the critic's repair instruction for auto-repair
   repairInstruction?: string;
+  // cinematography presets (appended to the prompt at generation)
+  shotSize?: string;
+  angle?: string;
+  lens?: string;
+  lighting?: string;
   // demo mode: read-only node with pre-filled fixtures + an inspectable detail block
   demo?: boolean;
   step?: number;
@@ -53,6 +58,12 @@ export interface RecutNodeData {
 }
 
 export type RecutNode = Node<RecutNodeData>;
+
+/** Combine a node's prompt with its cinematography presets for generation. */
+export function effectivePrompt(d: RecutNodeData): string {
+  const cine = [d.shotSize, d.angle, d.lens, d.lighting].filter(Boolean).join(', ');
+  return cine ? `${d.prompt}${d.prompt ? ', ' : ''}${cine}` : d.prompt;
+}
 
 export const KIND_CAPABILITY: Record<RecutNodeKind, Capability> = {
   text2image: 'image.generate',
@@ -309,7 +320,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           kind: node.data.kind,
-          prompt: node.data.prompt,
+          prompt: effectivePrompt(node.data),
           image: images[0],
           images,
           refs: canonRef ? [canonRef] : undefined,

@@ -10,9 +10,11 @@ export function ShowrunBar() {
   const addConfiguredNode = useCanvas((s) => s.addConfiguredNode);
   const connectIds = useCanvas((s) => s.connectIds);
   const runAll = useCanvas((s) => s.runAll);
+  const runNode = useCanvas((s) => s.runNode);
 
   const [premise, setPremise] = useState('');
   const [autonomous, setAutonomous] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [graph, setGraph] = useState<PlanGraph | null>(null);
@@ -63,9 +65,17 @@ export function ShowrunBar() {
     }
   }
 
-  function approve() {
-    if (!graph) return;
-    applyNode(graph.nodes[index]!.key, draftPrompt);
+  // human-in-the-loop: confirm/edit this step's prompt → add it → GENERATE it → next.
+  async function approve() {
+    if (!graph || busy) return;
+    const key = graph.nodes[index]!.key;
+    applyNode(key, draftPrompt);
+    const id = keyToId.current[key];
+    if (id) {
+      setBusy(true);
+      await runNode(id);
+      setBusy(false);
+    }
     advance();
   }
   function skip() {
@@ -97,9 +107,9 @@ export function ShowrunBar() {
           data-testid="premise"
           className="flex-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-100 outline-none focus:border-neutral-600"
         />
-        <label className="flex items-center gap-1.5 text-[11px] text-neutral-400" title="Agent mode: the agent builds AND generates the whole film on its own (uses live budget)">
+        <label className="flex items-center gap-1.5 text-[11px] text-neutral-400" title="Off = agent asks you to confirm/edit every step. On = it builds AND generates the whole film without stopping.">
           <input type="checkbox" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} data-testid="autonomous" className="accent-sky-400" />
-          Agent mode
+          ⚡ Fully autonomous
         </label>
         <button onClick={showrun} disabled={phase === 'planning'} data-testid="showrun" className="rounded-md bg-sky-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60">
           {phase === 'planning' ? 'Planning…' : 'Showrun'}
@@ -114,12 +124,13 @@ export function ShowrunBar() {
             <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">{proposal.kind}</span>
           </div>
           <p className="mb-2 text-sm text-neutral-200">{proposal.note}</p>
-          {proposal.kind !== 'video' && (
-            <textarea value={draftPrompt} onChange={(e) => setDraftPrompt(e.target.value)} rows={3} className="mb-3 w-full resize-none rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-neutral-600" />
-          )}
+          <div className="mb-1 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">Prompt — edit before generating</div>
+          <textarea value={draftPrompt} onChange={(e) => setDraftPrompt(e.target.value)} rows={3} className="mb-3 w-full resize-none rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-neutral-600" />
           <div className="flex gap-2">
-            <button onClick={approve} data-testid="approve-step" className="flex-1 rounded-md bg-emerald-500 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400">Approve & next</button>
-            <button onClick={skip} className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800">Skip</button>
+            <button onClick={approve} disabled={busy} data-testid="approve-step" className="flex-1 rounded-md bg-emerald-500 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-60">
+              {busy ? 'Generating…' : 'Approve & generate →'}
+            </button>
+            <button onClick={skip} disabled={busy} className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">Skip</button>
           </div>
         </div>
       )}
