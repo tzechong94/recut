@@ -42,6 +42,44 @@ export function buildExportArgs(spec: ExportSpec): string[] {
   ];
 }
 
+/**
+ * Assemble ordered clips + bake the LUT + (optionally) lay a concatenated audio track over the
+ * whole cut. This is the "finish a film" path from the canvas timeline.
+ */
+export function buildAssembleArgs(spec: ExportSpec & { audio?: string[] }): string[] {
+  const fps = spec.fps ?? 24;
+  const n = spec.clips.length;
+  if (n === 0) throw new Error('assemble needs at least one clip');
+  const audio = spec.audio ?? [];
+
+  const inputs = [...spec.clips, ...audio].flatMap((c) => ['-i', c]);
+  const concatV = spec.clips.map((_, i) => `[${i}:v]`).join('') + `concat=n=${n}:v=1:a=0[cat]`;
+  const geom = spec.vertical
+    ? `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`
+    : `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2`;
+  let filter = `${concatV};[cat]lut3d=file='${spec.lutCube}',${geom},fps=${fps}[v]`;
+
+  const maps = ['-map', '[v]'];
+  if (audio.length) {
+    const concatA = audio.map((_, i) => `[${n + i}:a]`).join('') + `concat=n=${audio.length}:v=0:a=1[a]`;
+    filter += `;${concatA}`;
+    maps.push('-map', '[a]');
+  }
+
+  return [
+    '-y',
+    ...inputs,
+    '-filter_complex',
+    filter,
+    ...maps,
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    ...(audio.length ? ['-c:a', 'aac', '-shortest'] : []),
+    '-movflags', '+faststart',
+    spec.out,
+  ];
+}
+
 /** Build ffmpeg args that animate an approved keyframe into a clip (Ken Burns push-in). Video
  *  is animation of an approved keyframe (hard rule 6); real i2v uses the same clip contract. */
 export function buildKenBurnsArgs(image: string, out: string, seconds = 3, fps = 24): string[] {

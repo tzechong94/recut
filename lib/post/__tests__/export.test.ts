@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { buildExportArgs, buildKenBurnsArgs } from '../export';
+import { buildExportArgs, buildKenBurnsArgs, buildAssembleArgs } from '../export';
 import { lutByName, LUTS } from '../lut';
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
@@ -54,6 +54,36 @@ describe.skipIf(!hasFfmpeg || !clipsExist)('ffmpeg export produces a graded MP4 
     const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,height', '-of', 'default=noprint_wrappers=1', out], { encoding: 'utf8' });
     expect(probe.stdout).toContain('codec_name=h264');
     expect(probe.stdout).toContain('height=1080');
+  }, 60_000);
+});
+
+describe('assemble arg builder (clips + audio + lut)', () => {
+  it('maps a video stream only when there is no audio', () => {
+    const args = buildAssembleArgs({ clips: ['a.mp4', 'b.mp4'], lutCube: 'x.cube', out: 'o.mp4' });
+    expect(args.filter((a) => a === '-map')).toHaveLength(1);
+    expect(args[args.indexOf('-filter_complex') + 1]).toContain('concat=n=2:v=1:a=0');
+  });
+  it('adds an audio concat + maps it when dialogue is present', () => {
+    const args = buildAssembleArgs({ clips: ['a.mp4'], audio: ['v1.wav', 'v2.wav'], lutCube: 'x.cube', out: 'o.mp4' });
+    const fc = args[args.indexOf('-filter_complex') + 1]!;
+    expect(fc).toContain('concat=n=2:v=0:a=1[a]');
+    expect(args.filter((a) => a === '-map')).toHaveLength(2);
+    expect(args).toContain('aac');
+  });
+});
+
+describe.skipIf(!hasFfmpeg || !clipsExist)('ffmpeg assemble produces a film from canvas clips', () => {
+  it('assembles 2 clips + LUT into a playable mp4', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'recut-asm-'));
+    const out = join(dir, 'film.mp4');
+    const args = buildAssembleArgs({
+      clips: [resolve('public/clips/1000.mp4'), resolve('public/clips/1001.mp4')],
+      lutCube: resolve('public', lutByName('warm-film').cube.replace(/^\//, '')),
+      out,
+    });
+    const r = spawnSync('ffmpeg', args, { stdio: 'ignore' });
+    expect(r.status).toBe(0);
+    expect(existsSync(out)).toBe(true);
   }, 60_000);
 });
 

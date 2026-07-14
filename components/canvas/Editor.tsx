@@ -8,6 +8,7 @@ import { useCanvas, type RecutNodeKind } from '../../lib/canvas/store';
 import { RecutNode } from './RecutNode';
 import { NodeInspector } from './NodeInspector';
 import { ShowrunBar } from './ShowrunBar';
+import { TimelinePanel } from './TimelinePanel';
 
 const nodeTypes = { recut: RecutNode };
 
@@ -138,6 +139,7 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
         </div>
         {selectedId && <NodeInspector nodeId={selectedId} onDelete={() => deleteNode(selectedId)} onDuplicate={() => duplicateNode(selectedId)} />}
       </div>
+      <TimelinePanel />
     </div>
   );
 }

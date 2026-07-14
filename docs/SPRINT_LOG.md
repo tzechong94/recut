@@ -243,3 +243,17 @@ mocked plan = deterministic/free) · live plan smoke $0.01. **Spend $2.43/$8.**
 
 **Gates:** typecheck · 81/81 unit · e2e 17/17 (run-all sequencing, mocked = deterministic/free).
 **Spend $2.43/$8.**
+
+## 2026-07-14 — S5+S6 (timeline, grade, export finished films) — SHIPPED
+
+- **Timeline panel** (collapsible bottom strip on the canvas): collects the project's Video-node
+  clips in canvas order (y,x) + a dialogue voice track from Dialogue nodes. LUT selector.
+- **Assemble/export:** `/api/assemble` concats the ordered clips, bakes the series LUT (ffmpeg
+  lut3d), lays the concatenated dialogue audio over the cut, → 1080p or 9:16 MP4 download.
+  `buildAssembleArgs` (clips + audio + lut). Verified live: 3 clips → 9s 1080p graded film.
+- Colour grading never touches a model (hard rule 5). Real ffmpeg-gated assemble test.
+
+Deferred (documented): true i2v continuation chaining (last frame N → first N+1) — the assembly
+sequences clips today; frame-chaining is a generation-time follow-up (costs live i2v per link).
+
+**Gates:** typecheck · 84/84 unit (2 real ffmpeg tests) · e2e 17/17. Spend $2.43/$8.
