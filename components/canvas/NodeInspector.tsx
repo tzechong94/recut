@@ -23,7 +23,7 @@ export function NodeInspector({ nodeId, onDelete, onDuplicate }: { nodeId: strin
   const output = d.imageUrl ?? d.videoUrl ?? d.audioUrl;
 
   return (
-    <aside className="w-72 shrink-0 overflow-y-auto border-l border-neutral-800 bg-neutral-950 p-4 text-sm" data-testid="node-inspector">
+    <aside className="h-full w-72 shrink-0 overflow-y-auto border-l border-neutral-800 bg-neutral-950 p-4 text-sm" data-testid="node-inspector">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold tracking-widest text-neutral-500 uppercase">{d.title}</h2>
         <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">{KIND_CAPABILITY[d.kind]}</span>

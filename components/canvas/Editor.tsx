@@ -114,7 +114,7 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
       {lastError && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{lastError}</div>}
       {pausedReason && <div className="border-b border-amber-900 bg-amber-950/50 px-4 py-1.5 text-xs text-amber-300" data-testid="paused">⏸ {pausedReason}</div>}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">
           {nodes.length === 0 && (
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-center" data-testid="empty-hint">
@@ -135,6 +135,7 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
             onPaneClick={() => select(null)}
             nodeTypes={nodeTypes}
             fitView
+            nodeDragThreshold={5}
             proOptions={{ hideAttribution: true }}
             colorMode="dark"
             defaultEdgeOptions={{ animated: true }}
@@ -144,7 +145,11 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
             <MiniMap pannable className="!bg-neutral-900" />
           </ReactFlow>
         </div>
-        {selectedId && <NodeInspector nodeId={selectedId} onDelete={() => deleteNode(selectedId)} onDuplicate={() => duplicateNode(selectedId)} />}
+        {selectedId && (
+          <div className="absolute top-0 right-0 bottom-0 z-20 shadow-2xl">
+            <NodeInspector nodeId={selectedId} onDelete={() => deleteNode(selectedId)} onDuplicate={() => duplicateNode(selectedId)} />
+          </div>
+        )}
       </div>
       <TimelinePanel />
     </div>
