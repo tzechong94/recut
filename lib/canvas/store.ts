@@ -101,6 +101,9 @@ export interface CanvasState {
   onConnect: (c: Connection) => void;
   select: (id: string | null) => void;
   addNode: (kind: RecutNodeKind, position: { x: number; y: number }) => void;
+  /** add a fully-configured node (used by the showrunner agent); returns its id */
+  addConfiguredNode: (kind: RecutNodeKind, position: { x: number; y: number }, data: Partial<RecutNodeData>) => string;
+  connectIds: (source: string, target: string) => void;
   updateNode: (id: string, patch: Partial<RecutNodeData>) => void;
   deleteNode: (id: string) => void;
   duplicateNode: (id: string) => void;
@@ -183,6 +186,23 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     const extra: Partial<RecutNodeData> = kind === 'canon' ? { entityKind: 'character', name: 'New entity', locked: true } : {};
     const node: RecutNode = { id, type: 'recut', position, data: { kind, title: KIND_TITLE[kind], prompt: '', status: 'idle', ...extra } };
     set({ past: [...s.past, snapshot(s)], future: [], nodes: [...s.nodes, node], nextId: s.nextId + 1, selectedId: id });
+  },
+
+  addConfiguredNode: (kind, position, data) => {
+    const s = get();
+    const id = `n${s.nextId}`;
+    const node: RecutNode = { id, type: 'recut', position, data: { kind, title: KIND_TITLE[kind], prompt: '', status: 'idle', ...data } };
+    set({ past: [...s.past, snapshot(s)], future: [], nodes: [...s.nodes, node], nextId: s.nextId + 1 });
+    return id;
+  },
+
+  connectIds: (source, target) => {
+    const s = get();
+    const from = s.nodes.find((n) => n.id === source);
+    const to = s.nodes.find((n) => n.id === target);
+    if (!from || !to) return;
+    if (!canConnect(KIND_CAPABILITY[from.data.kind], KIND_CAPABILITY[to.data.kind]).ok) return;
+    set({ edges: addEdge({ source, target, animated: true, id: `e-${source}-${target}` }, s.edges) });
   },
 
   updateNode: (id, patch) =>

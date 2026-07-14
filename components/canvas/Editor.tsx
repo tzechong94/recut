@@ -7,6 +7,7 @@ import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react';
 import { useCanvas, type RecutNodeKind } from '../../lib/canvas/store';
 import { RecutNode } from './RecutNode';
 import { NodeInspector } from './NodeInspector';
+import { ShowrunBar } from './ShowrunBar';
 
 const nodeTypes = { recut: RecutNode };
 
@@ -78,7 +79,7 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
   const add = (kind: RecutNodeKind) => addNode(kind, { x: 160 + (nodes.length % 6) * 40, y: 130 + (nodes.length % 6) * 40 });
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="relative flex h-screen flex-col">
       <header className="z-10 flex items-center justify-between gap-4 border-b border-neutral-800 bg-neutral-950 px-4 py-2">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-sm font-semibold text-neutral-100">Recut</Link>
@@ -96,6 +97,8 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
         </div>
         <div className="text-xs tabular-nums text-neutral-500" data-testid="spend">spend ${spentUsd.toFixed(3)}</div>
       </header>
+
+      <ShowrunBar />
 
       {lastError && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{lastError}</div>}
 

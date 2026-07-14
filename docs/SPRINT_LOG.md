@@ -215,3 +215,18 @@ LUT zero-network asserted) · eval:ui 7.69 (timeline 7.29 ≥7). Spend $1.89/$8.
 - Store: 5 new unit tests (undo/redo, duplicate/delete, typed ports, canon init, stale prop).
 
 **Gates:** typecheck · 75/75 unit · e2e 14/14. Spend $2.42/$8 (no live spend this sprint).
+
+## 2026-07-14 — S3 (showrunner agent core) — SHIPPED
+
+- Premise → **qwen3-max** plans a story (title, cast, shots w/ characters/animate/dialogue) →
+  deterministically compiled into a node graph (build-graph.ts, pure + tested).
+- `/api/agent/plan`: premise → plan → graph, governor-charged (~$0.01). Manifests: qwen-max
+  (text.plan); adapter dashscope-text. planner.ts strict-JSON parse.
+- **ShowrunBar**: premise input + **Fully-autonomous** toggle. Autonomous → builds the whole
+  graph at once. Step mode (default, TapNow-style) → proposals appear one at a time with
+  editable prompt + Approve/Skip; approved nodes land on the canvas and auto-wire their inputs.
+- Store: addConfiguredNode + connectIds (agent places + wires nodes).
+- Live-verified: "lighthouse keeper" premise → 2 cast, 4 shots, 11 nodes, 10 edges, all kinds.
+
+**Gates:** typecheck · 78/78 unit (planner+build-graph) · e2e 16/16 (showrun step+autonomous,
+mocked plan = deterministic/free) · live plan smoke $0.01. **Spend $2.43/$8.**
