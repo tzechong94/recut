@@ -51,13 +51,17 @@ export function buildAssembleArgs(spec: ExportSpec & { audio?: string[] }): stri
   const n = spec.clips.length;
   if (n === 0) throw new Error('assemble needs at least one clip');
   const audio = spec.audio ?? [];
+  const [W, H] = spec.vertical ? [1080, 1920] : [1920, 1080];
 
   const inputs = [...spec.clips, ...audio].flatMap((c) => ['-i', c]);
-  const concatV = spec.clips.map((_, i) => `[${i}:v]`).join('') + `concat=n=${n}:v=1:a=0[cat]`;
+  // i2v clips can each be a different size, so NORMALISE every clip to the target frame
+  // (scale + pad/crop + reset SAR + fps) BEFORE concat — concat requires identical inputs.
   const geom = spec.vertical
-    ? `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`
-    : `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2`;
-  let filter = `${concatV};[cat]lut3d=file='${spec.lutCube}',${geom},fps=${fps}[v]`;
+    ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=${fps}`
+    : `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}`;
+  const perClip = spec.clips.map((_, i) => `[${i}:v]${geom}[v${i}]`).join(';');
+  const concatV = spec.clips.map((_, i) => `[v${i}]`).join('') + `concat=n=${n}:v=1:a=0[cat]`;
+  let filter = `${perClip};${concatV};[cat]lut3d=file='${spec.lutCube}'[v]`;
 
   const maps = ['-map', '[v]'];
   if (audio.length) {
@@ -74,7 +78,9 @@ export function buildAssembleArgs(spec: ExportSpec & { audio?: string[] }): stri
     ...maps,
     '-c:v', 'libx264',
     '-pix_fmt', 'yuv420p',
-    ...(audio.length ? ['-c:a', 'aac', '-shortest'] : []),
+    // no -shortest: the VO is shorter than the film, so trimming to it would cut the video.
+    // The video runs full length; the voice plays over the opening then silence.
+    ...(audio.length ? ['-c:a', 'aac'] : []),
     '-movflags', '+faststart',
     spec.out,
   ];
