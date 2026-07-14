@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { Gateway } from '../../lib/gateway/jobs';
 import { critique } from '../../lib/agent/critic';
 import { ReportCard, type ReportRow } from '../../components/canvas/ReportCard';
+import { Nav } from '../../components/Nav';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,11 +22,7 @@ export default async function ReportPage() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-neutral-900 px-8 py-4">
-        <h1 className="text-sm font-semibold tracking-wide text-neutral-200">
-          The Letter <span className="text-neutral-600">· continuity</span>
-        </h1>
-      </header>
+      <Nav current="report" />
       <ReportCard rows={rows} />
     </main>
   );

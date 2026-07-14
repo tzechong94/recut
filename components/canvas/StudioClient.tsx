@@ -108,8 +108,8 @@ export function StudioClient({ initialProject }: { initialProject: Project }) {
   const staleCount = stale.size;
 
   return (
-    <div className="flex h-screen">
-      <aside className="w-80 shrink-0 border-r border-neutral-900 bg-neutral-950 p-5">
+    <div className="flex h-full">
+      <aside className="w-80 shrink-0 overflow-y-auto border-r border-neutral-900 bg-neutral-950 p-5">
         <h1 className="text-sm font-semibold tracking-wide text-neutral-100">Series Bible</h1>
         <p className="mt-1 text-xs text-neutral-500">Edit an entity → every take that used it flags stale, instantly.</p>
 
