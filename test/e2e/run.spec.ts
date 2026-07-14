@@ -24,14 +24,12 @@ test('run all executes the wired graph in order and updates the budget bar', asy
   await page.getByTestId('new-project-title').fill('Run test');
   await page.getByTestId('create-project').click();
   await page.getByTestId('premise').fill('a keeper');
-  await page.getByTestId('autonomous').check();
+  await page.getByTestId('autonomous').check(); // Agent mode: builds AND auto-runs the graph
   await page.getByTestId('showrun').click();
 
-  // graph built → run all
+  // agent mode builds the graph then generates it autonomously (no manual run-all)
   await expect(page.getByText('Text → Image').first()).toBeVisible();
-  await page.getByTestId('run-all').click();
-
-  // budget bar reflects the run
+  // budget bar reflects the auto-run
   await expect(page.getByTestId('spend')).toContainText('$0.500 / $8');
   // the video node produced a clip (last in the chain ran)
   await expect(page.locator('video').first()).toBeVisible();
