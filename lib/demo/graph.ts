@@ -1,5 +1,17 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { RecutNodeData } from '../canvas/store';
+import { selectModel } from '../gateway/router';
+import { CRITIC_MODEL_ID } from '../../manifests/qwen-vl-critic';
+import { I2V_MODEL_ID } from '../../manifests/wan-i2v';
+
+// Model names are DISPLAYED to the user in the inspector, but sourced from the manifests (via the
+// router) so the single-source-of-truth contract holds — no model-id literals in product code.
+const M = {
+  gen: selectModel('image.generate').id,
+  edit: selectModel('image.edit').id,
+  critic: CRITIC_MODEL_ID,
+  i2v: I2V_MODEL_ID,
+};
 
 // The curated demo as a node graph — "The Letter". All outputs come from committed fixtures
 // (replay, zero cost). Nodes are revealed by `step` as the user clicks Next, and each carries an
@@ -27,7 +39,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
           { k: 'Kind', v: 'character' },
           { k: 'Hair', v: 'black bob' },
           { k: 'Wardrobe', v: 'red wool scarf, charcoal jacket' },
-          { k: 'Model', v: 'qwen-image-plus' },
+          { k: 'Model', v: M.gen },
         ],
       },
     }),
@@ -39,7 +51,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
       detail: {
         caption: 'Compile the shot from the rig + bible, render 4 candidates, accept one as the Take. The prompt is a typed object, not a string.',
         rows: [
-          { k: 'Model', v: 'qwen-image-edit' },
+          { k: 'Model', v: M.edit },
           { k: 'Seed', v: '1000' },
           { k: 'Shot size', v: 'MS' },
           { k: 'Capability', v: 'image.edit' },
@@ -55,7 +67,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
       detail: {
         caption: 'Edit the wardrobe — red scarf → blue. A deliberate continuity break to show the critic works.',
         rows: [
-          { k: 'Model', v: 'qwen-image-edit' },
+          { k: 'Model', v: M.edit },
           { k: 'Change', v: 'scarf red → blue' },
         ],
       },
@@ -67,7 +79,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
       detail: {
         caption: 'The critic scores the take against the locked reference. Wardrobe collapses to 0.30 — visibly off-model. Never fake-passes.',
         rows: [
-          { k: 'Model', v: 'qwen3-vl-plus' },
+          { k: 'Model', v: M.critic },
           { k: 'Verdict', v: 'reject' },
           { k: 'Repair', v: 'the scarf is blue; it must be red. Preserve pose and lighting.' },
         ],
@@ -89,7 +101,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
       detail: {
         caption: 'Auto-repair: append the critic’s instruction, re-render, re-critique. Continuity recovers above threshold.',
         rows: [
-          { k: 'Model', v: 'qwen-image-edit' },
+          { k: 'Model', v: M.edit },
           { k: 'Continuity', v: '0.88 (recovered, +0.21)' },
           { k: 'Wardrobe', v: '1.00' },
         ],
@@ -103,7 +115,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
       detail: {
         caption: 'Animate the approved keyframe — true image-to-video. Video is animation of an approved frame, never a cold call.',
         rows: [
-          { k: 'Model', v: 'wan2.6-i2v' },
+          { k: 'Model', v: M.i2v },
           { k: 'Duration', v: '3s' },
           { k: 'Capability', v: 'video.i2v' },
         ],
