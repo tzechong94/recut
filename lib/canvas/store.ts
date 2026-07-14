@@ -14,6 +14,12 @@ import { canConnect } from './node';
 
 export type RecutNodeKind = 'text2image' | 'upload' | 'edit' | 'video' | 'critique';
 
+export interface DemoDetail {
+  caption: string;
+  rows: Array<{ k: string; v: string }>;
+  axes?: Array<{ label: string; score: number }>;
+}
+
 export interface RecutNodeData {
   kind: RecutNodeKind;
   title: string;
@@ -23,6 +29,10 @@ export interface RecutNodeData {
   score?: number;
   status: 'idle' | 'running' | 'done' | 'error';
   error?: string;
+  // demo mode: read-only node with pre-filled fixtures + an inspectable detail block
+  demo?: boolean;
+  step?: number;
+  detail?: DemoDetail;
   [key: string]: unknown;
 }
 

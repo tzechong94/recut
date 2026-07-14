@@ -59,8 +59,15 @@ export function RecutNode({ id, data }: NodeProps) {
           </div>
         )}
 
-        {/* controls by kind */}
-        {d.kind === 'upload' ? (
+        {/* demo mode: read-only, prompt shown as text, no Run */}
+        {d.demo ? (
+          d.prompt ? (
+            <p className="line-clamp-3 rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-neutral-400">
+              {d.prompt}
+            </p>
+          ) : null
+        ) : /* controls by kind */
+        d.kind === 'upload' ? (
           <label className="block cursor-pointer rounded-md border border-neutral-700 px-3 py-1.5 text-center text-xs text-neutral-300 hover:bg-neutral-800">
             Choose image
             <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />

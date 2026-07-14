@@ -70,7 +70,7 @@ export function ProjectsHome() {
       </div>
 
       <p className="mt-10 text-xs text-neutral-700">
-        Prefer the guided tour? <Link href="/studio" className="underline hover:text-neutral-400">Open the curated demo →</Link>
+        Prefer the guided tour? <Link href="/demo" className="underline hover:text-neutral-400">Open the curated demo →</Link>
       </p>
     </main>
   );
