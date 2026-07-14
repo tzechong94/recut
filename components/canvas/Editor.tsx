@@ -21,23 +21,24 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
     selectedId, select, deleteNode, duplicateNode, undo, redo, past, future,
     runAll, runningAll, pausedReason, capUsd,
   } = useCanvas();
-  const loadedRef = useRef(false);
+  // Tracks WHICH project we've finished loading. Autosave only runs once this matches the
+  // current projectId — so the empty initial canvas can never be saved over a real graph.
+  const loadedFor = useRef<string | null>(null);
 
-  // load the graph from the server once per project
   useEffect(() => {
+    loadedFor.current = null;
     reset();
-    loadedRef.current = false;
     loadGraph(projectId).then((g) => {
       if (g && g.nodes.length) load(g.nodes as RecutNodeType[], g.edges as Edge[]);
-      loadedRef.current = true;
+      loadedFor.current = projectId;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  // persist to the server, debounced, once loaded (avoid clobbering with the empty initial state)
   useEffect(() => {
-    if (!loadedRef.current) return;
-    const t = setTimeout(() => void saveGraph(projectId, nodes, edges), 700);
+    if (loadedFor.current !== projectId) return; // haven't loaded THIS project yet
+    if (nodes.length === 0) return; // never autosave an empty graph over a saved project
+    const t = setTimeout(() => void saveGraph(projectId, nodes, edges), 800);
     return () => clearTimeout(t);
   }, [nodes, edges, projectId]);
 
