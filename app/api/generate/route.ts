@@ -9,6 +9,8 @@ import { selectModel } from '../../../lib/gateway/router';
 import { CRITIC_MODEL_ID } from '../../../manifests/qwen-vl-critic';
 import { buildCritiquePayload, parseVerdict, continuityScore } from '../../../lib/agent/critic';
 import { buildKenBurnsArgs } from '../../../lib/post/export';
+import { submitI2V, pollI2V } from '../../../adapters/dashscope-video';
+import { WAN_I2V, I2V_MODEL_ID } from '../../../manifests/wan-i2v';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,12 +79,28 @@ export async function POST(req: Request): Promise<Response> {
 
     if (body.kind === 'video') {
       if (!body.image) return Response.json({ error: 'video needs an input image' }, { status: 400 });
-      if (spawnSync('ffmpeg', ['-version']).status !== 0) return Response.json({ error: 'ffmpeg unavailable' }, { status: 501 });
-      const local = await toLocalFile(body.image);
       const genDir = resolve(process.cwd(), 'public/generated');
       mkdirSync(genDir, { recursive: true });
       const name = `${randomUUID()}.mp4`;
       const outPath = join(genDir, name);
+
+      // True image-to-video (wan2.6-i2v) when the input is a fetchable URL (generated nodes
+      // produce OSS urls). Uploaded data-URIs can't be fetched by the model → Ken Burns fallback.
+      if (/^https?:\/\//.test(body.image)) {
+        const durationSec = 3;
+        const cost = WAN_I2V.cost.amount * durationSec;
+        gov.assertCanSpend(cost);
+        const prompt = body.prompt?.trim() || 'subtle natural motion, gentle camera push-in, cinematic, vertical 9:16';
+        const taskId = await submitI2V(I2V_MODEL_ID, body.image, prompt, { durationSec, resolution: '720P' });
+        const remoteUrl = await pollI2V(taskId);
+        gov.record(cost);
+        const dl = await fetch(remoteUrl);
+        writeFileSync(outPath, Buffer.from(await dl.arrayBuffer()));
+        return Response.json({ videoUrl: `/generated/${name}`, spentUsd: gov.spent() });
+      }
+
+      if (spawnSync('ffmpeg', ['-version']).status !== 0) return Response.json({ error: 'ffmpeg unavailable' }, { status: 501 });
+      const local = await toLocalFile(body.image);
       const rc = spawnSync('ffmpeg', buildKenBurnsArgs(local, outPath, 3), { stdio: 'ignore' });
       if (rc.status !== 0 || !existsSync(outPath)) return Response.json({ error: 'ffmpeg failed' }, { status: 500 });
       return Response.json({ videoUrl: `/generated/${name}`, spentUsd: gov.spent() });

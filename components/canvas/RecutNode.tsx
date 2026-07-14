@@ -81,7 +81,15 @@ export function RecutNode({ id, data }: NodeProps) {
               disabled={d.status === 'running'}
               className="w-full rounded-md bg-sky-500 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60"
             >
-              {d.status === 'running' ? 'Generating…' : d.kind === 'critique' ? 'Score' : d.kind === 'video' ? 'Animate' : 'Generate'}
+              {d.status === 'running'
+                ? d.kind === 'video'
+                  ? 'Rendering video… ~1–2 min'
+                  : 'Generating…'
+                : d.kind === 'critique'
+                  ? 'Score'
+                  : d.kind === 'video'
+                    ? 'Animate (i2v)'
+                    : 'Generate'}
             </button>
           </>
         )}
