@@ -11,6 +11,7 @@ import { NodeInspector } from './NodeInspector';
 const nodeTypes = { recut: RecutNode };
 
 const TOOLS: Array<{ kind: RecutNodeKind; label: string }> = [
+  { kind: 'canon', label: 'Canon' },
   { kind: 'text2image', label: 'Text→Image' },
   { kind: 'upload', label: 'Upload' },
   { kind: 'edit', label: 'Edit' },

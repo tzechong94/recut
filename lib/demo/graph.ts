@@ -33,7 +33,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
       title: 'Cast · Mei',
       imageUrl: '/refs/mei.png',
       detail: {
-        caption: 'Cast a character into the Series Bible. One locked reference — every shot inherits it, no copying.',
+        caption: 'Cast a character into the Canon. One locked reference — every shot inherits it, no copying.',
         rows: [
           { k: 'Name', v: 'Mei' },
           { k: 'Kind', v: 'character' },
@@ -49,7 +49,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
       imageUrl: '/takes/1000.png',
       prompt: keyframePrompt,
       detail: {
-        caption: 'Compile the shot from the rig + bible, render 4 candidates, accept one as the Take. The prompt is a typed object, not a string.',
+        caption: 'Compile the shot from the rig + canon, render 4 candidates, accept one as the Take. The prompt is a typed object, not a string.',
         rows: [
           { k: 'Model', v: M.edit },
           { k: 'Seed', v: '1000' },
@@ -135,7 +135,7 @@ export function buildDemoGraph(keyframePrompt: string): { nodes: Node<RecutNodeD
 }
 
 export const DEMO_STEPS = [
-  'Cast Mei into the Series Bible',
+  'Cast Mei into the Canon',
   'Compile the shot → 4 candidates → accept a Take',
   'Break continuity: recolour the scarf blue',
   'Run the continuity critic — wardrobe 0.30, off-model',

@@ -10,7 +10,7 @@ test('guided demo reveals nodes on Next and inspects them', async ({ page }) => 
   await expect(page.getByText('Cast · Mei').first()).toBeVisible();
 
   // the first node's prompt/detail is inspectable
-  await expect(page.getByTestId('demo-inspector')).toContainText('Series Bible');
+  await expect(page.getByTestId('demo-inspector')).toContainText('Canon');
 
   // Next reveals the keyframe node + auto-selects it, showing the real compiled prompt
   await page.getByTestId('demo-next').click();

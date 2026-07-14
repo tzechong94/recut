@@ -202,3 +202,16 @@ LUT zero-network asserted) · eval:ui 7.69 (timeline 7.29 ≥7). Spend $1.89/$8.
 
 **Gates:** typecheck · 70/70 unit · e2e 14/14 · live smoke (dialogue $0.002 + compose $0.05).
 **Spend $2.42/$8.**
+
+## 2026-07-14 — S2 (Canon woven into canvas) — SHIPPED
+
+- Renamed all user-facing "Series Bible" → **Canon** (internal domain property `bible` kept).
+- New **canon** node kind: a locked reference entity (character/location/prop/style) with a
+  name + kind + reference image (🔒). Produces an image downstream nodes inherit via edges.
+- **Stale propagation:** changing a canon reference (or any node's output) flags every
+  downstream node `stale` (amber). `setCanonRef` + `descendants()` BFS. Unit-tested.
+- **Continuity-vs-canon:** a critique node finds the nearest upstream canon reference
+  (`nearestCanonRef` BFS) and scores its input against it.
+- Store: 5 new unit tests (undo/redo, duplicate/delete, typed ports, canon init, stale prop).
+
+**Gates:** typecheck · 75/75 unit · e2e 14/14. Spend $2.42/$8 (no live spend this sprint).

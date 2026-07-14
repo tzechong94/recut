@@ -1,7 +1,7 @@
 'use client';
 
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { useCanvas, type RecutNodeData, type RecutNodeKind, CONSUMES, PRODUCES_IMAGE } from '../../lib/canvas/store';
+import { useCanvas, type RecutNodeData, type RecutNodeKind, type CanonKind, CONSUMES, PRODUCES_IMAGE } from '../../lib/canvas/store';
 import { TTS_VOICES } from '../../manifests/qwen-tts';
 
 const ACCENT: Record<RecutNodeKind, string> = {
@@ -13,7 +13,10 @@ const ACCENT: Record<RecutNodeKind, string> = {
   video: 'text-violet-300',
   critique: 'text-amber-300',
   dialogue: 'text-pink-300',
+  canon: 'text-fuchsia-300',
 };
+
+const CANON_KINDS: CanonKind[] = ['character', 'location', 'prop', 'style'];
 
 const STATUS_CLS: Record<RecutNodeData['status'], string> = {
   idle: 'bg-neutral-800 text-neutral-400',
@@ -45,23 +48,32 @@ export function RecutNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as RecutNodeData;
   const updateNode = useCanvas((s) => s.updateNode);
   const runNode = useCanvas((s) => s.runNode);
+  const setCanonRef = useCanvas((s) => s.setCanonRef);
 
-  const onUpload = (file: File) => {
+  const onUpload = (file: File, asCanon = false) => {
     const reader = new FileReader();
-    reader.onload = () => updateNode(id, { imageUrl: String(reader.result), status: 'done' });
+    reader.onload = () => (asCanon ? setCanonRef(id, String(reader.result)) : updateNode(id, { imageUrl: String(reader.result), status: 'done' }));
     reader.readAsDataURL(file);
   };
 
-  const showsPrompt = !d.demo && d.kind !== 'upload';
+  const showsPrompt = !d.demo && d.kind !== 'upload' && d.kind !== 'canon';
   const producesSource = PRODUCES_IMAGE.includes(d.kind) || d.kind === 'video';
+  const borderCls = selected ? 'border-sky-400 ring-2 ring-sky-400/40' : d.stale ? 'border-amber-500/60' : d.kind === 'canon' ? 'border-fuchsia-500/40' : 'border-neutral-700';
 
   return (
-    <div className={`w-64 overflow-hidden rounded-xl border bg-neutral-900 shadow-xl ${selected ? 'border-sky-400 ring-2 ring-sky-400/40' : 'border-neutral-700'}`}>
+    <div className={`w-64 overflow-hidden rounded-xl border bg-neutral-900 shadow-xl ${borderCls}`}>
       {CONSUMES.includes(d.kind) && <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-sky-400" />}
 
       <header className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-        <span className={`text-xs font-semibold ${ACCENT[d.kind]}`}>{d.title}</span>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_CLS[d.status]}`}>{d.status}</span>
+        <span className={`flex items-center gap-1 text-xs font-semibold ${ACCENT[d.kind]}`}>
+          {d.kind === 'canon' && <span title="locked reference">🔒</span>}
+          {d.kind === 'canon' ? d.name || 'Canon' : d.title}
+        </span>
+        {d.stale ? (
+          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">stale</span>
+        ) : (
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_CLS[d.status]}`}>{d.status}</span>
+        )}
       </header>
 
       <div className="space-y-2 p-3">
@@ -83,7 +95,7 @@ export function RecutNode({ id, data, selected }: NodeProps) {
           </div>
         ) : (
           <div className="flex h-32 items-center justify-center rounded border border-dashed border-neutral-800 text-[11px] text-neutral-600">
-            {d.kind === 'upload' ? 'upload an image ↓' : d.kind === 'compose' ? 'connect 2+ images' : 'no output yet'}
+            {d.kind === 'upload' ? 'upload an image ↓' : d.kind === 'canon' ? 'lock a reference ↓' : d.kind === 'compose' ? 'connect 2+ images' : 'no output yet'}
           </div>
         )}
 
@@ -92,6 +104,28 @@ export function RecutNode({ id, data, selected }: NodeProps) {
           d.prompt ? (
             <p className="line-clamp-3 rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1.5 font-mono text-[10px] leading-relaxed text-neutral-400">{d.prompt}</p>
           ) : null
+        ) : d.kind === 'canon' ? (
+          <>
+            <input
+              value={d.name ?? ''}
+              onChange={(e) => updateNode(id, { name: e.target.value })}
+              placeholder="entity name"
+              className="w-full rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-neutral-600"
+            />
+            <select
+              value={d.entityKind ?? 'character'}
+              onChange={(e) => updateNode(id, { entityKind: e.target.value as CanonKind })}
+              className="w-full rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-300 outline-none"
+            >
+              {CANON_KINDS.map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+            <label className="block cursor-pointer rounded-md border border-fuchsia-700/50 px-3 py-1.5 text-center text-xs text-fuchsia-200 hover:bg-fuchsia-950/30">
+              {d.imageUrl ? 'Replace reference' : 'Lock reference'}
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0], true)} />
+            </label>
+          </>
         ) : d.kind === 'upload' ? (
           <label className="block cursor-pointer rounded-md border border-neutral-700 px-3 py-1.5 text-center text-xs text-neutral-300 hover:bg-neutral-800">
             Choose image

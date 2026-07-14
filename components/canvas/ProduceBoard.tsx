@@ -126,7 +126,7 @@ export function ProduceBoard({ shotAction, sceneTitle, entityName, takes }: Prop
             <Row k="Shot size" v={accepted.provenance.compiledPrompt.camera.shotSize} />
             <Row k="Latency" v={`${accepted.provenance.latencyMs} ms`} />
             <Row k="Cost" v={money(accepted.provenance.costUsd)} />
-            <Row k="Bible v" v={String(accepted.provenance.bibleVersion)} />
+            <Row k="Canon v" v={String(accepted.provenance.bibleVersion)} />
             <Row k="Cache hash" v={accepted.provenance.cacheHash.slice(0, 16) + '…'} mono />
             <a
               data-testid="export"

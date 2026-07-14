@@ -3,7 +3,7 @@ import Link from 'next/link';
 // Guided walkthrough order — the demo flow. Each screen shows this bar so the user always
 // knows where they are and what's next.
 export const STEPS = [
-  { slug: 'studio', path: '/studio', label: 'Bible & Canvas' },
+  { slug: 'studio', path: '/studio', label: 'Canon & Canvas' },
   { slug: 'rig', path: '/rig', label: 'Rig' },
   { slug: 'produce', path: '/produce', label: 'Produce' },
   { slug: 'report', path: '/report', label: 'Continuity' },

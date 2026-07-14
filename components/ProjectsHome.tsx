@@ -27,7 +27,7 @@ export function ProjectsHome() {
       <h1 className="mt-2 text-4xl font-semibold text-balance">Every other tool gives you shots. Recut gives you a series.</h1>
       <p className="mt-3 max-w-xl text-neutral-400">
         A node canvas for AI film: generate, upload, edit, and animate — wire outputs into inputs,
-        with a Series Bible and a continuity critic keeping every shot on-model.
+        with a Canon and a continuity critic keeping every shot on-model.
       </p>
 
       <div className="mt-8 flex gap-2">

@@ -15,7 +15,7 @@ function EntityNode({ data }: NodeProps) {
     <div className="w-56 overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-lg">
       <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-1.5">
         <span className="text-[11px] font-semibold tracking-wide text-fuchsia-300 uppercase">{d.kind}</span>
-        <span className="text-[10px] tabular-nums text-neutral-500">bible v{d.version}</span>
+        <span className="text-[10px] tabular-nums text-neutral-500">canon v{d.version}</span>
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={d.thumb} alt={d.name} className="h-32 w-full object-cover" />
@@ -110,7 +110,7 @@ export function StudioClient({ initialProject }: { initialProject: Project }) {
   return (
     <div className="flex h-full">
       <aside className="w-80 shrink-0 overflow-y-auto border-r border-neutral-900 bg-neutral-950 p-5">
-        <h1 className="text-sm font-semibold tracking-wide text-neutral-100">Series Bible</h1>
+        <h1 className="text-sm font-semibold tracking-wide text-neutral-100">Canon</h1>
         <p className="mt-1 text-xs text-neutral-500">Edit an entity → every take that used it flags stale, instantly.</p>
 
         <div className="mt-5 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
@@ -137,7 +137,7 @@ export function StudioClient({ initialProject }: { initialProject: Project }) {
               </div>
             </div>
             <div className="flex items-center justify-between border-t border-neutral-800 pt-3 text-xs">
-              <span className="text-neutral-500">Bible version</span>
+              <span className="text-neutral-500">Canon version</span>
               <span className="tabular-nums text-neutral-200" data-testid="bible-version">v{project.bible.version}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
