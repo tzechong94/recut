@@ -41,6 +41,23 @@ export async function submitI2V(modelId: string, imgUrl: string, prompt: string,
   return taskId;
 }
 
+export interface I2VStatus {
+  status: 'running' | 'succeeded' | 'failed';
+  videoUrl?: string;
+  message?: string;
+}
+
+/** Single poll of a task — for non-blocking jobs (the client polls repeatedly). */
+export async function checkI2V(taskId: string): Promise<I2VStatus> {
+  const key = process.env.RECUT_DASHSCOPE_API_KEY ?? '';
+  const res = await fetch(`${base()}/tasks/${taskId}`, { headers: { Authorization: `Bearer ${key}` } });
+  const body = (await res.json().catch(() => ({}))) as { output?: { task_status?: string; video_url?: string; message?: string } };
+  const st = body.output?.task_status;
+  if (st === 'SUCCEEDED') return { status: 'succeeded', videoUrl: body.output?.video_url };
+  if (st === 'FAILED' || st === 'CANCELED') return { status: 'failed', message: body.output?.message };
+  return { status: 'running' };
+}
+
 /** Poll a task until it finishes. Returns the video_url on success. */
 export async function pollI2V(taskId: string, opts: { intervalMs?: number; timeoutMs?: number } = {}): Promise<string> {
   const key = process.env.RECUT_DASHSCOPE_API_KEY ?? '';

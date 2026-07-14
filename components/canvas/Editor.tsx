@@ -1,10 +1,12 @@
 'use client';
 
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react';
-import { useCanvas, type RecutNodeKind } from '../../lib/canvas/store';
+import { useCanvas, type RecutNode as RecutNodeType, type RecutNodeKind } from '../../lib/canvas/store';
+import type { Edge } from '@xyflow/react';
+import { loadGraph, saveGraph } from '../../lib/projects';
 import { RecutNode } from './RecutNode';
 import { NodeInspector } from './NodeInspector';
 import { ShowrunBar } from './ShowrunBar';
@@ -30,29 +32,25 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
     selectedId, select, deleteNode, duplicateNode, undo, redo, past, future,
     runAll, runningAll, pausedReason, capUsd,
   } = useCanvas();
-  const key = `recut:project:${projectId}`;
+  const loadedRef = useRef(false);
 
+  // load the graph from the server once per project
   useEffect(() => {
     reset();
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const g = JSON.parse(raw) as { nodes: never[]; edges: never[] };
-        if (g.nodes?.length) load(g.nodes, g.edges ?? []);
-      }
-    } catch {
-      /* ignore */
-    }
+    loadedRef.current = false;
+    loadGraph(projectId).then((g) => {
+      if (g && g.nodes.length) load(g.nodes as RecutNodeType[], g.edges as Edge[]);
+      loadedRef.current = true;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
+  // persist to the server, debounced, once loaded (avoid clobbering with the empty initial state)
   useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify({ nodes, edges }));
-    } catch {
-      /* ignore */
-    }
-  }, [nodes, edges, key]);
+    if (!loadedRef.current) return;
+    const t = setTimeout(() => void saveGraph(projectId, nodes, edges), 700);
+    return () => clearTimeout(t);
+  }, [nodes, edges, projectId]);
 
   // keyboard: delete / duplicate / undo / redo
   const onKey = useCallback(

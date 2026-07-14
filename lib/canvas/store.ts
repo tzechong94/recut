@@ -319,13 +319,36 @@ export const useCanvas = create<CanvasState>((set, get) => ({
           voice: node.data.voice,
         }),
       });
-      const j = (await res.json()) as { imageUrl?: string; videoUrl?: string; audioUrl?: string; score?: number; error?: string; spentUsd?: number; capUsd?: number | null; verdict?: { repair_instruction?: string } };
+      const j = (await res.json()) as { imageUrl?: string; videoUrl?: string; audioUrl?: string; score?: number; error?: string; spentUsd?: number; capUsd?: number | null; verdict?: { repair_instruction?: string }; taskId?: string };
       if (typeof j.spentUsd === 'number') set({ spentUsd: j.spentUsd });
       if (j.capUsd !== undefined) set({ capUsd: j.capUsd });
       if (!res.ok) {
         updateNode(id, { status: 'error', error: j.error ?? `HTTP ${res.status}` });
         return;
       }
+
+      // async i2v job: poll the status endpoint until the clip is ready (non-blocking submit)
+      if (j.taskId) {
+        const deadline = Date.now() + 6 * 60_000;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const sres = await fetch(`/api/generate/status?taskId=${j.taskId}`);
+          const sj = (await sres.json()) as { status?: string; videoUrl?: string; error?: string };
+          if (sj.status === 'done' && sj.videoUrl) {
+            updateNode(id, { status: 'done', stale: false, videoUrl: sj.videoUrl });
+            const st = descendants(id, get().edges);
+            if (st.size) set({ nodes: get().nodes.map((n) => (st.has(n.id) ? { ...n, data: { ...n.data, stale: true } } : n)) });
+            return;
+          }
+          if (sj.status === 'failed') {
+            updateNode(id, { status: 'error', error: sj.error ?? 'i2v failed' });
+            return;
+          }
+        }
+        updateNode(id, { status: 'error', error: 'i2v timed out' });
+        return;
+      }
+
       updateNode(id, { status: 'done', stale: false, imageUrl: j.imageUrl, videoUrl: j.videoUrl, audioUrl: j.audioUrl, score: j.score, repairInstruction: j.verdict?.repair_instruction });
       // an upstream output changed → everything downstream is now stale until re-run
       const stale = descendants(id, get().edges);

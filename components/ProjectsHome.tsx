@@ -10,15 +10,17 @@ export function ProjectsHome() {
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [title, setTitle] = useState('');
 
-  useEffect(() => setProjects(listProjects()), []);
+  useEffect(() => {
+    listProjects().then(setProjects);
+  }, []);
 
-  const create = () => {
-    const meta = createProject(title, Date.now());
+  const create = async () => {
+    const meta = await createProject(title);
     router.push(`/project/${meta.id}`);
   };
-  const remove = (id: string) => {
-    deleteProject(id);
-    setProjects(listProjects());
+  const remove = async (id: string) => {
+    await deleteProject(id);
+    setProjects(await listProjects());
   };
 
   return (

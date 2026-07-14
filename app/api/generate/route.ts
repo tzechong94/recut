@@ -9,7 +9,7 @@ import { selectModel } from '../../../lib/gateway/router';
 import { CRITIC_MODEL_ID } from '../../../manifests/qwen-vl-critic';
 import { buildCritiquePayload, parseVerdict, continuityScore } from '../../../lib/agent/critic';
 import { buildKenBurnsArgs } from '../../../lib/post/export';
-import { submitI2V, pollI2V } from '../../../adapters/dashscope-video';
+import { submitI2V } from '../../../adapters/dashscope-video';
 import { WAN_I2V, I2V_MODEL_ID } from '../../../manifests/wan-i2v';
 import { TTS_MODEL_ID } from '../../../manifests/qwen-tts';
 
@@ -105,16 +105,15 @@ export async function POST(req: Request): Promise<Response> {
       // True image-to-video (wan2.6-i2v) when the input is a fetchable URL (generated nodes
       // produce OSS urls). Uploaded data-URIs can't be fetched by the model → Ken Burns fallback.
       if (/^https?:\/\//.test(body.image)) {
+        // async job: submit now, charge on submit, return the task id — the client polls
+        // /api/generate/status so the 1–3 min render never blocks the request.
         const durationSec = 3;
         const cost = WAN_I2V.cost.amount * durationSec;
         gov.assertCanSpend(cost);
         const prompt = body.prompt?.trim() || 'subtle natural motion, gentle camera push-in, cinematic, vertical 9:16';
         const taskId = await submitI2V(I2V_MODEL_ID, body.image, prompt, { durationSec, resolution: '720P' });
-        const remoteUrl = await pollI2V(taskId);
         gov.record(cost);
-        const dl = await fetch(remoteUrl);
-        writeFileSync(outPath, Buffer.from(await dl.arrayBuffer()));
-        return Response.json({ videoUrl: `/generated/${name}`, spentUsd: gov.spent(), capUsd: gov.cap() });
+        return Response.json({ taskId, spentUsd: gov.spent(), capUsd: gov.cap() });
       }
 
       if (spawnSync('ffmpeg', ['-version']).status !== 0) return Response.json({ error: 'ffmpeg unavailable' }, { status: 501 });

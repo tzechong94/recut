@@ -257,3 +257,17 @@ Deferred (documented): true i2v continuation chaining (last frame N → first N+
 sequences clips today; frame-chaining is a generation-time follow-up (costs live i2v per link).
 
 **Gates:** typecheck · 84/84 unit (2 real ffmpeg tests) · e2e 17/17. Spend $2.43/$8.
+
+## 2026-07-14 — S7 (persistence + robustness + async jobs) — SHIPPED
+
+- **Durable server persistence:** projects + graphs stored server-side (lib/server/projectStore,
+  file-backed .recut/projects/<id>.json — Prisma/Postgres is the drop-in prod swap). REST:
+  GET/POST /api/projects, GET/PUT/DELETE /api/projects/[id]. Shareable by id. Replaced
+  localStorage; Editor loads on mount + debounced-saves to the server. Round-trip verified.
+- **Non-blocking async i2v:** the 1–3 min render no longer blocks the request. /api/generate
+  submits and returns a taskId (charged on submit); /api/generate/status polls one tick; the
+  store polls until the clip is ready (node shows "running" meanwhile). Live-verified:
+  submit <1s → done in ~36s.
+- Robustness: budget guard (S4) + fail-closed governor + per-node error surfacing.
+
+**Gates:** typecheck · 84/84 unit · e2e 17/17 · live async i2v smoke. **Spend $2.78/$8.**

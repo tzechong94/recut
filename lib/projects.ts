@@ -1,5 +1,4 @@
-// Client-side project registry (localStorage). Each project owns a canvas graph stored under
-// recut:project:<id> by the canvas store.
+// Client project API — talks to the server store (durable + shareable). Replaces localStorage.
 
 export interface ProjectMeta {
   id: string;
@@ -7,29 +6,35 @@ export interface ProjectMeta {
   createdAt: number;
 }
 
-const KEY = 'recut:projects';
-
-export function listProjects(): ProjectMeta[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as ProjectMeta[]).sort((a, b) => b.createdAt - a.createdAt) : [];
-  } catch {
-    return [];
-  }
+export async function listProjects(): Promise<ProjectMeta[]> {
+  const res = await fetch('/api/projects');
+  if (!res.ok) return [];
+  return ((await res.json()) as { projects: ProjectMeta[] }).projects;
 }
 
-export function getProject(id: string): ProjectMeta | undefined {
-  return listProjects().find((p) => p.id === id);
+export async function getProject(id: string): Promise<ProjectMeta | undefined> {
+  const res = await fetch(`/api/projects/${id}`);
+  if (!res.ok) return undefined;
+  const p = (await res.json()) as ProjectMeta;
+  return { id: p.id, title: p.title, createdAt: p.createdAt };
 }
 
-export function createProject(title: string, now: number): ProjectMeta {
-  const meta: ProjectMeta = { id: crypto.randomUUID().slice(0, 8), title: title.trim() || 'Untitled project', createdAt: now };
-  const all = [meta, ...listProjects()];
-  localStorage.setItem(KEY, JSON.stringify(all));
-  return meta;
+export async function createProject(title: string): Promise<ProjectMeta> {
+  const res = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+  return (await res.json()) as ProjectMeta;
 }
 
-export function deleteProject(id: string): void {
-  localStorage.setItem(KEY, JSON.stringify(listProjects().filter((p) => p.id !== id)));
-  localStorage.removeItem(`recut:project:${id}`);
+export async function deleteProject(id: string): Promise<void> {
+  await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+}
+
+export async function loadGraph(id: string): Promise<{ nodes: unknown[]; edges: unknown[] } | null> {
+  const res = await fetch(`/api/projects/${id}`);
+  if (!res.ok) return null;
+  const p = (await res.json()) as { nodes: unknown[]; edges: unknown[] };
+  return { nodes: p.nodes ?? [], edges: p.edges ?? [] };
+}
+
+export async function saveGraph(id: string, nodes: unknown[], edges: unknown[]): Promise<void> {
+  await fetch(`/api/projects/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nodes, edges }) });
 }
