@@ -77,7 +77,9 @@ export function RecutNode({ id, data, selected }: NodeProps) {
         )}
       </header>
 
-      <div className="space-y-2 p-3">
+      {/* nodrag: interacting with the controls (esp. native <select>) must never start a node
+          drag; nowheel: scrolling a textarea shouldn't zoom the canvas. Drag from the header. */}
+      <div className="nodrag nowheel space-y-2 p-3">
         {/* output preview */}
         {d.videoUrl ? (
           <video src={d.videoUrl} autoPlay muted loop playsInline controls className="h-32 w-full rounded bg-black object-cover" />
