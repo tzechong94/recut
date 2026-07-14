@@ -9,6 +9,7 @@ type Phase = 'idle' | 'planning' | 'stepping' | 'error';
 export function ShowrunBar() {
   const addConfiguredNode = useCanvas((s) => s.addConfiguredNode);
   const connectIds = useCanvas((s) => s.connectIds);
+  const runAll = useCanvas((s) => s.runAll);
 
   const [premise, setPremise] = useState('');
   const [autonomous, setAutonomous] = useState(false);
@@ -42,7 +43,7 @@ export function ShowrunBar() {
       }
       setGraph(j.graph);
       if (autonomous) {
-        // apply the whole graph now, using j.graph directly (state not yet flushed this tick)
+        // Agent mode: build the whole graph now, then generate every node autonomously.
         const map: Record<string, string> = {};
         for (const pn of j.graph.nodes) {
           map[pn.key] = addConfiguredNode(pn.kind, { x: pn.x, y: pn.y }, { prompt: pn.prompt, name: pn.name, entityKind: pn.entityKind, status: 'idle' });
@@ -50,6 +51,7 @@ export function ShowrunBar() {
         for (const e of j.graph.edges) if (map[e.from] && map[e.to]) connectIds(map[e.from]!, map[e.to]!);
         setPhase('idle');
         setGraph(null);
+        void runAll(); // fire the full generation run (budget guard applies)
       } else {
         setIndex(0);
         setDraftPrompt(j.graph.nodes[0]?.prompt ?? '');
@@ -95,9 +97,9 @@ export function ShowrunBar() {
           data-testid="premise"
           className="flex-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-100 outline-none focus:border-neutral-600"
         />
-        <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
+        <label className="flex items-center gap-1.5 text-[11px] text-neutral-400" title="Agent mode: the agent builds AND generates the whole film on its own (uses live budget)">
           <input type="checkbox" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} data-testid="autonomous" className="accent-sky-400" />
-          Fully autonomous
+          Agent mode
         </label>
         <button onClick={showrun} disabled={phase === 'planning'} data-testid="showrun" className="rounded-md bg-sky-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60">
           {phase === 'planning' ? 'Planning…' : 'Showrun'}

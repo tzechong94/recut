@@ -6,6 +6,7 @@ import { LUTS } from '../../lib/post/lut';
 
 export function TimelinePanel() {
   const nodes = useCanvas((s) => s.nodes);
+  const addConfiguredNode = useCanvas((s) => s.addConfiguredNode);
   const [open, setOpen] = useState(false);
   const [lut, setLut] = useState('teal-orange');
   const [exporting, setExporting] = useState<false | '1080p' | '9x16'>(false);
@@ -30,6 +31,7 @@ export function TimelinePanel() {
   );
 
   async function exportFilm(vertical: boolean) {
+    if (clips.length === 0) return;
     setExporting(vertical ? '9x16' : '1080p');
     setError(null);
     try {
@@ -38,20 +40,21 @@ export function TimelinePanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clips, audio, lut, vertical }),
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+      const j = (await res.json().catch(() => ({ error: res.statusText }))) as { videoUrl?: string; error?: string };
+      if (!res.ok || !j.videoUrl) {
         setError(j.error ?? `HTTP ${res.status}`);
         return;
       }
-      const blob = await res.blob();
-      const href = URL.createObjectURL(blob);
+      // drop the finished film onto the canvas as a node…
+      addConfiguredNode('video', { x: 1200, y: 200 }, { title: `🎬 Final Film (${vertical ? '9:16' : '1080p'})`, videoUrl: j.videoUrl, status: 'done', prompt: `assembled ${clips.length} clips + ${audio.length} voice, ${lut} LUT` });
+      // …and download it
       const a = document.createElement('a');
-      a.href = href;
+      a.href = j.videoUrl;
       a.download = `recut-film${vertical ? '-9x16' : '-1080p'}.mp4`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(href);
+      setOpen(true);
     } catch (e) {
       setError(String(e).slice(0, 120));
     } finally {
@@ -61,13 +64,24 @@ export function TimelinePanel() {
 
   return (
     <div className="border-t border-neutral-800 bg-neutral-950" data-testid="timeline-panel">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between px-4 py-1.5 text-xs text-neutral-400 hover:bg-neutral-900">
-        <span className="font-medium">
-          Timeline · {clips.length} clip{clips.length === 1 ? '' : 's'}
-          {audio.length ? ` · ${audio.length} voice` : ''}
-        </span>
-        <span>{open ? '▾' : '▴'}</span>
-      </button>
+      <div className={`flex items-center justify-between px-4 py-2.5 ${clips.length ? 'bg-neutral-900' : 'bg-neutral-950'}`}>
+        <button onClick={() => setOpen((o) => !o)} data-testid="timeline-toggle" className={`flex items-center gap-2 text-xs font-semibold ${clips.length ? 'text-neutral-100' : 'text-neutral-500'}`}>
+          {open ? '▾' : '▴'} 🎬 Timeline
+          <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-medium text-neutral-400">
+            {clips.length} clip{clips.length === 1 ? '' : 's'}{audio.length ? ` · ${audio.length} voice` : ''}
+          </span>
+        </button>
+        {clips.length > 0 && (
+          <button
+            onClick={() => exportFilm(false)}
+            disabled={exporting !== false}
+            data-testid="export-bar"
+            className="rounded-md bg-sky-500 px-4 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60"
+          >
+            {exporting === '1080p' ? 'Stitching the film…' : '▶ Export film'}
+          </button>
+        )}
+      </div>
 
       {open && (
         <div className="px-4 pb-3">

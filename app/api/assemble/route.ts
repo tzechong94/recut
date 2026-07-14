@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { buildAssembleArgs } from '../../../lib/post/export';
 import { lutByName } from '../../../lib/post/lut';
 
@@ -36,8 +36,11 @@ export async function POST(req: Request): Promise<Response> {
   }
   const audio = (body.audio ?? []).map(localOf).filter((a): a is string => a !== null);
 
-  const dir = mkdtempSync(join(tmpdir(), 'recut-assemble-'));
-  const out = join(dir, 'film.mp4');
+  // save the finished film under public/ so it gets a durable URL (→ can become a canvas node)
+  const genDir = resolve(process.cwd(), 'public/generated');
+  mkdirSync(genDir, { recursive: true });
+  const name = `film-${randomUUID()}.mp4`;
+  const out = join(genDir, name);
   const lut = lutByName(body.lut ?? 'teal-orange');
   const args = buildAssembleArgs({
     clips: clips as string[],
@@ -48,13 +51,5 @@ export async function POST(req: Request): Promise<Response> {
   });
   const r = spawnSync('ffmpeg', args, { stdio: 'ignore' });
   if (r.status !== 0 || !existsSync(out)) return Response.json({ error: 'ffmpeg assemble failed' }, { status: 500 });
-
-  const bytes = readFileSync(out);
-  return new Response(new Uint8Array(bytes), {
-    headers: {
-      'Content-Type': 'video/mp4',
-      'Content-Disposition': `attachment; filename="recut-film-${lut.name}${body.vertical ? '-9x16' : '-1080p'}.mp4"`,
-      'Content-Length': String(bytes.length),
-    },
-  });
+  return Response.json({ videoUrl: `/generated/${name}` });
 }

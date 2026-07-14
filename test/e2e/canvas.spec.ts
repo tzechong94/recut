@@ -9,18 +9,22 @@ test('create a project → add nodes on the canvas', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/project\/[a-z0-9]+/);
 
-  // toolbar adds nodes (titles appear on both the node and the inspector → use .first())
-  await page.getByTestId('add-text2image').click();
+  // the "+ Add node" menu adds nodes (titles appear on both the node and the inspector → .first())
+  const add = async (kind: string) => {
+    await page.getByTestId('add-node').click();
+    await page.getByTestId(`add-${kind}`).click();
+  };
+  await add('text2image');
   await expect(page.getByText('Text → Image').first()).toBeVisible();
   await expect(page.getByPlaceholder('describe the image…')).toBeVisible();
 
-  await page.getByTestId('add-compose').click();
+  await add('compose');
   await expect(page.getByText('Compose').first()).toBeVisible();
 
-  await page.getByTestId('add-dialogue').click();
+  await add('dialogue');
   await expect(page.getByText('Dialogue → Voice').first()).toBeVisible();
 
-  await page.getByTestId('add-video').click();
+  await add('video');
   await expect(page.getByText('Image → Video').first()).toBeVisible();
 
   // the prompt persists as you type (node state)

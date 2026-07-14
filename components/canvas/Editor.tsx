@@ -4,27 +4,16 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react';
-import { useCanvas, type RecutNode as RecutNodeType, type RecutNodeKind } from '../../lib/canvas/store';
+import { useCanvas, type RecutNode as RecutNodeType } from '../../lib/canvas/store';
 import type { Edge } from '@xyflow/react';
 import { loadGraph, saveGraph } from '../../lib/projects';
 import { RecutNode } from './RecutNode';
 import { NodeInspector } from './NodeInspector';
 import { ShowrunBar } from './ShowrunBar';
 import { TimelinePanel } from './TimelinePanel';
+import { AddNodeMenu } from './AddNodeMenu';
 
 const nodeTypes = { recut: RecutNode };
-
-const TOOLS: Array<{ kind: RecutNodeKind; label: string }> = [
-  { kind: 'canon', label: 'Canon' },
-  { kind: 'text2image', label: 'Text→Image' },
-  { kind: 'upload', label: 'Upload' },
-  { kind: 'edit', label: 'Edit' },
-  { kind: 'compose', label: 'Compose' },
-  { kind: 'inpaint', label: 'Inpaint' },
-  { kind: 'video', label: 'Video' },
-  { kind: 'dialogue', label: 'Dialogue' },
-  { kind: 'critique', label: 'Continuity' },
-];
 
 export function Editor({ projectId, title }: { projectId: string; title: string }) {
   const {
@@ -76,8 +65,6 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
     return () => window.removeEventListener('keydown', onKey);
   }, [onKey]);
 
-  const add = (kind: RecutNodeKind) => addNode(kind, { x: 160 + (nodes.length % 6) * 40, y: 130 + (nodes.length % 6) * 40 });
-
   return (
     <div className="relative flex h-screen flex-col">
       <header className="z-10 flex items-center justify-between gap-4 border-b border-neutral-800 bg-neutral-950 px-4 py-2">
@@ -85,19 +72,26 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
           <Link href="/" className="text-sm font-semibold text-neutral-100">Recut</Link>
           <span className="text-xs text-neutral-500">/ {title}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          {TOOLS.map((t) => (
-            <button key={t.kind} onClick={() => add(t.kind)} data-testid={`add-${t.kind}`} className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] font-medium text-neutral-300 hover:border-neutral-500 hover:bg-neutral-800">
-              ＋{t.label}
-            </button>
-          ))}
-          <span className="mx-1 h-4 w-px bg-neutral-800" />
+        <div className="flex items-center gap-2">
+          <AddNodeMenu />
+          <span className="h-4 w-px bg-neutral-800" />
           <button onClick={undo} disabled={past.length === 0} title="Undo (⌘Z)" className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">↶</button>
           <button onClick={redo} disabled={future.length === 0} title="Redo (⌘⇧Z)" className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">↷</button>
-          <span className="mx-1 h-4 w-px bg-neutral-800" />
-          <button onClick={runAll} disabled={runningAll || nodes.length === 0} data-testid="run-all" className="rounded-md bg-emerald-500 px-2.5 py-1.5 text-[11px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-50">
-            {runningAll ? 'Running…' : '▶ Run all'}
-          </button>
+          <span className="h-4 w-px bg-neutral-800" />
+          {(() => {
+            const hasWork = nodes.some((n) => n.data.kind !== 'upload' && n.data.kind !== 'canon' && (n.data.status !== 'done' || n.data.stale));
+            return (
+              <button
+                onClick={runAll}
+                disabled={runningAll || !hasWork}
+                data-testid="run-all"
+                title={hasWork ? 'Generate every node that still needs it, in order' : 'Everything is already generated'}
+                className="rounded-md bg-emerald-500 px-2.5 py-1.5 text-[11px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-40"
+              >
+                {runningAll ? 'Generating…' : hasWork ? '▶ Generate all' : '✓ All generated'}
+              </button>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums text-neutral-500" data-testid="spend">
           <span>${spentUsd.toFixed(3)}{capUsd !== null ? ` / $${capUsd.toFixed(0)}` : ''}</span>
@@ -120,8 +114,8 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-center" data-testid="empty-hint">
               <p className="text-sm font-medium text-neutral-400">Blank canvas</p>
               <p className="max-w-sm text-xs text-neutral-600">
-                Type a premise up top and <span className="text-sky-400">Showrun</span> — the agent proposes each shot.
-                Or drop a node from the toolbar and wire outputs into inputs.
+                Type a premise up top and hit <span className="text-sky-400">Showrun</span> — the agent builds the shots for you.
+                Or click <span className="text-sky-400">＋ Add node</span> to build it by hand.
               </p>
             </div>
           )}
