@@ -49,6 +49,7 @@ export function RecutNode({ id, data, selected }: NodeProps) {
   const updateNode = useCanvas((s) => s.updateNode);
   const runNode = useCanvas((s) => s.runNode);
   const setCanonRef = useCanvas((s) => s.setCanonRef);
+  const repairFrom = useCanvas((s) => s.repairFrom);
 
   const onUpload = (file: File, asCanon = false) => {
     const reader = new FileReader();
@@ -161,6 +162,16 @@ export function RecutNode({ id, data, selected }: NodeProps) {
               {runLabel(d.kind, d.status)}
             </button>
           </>
+        )}
+
+        {!d.demo && d.kind === 'critique' && typeof d.score === 'number' && d.score < 0.7 && d.repairInstruction && (
+          <button
+            onClick={() => repairFrom(id)}
+            data-testid="auto-repair"
+            className="w-full rounded-md border border-amber-600/50 bg-amber-950/30 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-950/60"
+          >
+            ↻ Auto-repair
+          </button>
         )}
 
         {d.error && <p className="text-[10px] text-rose-400">{d.error}</p>}

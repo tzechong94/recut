@@ -27,6 +27,7 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
   const {
     nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, load, reset, spentUsd, lastError,
     selectedId, select, deleteNode, duplicateNode, undo, redo, past, future,
+    runAll, runningAll, pausedReason, capUsd,
   } = useCanvas();
   const key = `recut:project:${projectId}`;
 
@@ -94,13 +95,25 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
           <span className="mx-1 h-4 w-px bg-neutral-800" />
           <button onClick={undo} disabled={past.length === 0} title="Undo (⌘Z)" className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">↶</button>
           <button onClick={redo} disabled={future.length === 0} title="Redo (⌘⇧Z)" className="rounded-md border border-neutral-700 px-2 py-1.5 text-[11px] text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">↷</button>
+          <span className="mx-1 h-4 w-px bg-neutral-800" />
+          <button onClick={runAll} disabled={runningAll || nodes.length === 0} data-testid="run-all" className="rounded-md bg-emerald-500 px-2.5 py-1.5 text-[11px] font-semibold text-black hover:bg-emerald-400 disabled:opacity-50">
+            {runningAll ? 'Running…' : '▶ Run all'}
+          </button>
         </div>
-        <div className="text-xs tabular-nums text-neutral-500" data-testid="spend">spend ${spentUsd.toFixed(3)}</div>
+        <div className="flex items-center gap-2 text-xs tabular-nums text-neutral-500" data-testid="spend">
+          <span>${spentUsd.toFixed(3)}{capUsd !== null ? ` / $${capUsd.toFixed(0)}` : ''}</span>
+          {capUsd !== null && (
+            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-neutral-800">
+              <div className={`h-full ${spentUsd > 0.8 * capUsd ? 'bg-rose-400' : 'bg-emerald-400'}`} style={{ width: `${Math.min(100, (spentUsd / capUsd) * 100)}%` }} />
+            </div>
+          )}
+        </div>
       </header>
 
       <ShowrunBar />
 
       {lastError && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{lastError}</div>}
+      {pausedReason && <div className="border-b border-amber-900 bg-amber-950/50 px-4 py-1.5 text-xs text-amber-300" data-testid="paused">⏸ {pausedReason}</div>}
 
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">

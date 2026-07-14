@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useCanvas } from '../store';
+import { useCanvas, runOrder, type RecutNode } from '../store';
+import type { Edge } from '@xyflow/react';
 
 const at = (x = 0, y = 0) => ({ x, y });
 const S = () => useCanvas.getState();
@@ -68,5 +69,32 @@ describe('canvas store — Canon stale propagation', () => {
     expect(byId[n1!]!.stale).toBe(false); // the canon itself isn't stale
     expect(byId[n2!]!.stale).toBe(true); // direct descendant
     expect(byId[n3!]!.stale).toBe(true); // transitive descendant
+  });
+});
+
+describe('runOrder — topological', () => {
+  const node = (id: string): RecutNode => ({ id, type: 'recut', position: at(), data: { kind: 'edit', title: 'e', prompt: '', status: 'idle' } });
+  const edge = (from: string, to: string): Edge => ({ id: `${from}-${to}`, source: from, target: to });
+
+  it('orders a chain a→b→c', () => {
+    const order = runOrder([node('a'), node('b'), node('c')], [edge('a', 'b'), edge('b', 'c')]);
+    expect(order.indexOf('a')).toBeLessThan(order.indexOf('b'));
+    expect(order.indexOf('b')).toBeLessThan(order.indexOf('c'));
+  });
+  it('a diamond keeps parents before the join', () => {
+    const order = runOrder([node('a'), node('b'), node('c'), node('d')], [edge('a', 'b'), edge('a', 'c'), edge('b', 'd'), edge('c', 'd')]);
+    expect(order.indexOf('d')).toBe(3);
+    expect(order.indexOf('a')).toBe(0);
+  });
+});
+
+describe('runAll — budget guard', () => {
+  it('pauses without running when spend is past 80% of the cap', async () => {
+    S().addNode('text2image', at());
+    const id = S().nodes[0]!.id;
+    useCanvas.setState({ spentUsd: 1, capUsd: 1 }); // 100% > 80%
+    await S().runAll();
+    expect(S().pausedReason).toMatch(/budget/);
+    expect(S().nodes.find((n) => n.id === id)!.data.status).toBe('idle'); // never ran (no fetch)
   });
 });

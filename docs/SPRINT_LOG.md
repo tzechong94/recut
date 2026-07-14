@@ -230,3 +230,16 @@ LUT zero-network asserted) · eval:ui 7.69 (timeline 7.29 ≥7). Spend $1.89/$8.
 
 **Gates:** typecheck · 78/78 unit (planner+build-graph) · e2e 16/16 (showrun step+autonomous,
 mocked plan = deterministic/free) · live plan smoke $0.01. **Spend $2.43/$8.**
+
+## 2026-07-14 — S4 (agent execution loop + auto-repair) — SHIPPED
+
+- **Run all:** topological run order (Kahn) → runs every runnable node in dependency order.
+- **Budget guard:** stops before any node that would push spend past 80% of the cap; a pause
+  banner explains why. Budget bar in the header (spend/cap + green→rose fill). capUsd surfaced
+  from the generate route.
+- **Auto-repair:** critique nodes store the critic's repair instruction; a ↻ Auto-repair button
+  appends it to the nearest upstream image node, re-renders, and re-critiques.
+- Store unit tests: runOrder (chain + diamond), budget-guard pause (no fetch when over 80%).
+
+**Gates:** typecheck · 81/81 unit · e2e 17/17 (run-all sequencing, mocked = deterministic/free).
+**Spend $2.43/$8.**

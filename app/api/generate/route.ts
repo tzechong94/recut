@@ -68,7 +68,7 @@ export async function POST(req: Request): Promise<Response> {
       const payload = { messages: [{ role: 'user', content: [{ text: `${body.prompt ?? ''}.${aspectHint} Avoid: ${body.negative ?? NEGATIVE}.` }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
-      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent() });
+      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'edit' || body.kind === 'inpaint') {
@@ -81,7 +81,7 @@ export async function POST(req: Request): Promise<Response> {
       const payload = { messages: [{ role: 'user', content: [{ image: body.image }, { text: instruction }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
-      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent() });
+      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'compose') {
@@ -92,7 +92,7 @@ export async function POST(req: Request): Promise<Response> {
       const payload = { messages: [{ role: 'user', content: [...imgs.map((i) => ({ image: i })), { text: body.prompt ?? 'combine these images into one coherent composition' }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
-      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent() });
+      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'video') {
@@ -114,14 +114,14 @@ export async function POST(req: Request): Promise<Response> {
         gov.record(cost);
         const dl = await fetch(remoteUrl);
         writeFileSync(outPath, Buffer.from(await dl.arrayBuffer()));
-        return Response.json({ videoUrl: `/generated/${name}`, spentUsd: gov.spent() });
+        return Response.json({ videoUrl: `/generated/${name}`, spentUsd: gov.spent(), capUsd: gov.cap() });
       }
 
       if (spawnSync('ffmpeg', ['-version']).status !== 0) return Response.json({ error: 'ffmpeg unavailable' }, { status: 501 });
       const local = await toLocalFile(body.image);
       const rc = spawnSync('ffmpeg', buildKenBurnsArgs(local, outPath, 3), { stdio: 'ignore' });
       if (rc.status !== 0 || !existsSync(outPath)) return Response.json({ error: 'ffmpeg failed' }, { status: 500 });
-      return Response.json({ videoUrl: `/generated/${name}`, spentUsd: gov.spent() });
+      return Response.json({ videoUrl: `/generated/${name}`, spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'critique') {
@@ -140,7 +140,7 @@ export async function POST(req: Request): Promise<Response> {
       const content = j.output?.choices?.[0]?.message?.content;
       const text = Array.isArray(content) ? content.map((p) => (p as { text?: string }).text ?? '').join(' ') : String(content ?? '');
       const verdict = parseVerdict(text);
-      return Response.json({ verdict, score: continuityScore(verdict), spentUsd: gov.spent() });
+      return Response.json({ verdict, score: continuityScore(verdict), spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'dialogue') {
@@ -164,7 +164,7 @@ export async function POST(req: Request): Promise<Response> {
       const name = `${randomUUID()}.wav`;
       const dl = await fetch(j.output.audio.url);
       writeFileSync(join(genDir, name), Buffer.from(await dl.arrayBuffer()));
-      return Response.json({ audioUrl: `/generated/${name}`, spentUsd: gov.spent() });
+      return Response.json({ audioUrl: `/generated/${name}`, spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     return Response.json({ error: 'unknown kind' }, { status: 400 });

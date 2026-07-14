@@ -43,6 +43,8 @@ export interface RecutNodeData {
   locked?: boolean;
   // stale = an upstream input changed after this node last ran
   stale?: boolean;
+  // critique nodes carry the critic's repair instruction for auto-repair
+  repairInstruction?: string;
   // demo mode: read-only node with pre-filled fixtures + an inspectable detail block
   demo?: boolean;
   step?: number;
@@ -91,6 +93,9 @@ export interface CanvasState {
   edges: Edge[];
   nextId: number;
   spentUsd: number;
+  capUsd: number | null;
+  runningAll: boolean;
+  pausedReason: string | null;
   lastError: string | null;
   selectedId: string | null;
   past: Snapshot[];
@@ -108,6 +113,8 @@ export interface CanvasState {
   deleteNode: (id: string) => void;
   duplicateNode: (id: string) => void;
   runNode: (id: string) => Promise<void>;
+  runAll: () => Promise<void>;
+  repairFrom: (critiqueId: string) => Promise<void>;
   setCanonRef: (id: string, dataUri: string) => void;
   undo: () => void;
   redo: () => void;
@@ -135,6 +142,51 @@ function descendants(id: string, edges: Edge[]): Set<string> {
   return out;
 }
 
+/** per-kind cost estimate (USD) for the budget guard */
+export const KIND_COST: Record<string, number> = {
+  text2image: 0.05, edit: 0.05, compose: 0.05, inpaint: 0.05, video: 0.3, critique: 0.005, dialogue: 0.002, upload: 0, canon: 0,
+};
+const RUNNABLE = new Set<RecutNodeKind>(['text2image', 'edit', 'compose', 'inpaint', 'video', 'critique', 'dialogue']);
+export const CONTINUITY_THRESHOLD = 0.7;
+
+/** Topological run order (Kahn). Nodes in cycles / unreachable tails are dropped. */
+export function runOrder(nodes: RecutNode[], edges: Edge[]): string[] {
+  const indeg = new Map<string, number>(nodes.map((n) => [n.id, 0]));
+  for (const e of edges) indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
+  const queue = nodes.filter((n) => (indeg.get(n.id) ?? 0) === 0).map((n) => n.id);
+  const order: string[] = [];
+  while (queue.length) {
+    const id = queue.shift()!;
+    order.push(id);
+    for (const e of edges) {
+      if (e.source === id) {
+        const d = (indeg.get(e.target) ?? 0) - 1;
+        indeg.set(e.target, d);
+        if (d === 0) queue.push(e.target);
+      }
+    }
+  }
+  return order;
+}
+
+/** The nearest upstream image-producing node (not canon), for auto-repair. */
+function nearestUpstreamImage(id: string, nodes: RecutNode[], edges: Edge[]): RecutNode | undefined {
+  const seen = new Set<string>();
+  const queue = [id];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const e of edges) {
+      if (e.target === cur && !seen.has(e.source)) {
+        seen.add(e.source);
+        const src = nodes.find((n) => n.id === e.source);
+        if (src && src.data.kind !== 'canon' && src.data.imageUrl) return src;
+        queue.push(e.source);
+      }
+    }
+  }
+  return undefined;
+}
+
 /** The nearest upstream canon node's locked reference image, if any. */
 function nearestCanonRef(id: string, nodes: RecutNode[], edges: Edge[]): string | undefined {
   const seen = new Set<string>();
@@ -158,6 +210,9 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   edges: [],
   nextId: 1,
   spentUsd: 0,
+  capUsd: null,
+  runningAll: false,
+  pausedReason: null,
   lastError: null,
   selectedId: null,
   past: [],
@@ -264,19 +319,55 @@ export const useCanvas = create<CanvasState>((set, get) => ({
           voice: node.data.voice,
         }),
       });
-      const j = (await res.json()) as { imageUrl?: string; videoUrl?: string; audioUrl?: string; score?: number; error?: string; spentUsd?: number };
+      const j = (await res.json()) as { imageUrl?: string; videoUrl?: string; audioUrl?: string; score?: number; error?: string; spentUsd?: number; capUsd?: number | null; verdict?: { repair_instruction?: string } };
+      if (typeof j.spentUsd === 'number') set({ spentUsd: j.spentUsd });
+      if (j.capUsd !== undefined) set({ capUsd: j.capUsd });
       if (!res.ok) {
         updateNode(id, { status: 'error', error: j.error ?? `HTTP ${res.status}` });
         return;
       }
-      updateNode(id, { status: 'done', stale: false, imageUrl: j.imageUrl, videoUrl: j.videoUrl, audioUrl: j.audioUrl, score: j.score });
+      updateNode(id, { status: 'done', stale: false, imageUrl: j.imageUrl, videoUrl: j.videoUrl, audioUrl: j.audioUrl, score: j.score, repairInstruction: j.verdict?.repair_instruction });
       // an upstream output changed → everything downstream is now stale until re-run
       const stale = descendants(id, get().edges);
       if (stale.size) set({ nodes: get().nodes.map((n) => (stale.has(n.id) ? { ...n, data: { ...n.data, stale: true } } : n)) });
-      if (typeof j.spentUsd === 'number') set({ spentUsd: j.spentUsd });
     } catch (e) {
       updateNode(id, { status: 'error', error: String(e).slice(0, 120) });
     }
+  },
+
+  runAll: async () => {
+    set({ runningAll: true, pausedReason: null });
+    const order = runOrder(get().nodes, get().edges);
+    for (const id of order) {
+      const n = get().nodes.find((x) => x.id === id);
+      if (!n || !RUNNABLE.has(n.data.kind)) continue;
+      if (n.data.status === 'done' && !n.data.stale) continue; // already produced, not stale
+      const cap = get().capUsd;
+      const est = KIND_COST[n.data.kind] ?? 0.05;
+      if (cap !== null && get().spentUsd + est > 0.8 * cap) {
+        set({ runningAll: false, pausedReason: `paused at 80% of the $${cap.toFixed(2)} budget` });
+        return;
+      }
+      await get().runNode(id);
+      if (get().nodes.find((x) => x.id === id)?.data.status === 'error') {
+        set({ runningAll: false, pausedReason: 'paused on a node error' });
+        return;
+      }
+    }
+    set({ runningAll: false });
+  },
+
+  repairFrom: async (critiqueId) => {
+    const { nodes, edges } = get();
+    const critique = nodes.find((n) => n.id === critiqueId);
+    if (!critique || critique.data.kind !== 'critique') return;
+    const instruction = critique.data.repairInstruction;
+    const upstream = nearestUpstreamImage(critiqueId, nodes, edges);
+    if (!instruction || !upstream) return;
+    // append the critic's instruction to the upstream node and re-render, then re-critique
+    get().updateNode(upstream.id, { prompt: `${upstream.data.prompt}. ${instruction}` });
+    await get().runNode(upstream.id);
+    await get().runNode(critiqueId);
   },
 
   setCanonRef: (id, dataUri) => {
@@ -304,6 +395,6 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     set({ future: s.future.slice(1), past: [...s.past, snapshot(s)], nodes: next.nodes, edges: next.edges });
   },
 
-  load: (nodes, edges) => set({ nodes, edges, nextId: nodes.length + 1, past: [], future: [], selectedId: null }),
-  reset: () => set({ nodes: [], edges: [], nextId: 1, lastError: null, past: [], future: [], selectedId: null }),
+  load: (nodes, edges) => set({ nodes, edges, nextId: nodes.length + 1, past: [], future: [], selectedId: null, runningAll: false, pausedReason: null }),
+  reset: () => set({ nodes: [], edges: [], nextId: 1, lastError: null, past: [], future: [], selectedId: null, runningAll: false, pausedReason: null }),
 }));
