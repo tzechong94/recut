@@ -16,6 +16,10 @@ export interface CompileInput {
   light?: LightRigState;
   lens?: LensPreset;
   style?: string;
+  /** global Style Prefix (project-level default, spec Stage 2) */
+  stylePrefix?: string;
+  /** scoped scene override: replaces stylePrefix for this compile only (spec Stage 2) */
+  styleOverride?: string;
   palette?: CompiledPrompt['palette'];
   seed?: number;
 }
@@ -26,8 +30,12 @@ export function compile(input: CompileInput): CompiledPrompt {
   const camera = deriveCamera(cameraState);
   if (input.lens) camera.lens = { ...camera.lens, body: input.lens.body };
 
-  const baseStyle = input.style ?? 'photorealistic cinematic still';
-  const style = input.lens ? `${baseStyle}, ${lensDescriptor(input.lens)}` : baseStyle;
+  // Merge order (spec Stage 2): scene override REPLACES the project prefix; the per-shot
+  // style refines whichever won; the lens descriptor is appended last.
+  const prefix = input.styleOverride?.trim() || input.stylePrefix?.trim() || '';
+  const shotStyle = input.style ?? (prefix ? '' : 'photorealistic cinematic still');
+  const merged = [prefix, shotStyle].filter(Boolean).join(', ');
+  const style = input.lens ? `${merged}, ${lensDescriptor(input.lens)}` : merged;
 
   return {
     subject: {

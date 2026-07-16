@@ -10,6 +10,11 @@ export interface Entity {
   id: string;
   kind: EntityKind;
   name: string;
+  /** stable registry slug used verbatim in prompts (spec 1.1): `hero`, `hero_wet` */
+  slug?: string;
+  /** state variant (spec 1.8): this entity is `variantOf` another, in state `state` */
+  variantOf?: string;
+  state?: string;
   description: string;
   /** 1–5 locked reference images; the spike showed one is usually enough */
   refs: AssetRef[];
@@ -66,6 +71,8 @@ export interface Scene {
   id: string;
   title: string;
   shotIds: string[];
+  /** scoped style override (spec Stage 2): replaces the project stylePrefix for this scene only */
+  styleOverride?: string;
 }
 
 /** Every asset carries this. Non-negotiable (hard rule 7). */
@@ -90,11 +97,16 @@ export interface Take {
   assetUrl: string;
   provenance: Provenance;
   accepted: boolean;
+  /** VLM judge output for this take (spec Stage 3) */
+  score?: number;
+  verdict?: Record<string, unknown>;
 }
 
 export interface Project {
   id: string;
   title: string;
+  /** global Style Prefix (spec Stage 2): default style glued to every compiled prompt */
+  stylePrefix?: string;
   bible: SeriesBible;
   scenes: Scene[];
   shots: Shot[];

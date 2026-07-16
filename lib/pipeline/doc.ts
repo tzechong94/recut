@@ -1,0 +1,122 @@
+// The pipeline document: the single connected artifact behind the three-stage wizard
+// (PIPELINE-SPEC.md). Stage 1 assets are named by registry slug; Stage 2 is one connected
+// shotlist (global Style Prefix, named prompts, per-scene overrides); Stage 3 takes are
+// keyed by prompt name. PURE module: types + merge/derive helpers only, no I/O.
+
+export type AssetKind = 'product' | 'character' | 'location' | 'prop';
+
+export interface AssetDoc {
+  id: string;
+  /** stable registry name, used verbatim in prompts (spec 1.1): `hero`, `sofa`, `hero_wet` */
+  slug: string;
+  kind: AssetKind;
+  imageUrl?: string;
+  /** locked = motion-tested + immutable; only locked assets may be referenced by prompts */
+  locked: boolean;
+  /** state variant (spec 1.8): `hero_wet` is a variant of `hero` with state 'wet' */
+  variantOf?: string;
+  state?: string;
+  /** judge scores recorded at lock time (motion test, spec 1.6) */
+  judge?: { identity?: number; lighting?: number; realism?: number };
+}
+
+export interface PromptDoc {
+  /** the prompt's name: scene number + letter, e.g. `1A`, `2C`. Edits are surgical by name. */
+  name: string;
+  text: string;
+  /** asset registry slugs this prompt requires; refs are attached from these at run time */
+  assetSlugs: string[];
+  /** whether this beat gets animated (i2v) after the keyframe is approved */
+  animate?: boolean;
+}
+
+export interface SceneDoc {
+  title: string;
+  /** scoped override: replaces/extends the global Style Prefix for this scene only */
+  styleOverride?: string;
+  prompts: PromptDoc[];
+}
+
+export interface TakeDoc {
+  id: string;
+  promptName: string;
+  kind: 'image' | 'video';
+  url: string;
+  /** VLM judge output for this take */
+  score?: number;
+  verdict?: Record<string, unknown>;
+  repairInstruction?: string;
+}
+
+export interface PipelineDoc {
+  projectId: string;
+  /** global Style Prefix (spec Stage 2): glued to every prompt; change once, changes everywhere */
+  stylePrefix: string;
+  assets: AssetDoc[];
+  scenes: SceneDoc[];
+  takes: TakeDoc[];
+}
+
+export function emptyPipeline(projectId: string): PipelineDoc {
+  return { projectId, stylePrefix: '', assets: [], scenes: [], takes: [] };
+}
+
+/** Prompt name for scene index s (0-based) and prompt index p: 1A, 1B, 2A … */
+export function promptName(sceneIdx: number, promptIdx: number): string {
+  return `${sceneIdx + 1}${String.fromCharCode(65 + promptIdx)}`;
+}
+
+/** Find a prompt (and its scene) by name across the shotlist. */
+export function findPrompt(doc: PipelineDoc, name: string): { scene: SceneDoc; prompt: PromptDoc } | undefined {
+  for (const scene of doc.scenes) {
+    const prompt = scene.prompts.find((p) => p.name === name);
+    if (prompt) return { scene, prompt };
+  }
+  return undefined;
+}
+
+/**
+ * The compiled text for a named prompt. Merge order (spec Stage 2): global Style Prefix,
+ * then the scene's scoped override, then the prompt body, then explicit asset anchors.
+ * Deterministic: identical doc + name gives byte-identical output.
+ */
+export function compilePromptText(doc: PipelineDoc, name: string): string {
+  const hit = findPrompt(doc, name);
+  if (!hit) return '';
+  const parts: string[] = [];
+  const prefix = hit.scene.styleOverride?.trim() || doc.stylePrefix.trim();
+  if (prefix) parts.push(prefix);
+  parts.push(hit.prompt.text.trim());
+  if (hit.prompt.assetSlugs.length) {
+    parts.push(`Use the attached reference images for: ${hit.prompt.assetSlugs.join(', ')}. Keep each exactly on-model.`);
+  }
+  return parts.filter(Boolean).join('. ');
+}
+
+/** Resolve a prompt's asset slugs to locked assets, preserving slug order. Unlocked/missing are skipped. */
+export function resolveAssets(doc: PipelineDoc, name: string): AssetDoc[] {
+  const hit = findPrompt(doc, name);
+  if (!hit) return [];
+  const bySlug = new Map(doc.assets.map((a) => [a.slug, a]));
+  return hit.prompt.assetSlugs
+    .map((s) => bySlug.get(s))
+    .filter((a): a is AssetDoc => Boolean(a && a.locked && a.imageUrl));
+}
+
+/** Stage gating: the shotlist opens with one locked asset; takes open with one prompt. */
+export function stageReady(doc: PipelineDoc): { shotlist: boolean; takes: boolean } {
+  return {
+    shotlist: doc.assets.some((a) => a.locked && a.imageUrl),
+    takes: doc.scenes.some((s) => s.prompts.length > 0),
+  };
+}
+
+/** Takes for one prompt, newest first (ids are monotonic per doc). */
+export function takesFor(doc: PipelineDoc, name: string): TakeDoc[] {
+  return doc.takes.filter((t) => t.promptName === name).reverse();
+}
+
+/** Slugify a display name into a registry slug: 'Mr Bean SOY' -> 'mr_bean_soy'. */
+export function toSlug(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'asset';
+}

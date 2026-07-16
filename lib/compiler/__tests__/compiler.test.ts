@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { CameraRigState, LightRigState } from '../../domain/types';
+import type { CameraRigState, LightRigState, Shot, SeriesBible } from '../../domain/types';
+import { compile } from '../compile';
 import { deriveCamera, shotSize, elevationName, azimuthName, lensCharacter } from '../camera';
 import { deriveLighting, detectSetup, contrastMood, kelvinLanguage } from '../lighting';
 import { lensDescriptor, isAnamorphic, DEFAULT_LENS_PRESET } from '../lens';
@@ -126,5 +127,30 @@ describe('determinism + golden shape', () => {
       fill: { ratio: 5 },
       mood: 'low-key',
     });
+  });
+});
+
+describe('style prefix merge (spec Stage 2)', () => {
+  const lig = (): LightRigState => ({ lights: [{ role: 'key', azimuthDeg: 30, elevationDeg: 25, intensity: 1, kelvin: 5600, hardness: 'soft' }] });
+  const demoShot = (): Shot => ({ id: 's1', sceneId: 'sc1', action: 'the hero sits', entityIds: [], camera: cam(), light: lig(), takeIds: [] });
+  const demoBible = (): SeriesBible => ({ version: 1, entities: [] });
+  const base = () => ({ shot: demoShot(), bible: demoBible() });
+  it('project stylePrefix is glued in front of the shot style', () => {
+    const p = compile({ ...base(), stylePrefix: 'bright commercial daylight', style: '35mm grain' });
+    expect(p.style).toBe('bright commercial daylight, 35mm grain');
+  });
+  it('scene override REPLACES the project prefix, not appends', () => {
+    const p = compile({ ...base(), stylePrefix: 'bright commercial daylight', styleOverride: 'harsh midday sun', style: '35mm grain' });
+    expect(p.style).toBe('harsh midday sun, 35mm grain');
+    expect(p.style).not.toContain('bright commercial');
+  });
+  it('no prefix, no style falls back to the historical default (golden tests unchanged)', () => {
+    const p = compile(base());
+    expect(p.style).toBe('photorealistic cinematic still');
+  });
+  it('merge is deterministic', () => {
+    const a = compile({ ...base(), stylePrefix: 'x', style: 'y' });
+    const b = compile({ ...base(), stylePrefix: 'x', style: 'y' });
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

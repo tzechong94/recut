@@ -20,7 +20,7 @@ function relativeTime(ms: number): string {
 function ProjectCard({ p, onDelete }: { p: ProjectMeta; onDelete: (id: string) => void }) {
   return (
     <Link
-      href={`/project/${p.id}`}
+      href={`/project/${p.id}/pipeline`}
       className="card-ring group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] transition hover:-translate-y-1"
     >
       {/* poster */}
@@ -72,7 +72,7 @@ export function ProjectsHome() {
     if (creating) return;
     setCreating(true);
     const meta = await createProject(title);
-    router.push(`/project/${meta.id}`);
+    router.push(`/project/${meta.id}/pipeline`);
   };
   const remove = async (id: string) => {
     await deleteProject(id);
