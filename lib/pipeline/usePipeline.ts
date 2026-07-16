@@ -47,7 +47,7 @@ async function callGenerate(body: Record<string, unknown>): Promise<GenerateResp
 interface PipelineState {
   doc: PipelineDoc;
   loadedFor: string | null;
-  tab: 'assets' | 'shotlist' | 'takes' | 'film';
+  tab: 'assets' | 'scenes' | 'film';
   busy: string | null; // human label of the in-flight operation
   error: string | null;
   spentUsd: number;
@@ -77,6 +77,8 @@ interface PipelineState {
   planShotlist: (beats: string) => Promise<void>;
   updatePrompt: (name: string, patch: Partial<PromptDoc>) => void;
   addPrompt: (sceneIdx: number) => void;
+  /** coverage cut: duplicate the scene's master cut at the next shot size (editorial coverage) */
+  addCoverage: (sceneIdx: number) => void;
   addScene: () => void;
   removeScene: (sceneIdx: number) => void;
   shiftScene: (sceneIdx: number, dir: -1 | 1) => void;
@@ -255,6 +257,27 @@ export const usePipeline = create<PipelineState>((set, get) => {
           prompts: s.prompts.map((p) => (p.name === name ? { ...p, ...patch } : p)),
         })),
       })),
+    addCoverage: (sceneIdx) =>
+      mutate((d) => {
+        const scene = d.scenes[sceneIdx];
+        const master = scene?.prompts[0];
+        if (!scene || !master) return d;
+        const LADDER = ['wide shot', 'medium shot', 'close-up', 'extreme close-up'];
+        const used = new Set(scene.prompts.map((p) => p.shotSize).filter(Boolean));
+        const next = LADDER.find((x) => !used.has(x)) ?? 'close-up';
+        const cut = {
+          name: promptName(sceneIdx, scene.prompts.length),
+          text: master.text,
+          assetSlugs: [...master.assetSlugs],
+          animate: master.animate,
+          shotSize: next,
+          angle: master.angle,
+          lens: master.lens,
+          light: master.light,
+        };
+        return { ...d, scenes: d.scenes.map((sc, i) => (i === sceneIdx ? { ...sc, prompts: [...sc.prompts, cut] } : sc)) };
+      }),
+
     addPrompt: (sceneIdx) =>
       mutate((d) => ({
         ...d,

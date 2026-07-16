@@ -165,3 +165,15 @@ describe('film harvest (keeper clips + voice tracks)', () => {
     expect(stageReady(doc()).film).toBe(false);
   });
 });
+
+describe('cinematography presets compile into the prompt', () => {
+  it('appends shot size, angle, lens, light after the body, before asset anchors', () => {
+    const d = doc();
+    d.scenes[0]!.prompts[0] = { ...d.scenes[0]!.prompts[0]!, shotSize: 'close-up', angle: 'low angle', lens: '85mm portrait lens', light: 'Rembrandt lighting' };
+    const t = compilePromptText(d, '1A');
+    expect(t).toContain('the hero sinks into the sofa. close-up, low angle, 85mm portrait lens, Rembrandt lighting. Use the attached');
+  });
+  it('no presets, no extra segment (back-compat)', () => {
+    expect(compilePromptText(doc(), '1B')).not.toContain('undefined');
+  });
+});

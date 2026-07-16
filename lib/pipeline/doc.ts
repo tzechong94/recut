@@ -30,6 +30,12 @@ export interface PromptDoc {
   animate?: boolean;
   /** spoken line for this beat (drama generation); becomes a voice take via TTS */
   dialogue?: string;
+  // cinematography presets (from the main-branch inspector): appended to the compiled prompt,
+  // so regenerating a cut at a new angle is a dropdown change, not a prose rewrite
+  shotSize?: string;
+  angle?: string;
+  lens?: string;
+  light?: string;
 }
 
 export interface SceneDoc {
@@ -91,6 +97,8 @@ export function compilePromptText(doc: PipelineDoc, name: string): string {
   const prefix = hit.scene.styleOverride?.trim() || doc.stylePrefix.trim();
   if (prefix) parts.push(prefix);
   parts.push(hit.prompt.text.trim());
+  const cine = [hit.prompt.shotSize, hit.prompt.angle, hit.prompt.lens, hit.prompt.light].filter(Boolean).join(', ');
+  if (cine) parts.push(cine);
   if (hit.prompt.assetSlugs.length) {
     parts.push(`Use the attached reference images for: ${hit.prompt.assetSlugs.join(', ')}. Keep each exactly on-model.`);
   }
