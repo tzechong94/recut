@@ -27,6 +27,8 @@ interface Body {
   seed?: number;
   aspect?: string;
   voice?: string;
+  /** i2v clip length in seconds (clamped 3-10); billed per second */
+  duration?: number;
 }
 
 const NEGATIVE = 'lowres, deformed, extra fingers, watermark, text';
@@ -134,8 +136,8 @@ export async function POST(req: Request): Promise<Response> {
       // produce OSS urls). Uploaded data-URIs can't be fetched by the model → Ken Burns fallback.
       if (/^https?:\/\//.test(body.image)) {
         // async job: submit now, charge on submit, return the task id — the client polls
-        // /api/generate/status so the 1–3 min render never blocks the request.
-        const durationSec = 3;
+        // /api/generate/status so the 1-3 min render never blocks the request.
+        const durationSec = Math.max(3, Math.min(10, Math.round(body.duration ?? 3)));
         const cost = WAN_I2V.cost.amount * durationSec;
         gov.assertCanSpend(cost);
         const prompt = body.prompt?.trim() || 'subtle natural motion, gentle camera push-in, cinematic, vertical 9:16';
