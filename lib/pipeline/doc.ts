@@ -28,6 +28,8 @@ export interface PromptDoc {
   assetSlugs: string[];
   /** whether this beat gets animated (i2v) after the keyframe is approved */
   animate?: boolean;
+  /** spoken line for this beat (drama generation); becomes a voice take via TTS */
+  dialogue?: string;
 }
 
 export interface SceneDoc {
@@ -40,7 +42,7 @@ export interface SceneDoc {
 export interface TakeDoc {
   id: string;
   promptName: string;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'audio';
   url: string;
   /** VLM judge output for this take */
   score?: number;
@@ -114,6 +116,43 @@ export function stageReady(doc: PipelineDoc): { shotlist: boolean; takes: boolea
 /** Takes for one prompt, newest first (ids are monotonic per doc). */
 export function takesFor(doc: PipelineDoc, name: string): TakeDoc[] {
   return doc.takes.filter((t) => t.promptName === name).reverse();
+}
+
+/**
+ * Renumber every prompt to its canonical name (scene order + letter) and remap takes to the
+ * new names. Prompt names encode scene position, so any structural change (delete, move)
+ * must renumber; takes follow their prompt through the rename. Pure.
+ */
+export function renumberScenes(doc: PipelineDoc): PipelineDoc {
+  const rename = new Map<string, string>();
+  const scenes = doc.scenes.map((scene, si) => ({
+    ...scene,
+    title: `Scene ${si + 1}`,
+    prompts: scene.prompts.map((p, pi) => {
+      const next = promptName(si, pi);
+      rename.set(p.name, next);
+      return { ...p, name: next };
+    }),
+  }));
+  const takes = doc.takes
+    .filter((t) => rename.has(t.promptName)) // takes of deleted prompts are dropped
+    .map((t) => ({ ...t, promptName: rename.get(t.promptName)! }));
+  return { ...doc, scenes, takes };
+}
+
+/** Delete a scene: its prompts (and their takes) go with it; the rest renumber. Pure. */
+export function deleteScene(doc: PipelineDoc, sceneIdx: number): PipelineDoc {
+  if (sceneIdx < 0 || sceneIdx >= doc.scenes.length) return doc;
+  return renumberScenes({ ...doc, scenes: doc.scenes.filter((_, i) => i !== sceneIdx) });
+}
+
+/** Move a scene up (-1) or down (+1); prompts renumber and takes follow. Pure. */
+export function moveScene(doc: PipelineDoc, sceneIdx: number, dir: -1 | 1): PipelineDoc {
+  const j = sceneIdx + dir;
+  if (sceneIdx < 0 || sceneIdx >= doc.scenes.length || j < 0 || j >= doc.scenes.length) return doc;
+  const scenes = [...doc.scenes];
+  [scenes[sceneIdx], scenes[j]] = [scenes[j]!, scenes[sceneIdx]!];
+  return renumberScenes({ ...doc, scenes });
 }
 
 /** Slugify a display name into a registry slug: 'Mr Bean SOY' -> 'mr_bean_soy'. */

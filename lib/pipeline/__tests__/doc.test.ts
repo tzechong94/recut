@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  deleteScene,
+  moveScene,
   emptyPipeline,
   promptName,
   compilePromptText,
@@ -89,5 +91,46 @@ describe('toSlug', () => {
     expect(toSlug('Mr Bean SOY')).toBe('mr_bean_soy');
     expect(toSlug('  Héro!! ')).toBe('h_ro');
     expect(toSlug('')).toBe('asset');
+  });
+});
+
+describe('scene delete and move (names renumber, takes follow)', () => {
+  const withTakes = (): PipelineDoc => {
+    const d = doc();
+    d.takes = [
+      { id: 't1', promptName: '1A', kind: 'image', url: '/t1.png', score: 0.9 },
+      { id: 't2', promptName: '2A', kind: 'image', url: '/t2.png', score: 0.8 },
+    ];
+    return d;
+  };
+
+  it('deleteScene drops its prompts AND their takes, renumbers the rest', () => {
+    const d = deleteScene(withTakes(), 0); // delete Scene 1 (1A, 1B)
+    expect(d.scenes.length).toBe(1);
+    expect(d.scenes[0]!.prompts[0]!.name).toBe('1A'); // old 2A renumbered to 1A
+    expect(d.scenes[0]!.title).toBe('Scene 1');
+    // t1 (old 1A) dropped with its scene; t2 followed 2A -> 1A
+    expect(d.takes.length).toBe(1);
+    expect(d.takes[0]!.id).toBe('t2');
+    expect(d.takes[0]!.promptName).toBe('1A');
+  });
+
+  it('moveScene swaps order, renumbers, and takes follow their prompt', () => {
+    const d = moveScene(withTakes(), 1, -1); // Scene 2 moves up
+    expect(d.scenes[0]!.prompts[0]!.text).toBe('sofa on the beach');
+    expect(d.scenes[0]!.prompts[0]!.name).toBe('1A'); // old 2A is now 1A
+    expect(d.scenes[1]!.prompts.map((p) => p.name)).toEqual(['2A', '2B']);
+    const t2 = d.takes.find((t) => t.id === 't2')!;
+    expect(t2.promptName).toBe('1A'); // followed its prompt
+    const t1 = d.takes.find((t) => t.id === 't1')!;
+    expect(t1.promptName).toBe('2A');
+    // scene override travelled with its scene
+    expect(d.scenes[0]!.styleOverride).toContain('harsh midday');
+  });
+
+  it('move at the boundary is a no-op', () => {
+    const d = withTakes();
+    expect(moveScene(d, 0, -1)).toBe(d);
+    expect(moveScene(d, 1, 1)).toBe(d);
   });
 });

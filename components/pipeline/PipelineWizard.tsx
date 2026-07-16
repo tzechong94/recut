@@ -207,7 +207,7 @@ function AssetCard({
 /* ---------------- Stage 2: Shotlist ---------------- */
 
 function ShotlistPanel() {
-  const { doc, setStylePrefix, setSceneOverride, planShotlist, updatePrompt, addPrompt, addScene, busy, setTab } = usePipeline();
+  const { doc, setStylePrefix, setSceneOverride, planShotlist, updatePrompt, addPrompt, addScene, removeScene, shiftScene, busy, setTab } = usePipeline();
   const [beats, setBeats] = useState('');
   const lockedSlugs = doc.assets.filter((a) => a.locked && a.imageUrl).map((a) => a.slug);
 
@@ -238,7 +238,7 @@ function ShotlistPanel() {
             value={beats}
             onChange={(e) => setBeats(e.target.value)}
             rows={3}
-            placeholder="One beat per scene: e.g. 'A 30s ad for the LUNA sofa: cosy evening reveal, a woman sinks in with a book, closeup of the stitching, hero product shot.'"
+            placeholder="One beat per scene. Product ad: 'A 30s ad for the LUNA sofa: evening reveal, she sinks in, stitching closeup, hero shot.' Or a drama: 'A lighthouse keeper finds a letter from her past.'"
             data-testid="beats"
             className="mb-3 w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-neutral-200 outline-none placeholder:text-neutral-600"
           />
@@ -258,8 +258,13 @@ function ShotlistPanel() {
         <>
           {doc.scenes.map((scene, si) => (
             <div key={si} className="glass mb-4 rounded-2xl p-4" data-testid={`scene-${si + 1}`}>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-bold text-neutral-200">{scene.title}</span>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-sm font-bold text-neutral-200">
+                  {scene.title}
+                  <button onClick={() => shiftScene(si, -1)} disabled={si === 0} title="Move scene up" data-testid={`scene-up-${si}`} className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-neutral-400 hover:bg-white/5 disabled:opacity-30">▲</button>
+                  <button onClick={() => shiftScene(si, 1)} disabled={si === doc.scenes.length - 1} title="Move scene down" data-testid={`scene-down-${si}`} className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-neutral-400 hover:bg-white/5 disabled:opacity-30">▼</button>
+                  <button onClick={() => { if (confirm(`Delete ${scene.title} and its takes?`)) removeScene(si); }} title="Delete scene (its prompts and takes go with it)" data-testid={`scene-delete-${si}`} className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-rose-300/80 hover:bg-rose-950/40">✕</button>
+                </span>
                 <input
                   value={scene.styleOverride ?? ''}
                   onChange={(e) => setSceneOverride(si, e.target.value)}
@@ -292,6 +297,12 @@ function ShotlistPanel() {
                     rows={2}
                     className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-neutral-200 outline-none focus:border-[color:var(--c2)]"
                   />
+                  <input
+                    value={p.dialogue ?? ''}
+                    onChange={(e) => updatePrompt(p.name, { dialogue: e.target.value || undefined })}
+                    placeholder="🔊 spoken line for this beat (optional, drama)…"
+                    className="mt-1.5 w-full rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-pink-200/90 outline-none placeholder:text-neutral-700"
+                  />
                   <p className="mt-1.5 line-clamp-2 font-mono text-[10px] leading-relaxed text-neutral-600" title={compilePromptText(doc, p.name)}>
                     → {compilePromptText(doc, p.name)}
                   </p>
@@ -313,7 +324,7 @@ function ShotlistPanel() {
 /* ---------------- Stage 3: Takes ---------------- */
 
 function TakesPanel() {
-  const { doc, runPrompt, judgeTake, animateTake, removeTake, busy } = usePipeline();
+  const { doc, runPrompt, voicePrompt, judgeTake, animateTake, removeTake, busy } = usePipeline();
   const prompts = doc.scenes.flatMap((s) => s.prompts);
   const [selected, setSelected] = useState<string | null>(prompts[0]?.name ?? null);
   const current = selected ?? prompts[0]?.name ?? null;
@@ -363,14 +374,27 @@ function TakesPanel() {
                   </div>
                 )}
               </div>
-              <button
-                onClick={() => void runPrompt(current)}
-                disabled={busy !== null}
-                data-testid="run-prompt"
-                className="btn-grad shrink-0 rounded-lg px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
-              >
-                {busy?.startsWith('running') ? 'Generating…' : takes.length ? '↻ New take' : '▶ Generate take'}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {prompts.find((p) => p.name === current)?.dialogue && (
+                  <button
+                    onClick={() => void voicePrompt(current)}
+                    disabled={busy !== null}
+                    data-testid="voice-prompt"
+                    title="Synthesize the spoken line as a voice take"
+                    className="rounded-lg border border-pink-500/40 bg-pink-500/10 px-4 py-2.5 text-sm font-semibold text-pink-200 hover:bg-pink-500/20 disabled:opacity-50"
+                  >
+                    🔊 Voice line
+                  </button>
+                )}
+                <button
+                  onClick={() => void runPrompt(current)}
+                  disabled={busy !== null}
+                  data-testid="run-prompt"
+                  className="btn-grad rounded-lg px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
+                >
+                  {busy?.startsWith('running') ? 'Generating…' : takes.length ? '↻ New take' : '▶ Generate take'}
+                </button>
+              </div>
             </div>
 
             {takes.length === 0 ? (
@@ -381,7 +405,12 @@ function TakesPanel() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-testid="takes-grid">
                 {takes.map((t) => (
                   <div key={t.id} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
-                    {t.kind === 'video' ? (
+                    {t.kind === 'audio' ? (
+                      <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-black/40">
+                        <span className="text-3xl">🔊</span>
+                        <audio src={t.url} controls className="w-4/5" />
+                      </div>
+                    ) : t.kind === 'video' ? (
                       <video src={t.url} controls muted loop playsInline className="aspect-video w-full bg-black object-cover" />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element

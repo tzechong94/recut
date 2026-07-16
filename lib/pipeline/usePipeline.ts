@@ -7,7 +7,9 @@
 import { create } from 'zustand';
 import {
   compilePromptText,
+  deleteScene,
   emptyPipeline,
+  moveScene,
   promptName,
   resolveAssets,
   toSlug,
@@ -69,9 +71,12 @@ interface PipelineState {
   updatePrompt: (name: string, patch: Partial<PromptDoc>) => void;
   addPrompt: (sceneIdx: number) => void;
   addScene: () => void;
+  removeScene: (sceneIdx: number) => void;
+  shiftScene: (sceneIdx: number, dir: -1 | 1) => void;
 
   // Stage 3
   runPrompt: (name: string) => Promise<void>;
+  voicePrompt: (name: string) => Promise<void>;
   judgeTake: (takeId: string) => Promise<void>;
   animateTake: (takeId: string) => Promise<void>;
   removeTake: (takeId: string) => void;
@@ -168,7 +173,11 @@ export const usePipeline = create<PipelineState>((set, get) => {
           body: JSON.stringify({ premise: beats }),
         });
         const j = (await res.json()) as {
-          plan?: { style: string; shots: Array<{ description: string; characters: string[]; animate: boolean }> };
+          plan?: {
+            style: string;
+            characters?: Array<{ name: string; description: string }>;
+            shots: Array<{ description: string; characters: string[]; animate: boolean; dialogue?: string }>;
+          };
           error?: string;
           spentUsd?: number;
         };
@@ -186,19 +195,33 @@ export const usePipeline = create<PipelineState>((set, get) => {
           }
           return out;
         };
-        // one beat per scene (spec: the ideal ad structure)
+        // drama generalisation: planned characters with no matching asset become unlocked
+        // character stubs in the registry, ready to generate + lock in Stage 1
+        const stubs = (j.plan.characters ?? [])
+          .filter((c) => matchSlugs([c.name]).length === 0)
+          .map((c) => ({ id: crypto.randomUUID().slice(0, 8), slug: toSlug(c.name), kind: 'character' as const, locked: false }));
+        const allSlugs = (names: string[]): string[] => {
+          const matched = matchSlugs(names);
+          for (const n of names) {
+            const stub = stubs.find((st) => st.slug === toSlug(n));
+            if (stub && !matched.includes(stub.slug)) matched.push(stub.slug);
+          }
+          return matched;
+        };
+        // one beat per scene (the ideal structure for ads and dramas alike)
         const scenes = j.plan.shots.map((shot, i) => ({
           title: `Scene ${i + 1}`,
           prompts: [
             {
               name: promptName(i, 0),
               text: shot.description,
-              assetSlugs: matchSlugs(shot.characters),
+              assetSlugs: allSlugs(shot.characters),
               animate: shot.animate,
+              dialogue: shot.dialogue || undefined,
             },
           ],
         }));
-        mutate((d) => ({ ...d, stylePrefix: d.stylePrefix || j.plan!.style, scenes }));
+        mutate((d) => ({ ...d, stylePrefix: d.stylePrefix || j.plan!.style, assets: [...d.assets, ...stubs], scenes }));
       } catch (e) {
         set({ error: String(e).slice(0, 160) });
       } finally {
@@ -228,6 +251,30 @@ export const usePipeline = create<PipelineState>((set, get) => {
         ...d,
         scenes: [...d.scenes, { title: `Scene ${d.scenes.length + 1}`, prompts: [{ name: promptName(d.scenes.length, 0), text: '', assetSlugs: [] }] }],
       })),
+
+    removeScene: (sceneIdx) => mutate((d) => deleteScene(d, sceneIdx)),
+    shiftScene: (sceneIdx, dir) => mutate((d) => moveScene(d, sceneIdx, dir)),
+
+    // drama: a prompt's dialogue line becomes a voice take via TTS
+    voicePrompt: async (name) => {
+      const { doc } = get();
+      const hit = doc.scenes.flatMap((s) => s.prompts).find((p) => p.name === name);
+      if (!hit?.dialogue?.trim()) return;
+      set({ busy: `voicing ${name}`, error: null });
+      try {
+        const j = await callGenerate({ kind: 'dialogue', prompt: hit.dialogue });
+        trackSpend(j);
+        const url = (j as { audioUrl?: string }).audioUrl;
+        if (url) {
+          const take: TakeDoc = { id: crypto.randomUUID().slice(0, 8), promptName: name, kind: 'audio', url };
+          mutate((d) => ({ ...d, takes: [...d.takes, take] }));
+        }
+      } catch (e) {
+        set({ error: String(e).slice(0, 160) });
+      } finally {
+        set({ busy: null });
+      }
+    },
 
     runPrompt: async (name) => {
       const { doc } = get();
