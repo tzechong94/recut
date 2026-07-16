@@ -29,10 +29,10 @@ export function ReportCard({ rows }: { rows: ReportRow[] }) {
       <p className="mt-1 mb-6 text-sm text-neutral-500">
         Weighted Continuity Score per take. One glance tells you which shot drifted off-model.
       </p>
-      <div className="overflow-x-auto rounded-xl border border-neutral-800">
+      <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-neutral-800 text-left text-[11px] tracking-wide text-neutral-500 uppercase">
+            <tr className="border-b border-white/8 text-left text-[11px] tracking-wide text-neutral-500 uppercase">
               <th className="px-4 py-3 font-medium">Take</th>
               {AXES.map((a) => (
                 <th key={a.key} className="px-3 py-3 text-center font-medium">{a.label}</th>
@@ -42,7 +42,7 @@ export function ReportCard({ rows }: { rows: ReportRow[] }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.name} data-testid={`row-${r.name}`} className="border-b border-neutral-900 last:border-0">
+              <tr key={r.name} data-testid={`row-${r.name}`} className="border-b border-white/8 last:border-0">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}

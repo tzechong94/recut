@@ -11,6 +11,29 @@ import {
 } from '@xyflow/react';
 import type { Capability } from '../gateway/types';
 import { canConnect } from './node';
+// Type-only: importing a VALUE from critic would pull its Gateway → node:fs into the client bundle.
+import type { ContinuityVerdict } from '../agent/critic';
+
+/** A scored keyframe row for the Continuity report card. */
+export interface ContinuityRow {
+  name: string;
+  thumb: string;
+  score: number;
+  verdict: ContinuityVerdict;
+}
+
+// Continuity Score weights — kept in sync with lib/agent/critic.ts (which is server-only).
+// The /api/generate critique endpoint returns the score; this is the client-side fallback.
+const SCORE_WEIGHTS: Record<string, number> = {
+  identity_match: 0.35, wardrobe_match: 0.2, framing_match: 0.15, prop_match: 0.1, location_match: 0.1, palette_match: 0.1,
+};
+function continuityScore(v: ContinuityVerdict): number {
+  const sum = Object.entries(SCORE_WEIGHTS).reduce((acc, [k, w]) => {
+    const n = Number((v as unknown as Record<string, number>)[k]);
+    return acc + w * (Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0);
+  }, 0);
+  return Number(sum.toFixed(3));
+}
 
 export type RecutNodeKind = 'text2image' | 'upload' | 'edit' | 'compose' | 'inpaint' | 'video' | 'critique' | 'dialogue' | 'canon';
 
@@ -109,6 +132,8 @@ export interface CanvasState {
   pausedReason: string | null;
   lastError: string | null;
   selectedId: string | null;
+  continuity: ContinuityRow[] | null;
+  continuityRunning: boolean;
   past: Snapshot[];
   future: Snapshot[];
 
@@ -125,6 +150,8 @@ export interface CanvasState {
   duplicateNode: (id: string) => void;
   runNode: (id: string) => Promise<void>;
   runAll: () => Promise<void>;
+  runContinuityCheck: () => Promise<void>;
+  clearContinuity: () => void;
   repairFrom: (critiqueId: string) => Promise<void>;
   setCanonRef: (id: string, dataUri: string) => void;
   undo: () => void;
@@ -226,6 +253,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   pausedReason: null,
   lastError: null,
   selectedId: null,
+  continuity: null,
+  continuityRunning: false,
   past: [],
   future: [],
 
@@ -390,6 +419,40 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     }
     set({ runningAll: false });
   },
+
+  // One-click Continuity check: critique every keyframe that has a Canon wired upstream against
+  // that locked reference, and collect a scored row per shot for the report card.
+  runContinuityCheck: async () => {
+    const { nodes, edges } = get();
+    set({ continuityRunning: true, continuity: null, lastError: null });
+    const rows: ContinuityRow[] = [];
+    for (const n of nodes) {
+      const d = n.data;
+      if (d.kind === 'canon' || d.kind === 'upload' || !d.imageUrl) continue;
+      const canonRef = nearestCanonRef(n.id, nodes, edges);
+      if (!canonRef) continue; // only shots anchored to a Canon are on-model-checkable
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'critique', image: d.imageUrl, refs: [canonRef], prompt: d.title }),
+        });
+        const j = (await res.json()) as { verdict?: ContinuityVerdict; score?: number; spentUsd?: number; capUsd?: number | null; error?: string };
+        if (typeof j.spentUsd === 'number') set({ spentUsd: j.spentUsd });
+        if (j.capUsd !== undefined) set({ capUsd: j.capUsd });
+        if (j.verdict) {
+          const score = typeof j.score === 'number' ? j.score : continuityScore(j.verdict);
+          rows.push({ name: d.title || n.id, thumb: d.imageUrl, score, verdict: j.verdict });
+          // reflect a failing shot on the node so the canvas + report agree
+          get().updateNode(n.id, { score, repairInstruction: (j.verdict as { repair_instruction?: string }).repair_instruction });
+        }
+      } catch (e) {
+        set({ lastError: `continuity: ${String(e).slice(0, 100)}` });
+      }
+    }
+    set({ continuity: rows, continuityRunning: false });
+  },
+  clearContinuity: () => set({ continuity: null }),
 
   repairFrom: async (critiqueId) => {
     const { nodes, edges } = get();

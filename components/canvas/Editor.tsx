@@ -12,6 +12,7 @@ import { NodeInspector } from './NodeInspector';
 import { ShowrunBar } from './ShowrunBar';
 import { TimelinePanel } from './TimelinePanel';
 import { AddNodeMenu } from './AddNodeMenu';
+import { ReportCard } from './ReportCard';
 
 const nodeTypes = { recut: RecutNode };
 
@@ -20,6 +21,7 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
     nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, load, reset, spentUsd, lastError,
     selectedId, select, deleteNode, duplicateNode, undo, redo, past, future,
     runAll, runningAll, pausedReason, capUsd,
+    continuity, continuityRunning, runContinuityCheck, clearContinuity,
   } = useCanvas();
   // Tracks WHICH project we've finished loading. Autosave only runs once this matches the
   // current projectId — so the empty initial canvas can never be saved over a real graph.
@@ -103,6 +105,20 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
               </button>
             );
           })()}
+          {(() => {
+            const hasShots = nodes.some((n) => n.data.imageUrl && n.data.kind !== 'canon' && n.data.kind !== 'upload');
+            return (
+              <button
+                onClick={runContinuityCheck}
+                disabled={continuityRunning || !hasShots}
+                data-testid="continuity-check"
+                title="Score every keyframe against its Canon reference"
+                className="rounded-md border border-white/12 bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-semibold text-neutral-200 hover:bg-white/8 disabled:opacity-40"
+              >
+                {continuityRunning ? 'Checking…' : '◎ Continuity check'}
+              </button>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums text-neutral-500" data-testid="spend">
           <span>${spentUsd.toFixed(3)}{capUsd !== null ? ` / $${capUsd.toFixed(0)}` : ''}</span>
@@ -157,6 +173,24 @@ export function Editor({ projectId, title }: { projectId: string; title: string 
         )}
       </div>
       <TimelinePanel />
+
+      {continuity && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm" data-testid="continuity-report" onClick={clearContinuity}>
+          <div className="max-h-[86vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/12 bg-[#0e0d15] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/8 px-6 py-3">
+              <span className="grad-text text-sm font-bold">Continuity report</span>
+              <button onClick={clearContinuity} className="rounded-md border border-white/12 px-3 py-1 text-xs text-neutral-300 hover:bg-white/5">Close</button>
+            </div>
+            {continuity.length === 0 ? (
+              <p className="px-8 py-12 text-center text-sm text-neutral-500">
+                No keyframes with a Canon wired upstream. Connect a Canon node into a shot, generate it, then run the check.
+              </p>
+            ) : (
+              <ReportCard rows={continuity} />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
