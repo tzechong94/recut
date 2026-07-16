@@ -48,8 +48,15 @@ const PROMPT_PLACEHOLDER: Partial<Record<RecutNodeKind, string>> = {
   dialogue: 'the spoken line…',
 };
 
-function runLabel(kind: RecutNodeKind, status: RecutNodeData['status']): string {
+function runLabel(kind: RecutNodeKind, status: RecutNodeData['status'], done: boolean): string {
   if (status === 'running') return kind === 'video' ? 'Rendering video… ~1–2 min' : kind === 'dialogue' ? 'Synthesizing…' : 'Generating…';
+  // already produced → the action is a re-run, not a first generation
+  if (done) {
+    if (kind === 'video') return '↻ Re-animate';
+    if (kind === 'dialogue') return '↻ Re-speak';
+    if (kind === 'critique') return '↻ Re-score';
+    return '↻ Regenerate';
+  }
   if (kind === 'critique') return 'Score';
   if (kind === 'video') return 'Animate (i2v)';
   if (kind === 'dialogue') return 'Speak';
@@ -78,6 +85,8 @@ export function RecutNode({ id, data, selected }: NodeProps) {
   const model = resolvedModel(d.kind);
   const cost = KIND_COST[d.kind] ?? 0;
   const showsMeta = !d.demo && d.kind !== 'upload' && d.kind !== 'canon';
+  const hasOutput = Boolean(d.imageUrl || d.videoUrl || d.audioUrl || typeof d.score === 'number');
+  const done = d.status === 'done' && hasOutput;
 
   const onUpload = (file: File, asCanon = false) => {
     const reader = new FileReader();
@@ -200,9 +209,13 @@ export function RecutNode({ id, data, selected }: NodeProps) {
             <button
               onClick={() => runNode(id)}
               disabled={d.status === 'running'}
-              className="btn-grad w-full rounded-md py-1.5 text-xs font-semibold disabled:opacity-60"
+              className={
+                done
+                  ? 'w-full rounded-md border border-white/12 bg-white/[0.03] py-1.5 text-xs font-semibold text-neutral-300 hover:bg-white/8 disabled:opacity-60'
+                  : 'btn-grad w-full rounded-md py-1.5 text-xs font-semibold disabled:opacity-60'
+              }
             >
-              {runLabel(d.kind, d.status)}
+              {runLabel(d.kind, d.status, done)}
             </button>
           </>
         )}
