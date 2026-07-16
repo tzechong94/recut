@@ -4,7 +4,6 @@ import Link from 'next/link';
 // knows where they are and what's next.
 export const STEPS = [
   { slug: 'studio', path: '/studio', label: 'Canon & Canvas' },
-  { slug: 'rig', path: '/rig', label: 'Rig' },
   { slug: 'produce', path: '/produce', label: 'Produce' },
   { slug: 'report', path: '/report', label: 'Continuity' },
   { slug: 'timeline', path: '/timeline', label: 'Timeline' },

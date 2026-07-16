@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 const SCREENS = [
   { name: 'landing', path: '/' },
   { name: 'produce', path: '/produce' },
-  { name: 'rig', path: '/rig' },
   { name: 'studio', path: '/studio' },
   { name: 'report', path: '/report' },
   { name: 'timeline', path: '/timeline' },
