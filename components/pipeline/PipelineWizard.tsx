@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePipeline } from '../../lib/pipeline/usePipeline';
 import { compilePromptText, keeperClips, resolveAssets, stageReady, takesFor, voiceTracks, type AssetDoc, type AssetKind } from '../../lib/pipeline/doc';
+import { classifyVerdict } from '../../lib/pipeline/taxonomy';
 import { LUTS } from '../../lib/post/lut';
 
 const ASSET_KINDS: AssetKind[] = ['product', 'character', 'location', 'prop'];
@@ -327,8 +328,9 @@ function ShotlistPanel() {
 /* ---------------- Stage 3: Takes ---------------- */
 
 function TakesPanel() {
-  const { doc, runPrompt, voicePrompt, judgeTake, animateTake, removeTake, setKeeper, busy } = usePipeline();
+  const { doc, runPrompt, applyRepair, voicePrompt, judgeTake, animateTake, removeTake, setKeeper, updatePrompt, busy } = usePipeline();
   const prompts = doc.scenes.flatMap((s) => s.prompts);
+  const currentPrompt = (name: string | null) => prompts.find((p) => p.name === name);
   const [selected, setSelected] = useState<string | null>(prompts[0]?.name ?? null);
   const current = selected ?? prompts[0]?.name ?? null;
   const takes = current ? takesFor(doc, current) : [];
@@ -364,9 +366,23 @@ function TakesPanel() {
         {current ? (
           <>
             <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
+              <div className="min-w-0 flex-1">
                 <h2 className="font-mono text-lg font-black text-neutral-100">{current}</h2>
-                <p className="mt-1 max-w-2xl font-mono text-[11px] leading-relaxed text-neutral-500">{compilePromptText(doc, current)}</p>
+                <textarea
+                  value={currentPrompt(current)?.text ?? ''}
+                  onChange={(e) => updatePrompt(current, { text: e.target.value })}
+                  rows={3}
+                  data-testid="takes-prompt-editor"
+                  placeholder="the shot: action, camera, choreography…"
+                  className="mt-1.5 w-full max-w-2xl resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs leading-relaxed text-neutral-200 outline-none focus:border-[color:var(--c2)]"
+                />
+                <input
+                  value={currentPrompt(current)?.dialogue ?? ''}
+                  onChange={(e) => updatePrompt(current, { dialogue: e.target.value || undefined })}
+                  placeholder="🔊 spoken line (optional)…"
+                  className="mt-1.5 w-full max-w-2xl rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-pink-200/90 outline-none placeholder:text-neutral-700"
+                />
+                <p className="mt-1.5 line-clamp-2 max-w-2xl font-mono text-[10px] leading-relaxed text-neutral-600" title={compilePromptText(doc, current)}>→ {compilePromptText(doc, current)}</p>
                 {assets.length > 0 && (
                   <div className="mt-2 flex items-center gap-1.5">
                     <span className="text-[10px] text-neutral-600 uppercase">refs</span>
@@ -432,9 +448,7 @@ function TakesPanel() {
                             </button>
                           )
                         )}
-                        {t.repairInstruction && t.score !== undefined && t.score < 0.7 && (
-                          <span className="line-clamp-1 max-w-[14rem] text-[10px] text-amber-300/80" title={t.repairInstruction}>{t.repairInstruction}</span>
-                        )}
+                        {/* diagnosis lives in the card below the footer */}
                       </div>
                       <div className="flex items-center gap-1.5">
                         {t.kind === 'video' && (
@@ -455,6 +469,31 @@ function TakesPanel() {
                         <button onClick={() => removeTake(t.id)} className="rounded-md px-1.5 py-1 text-[11px] text-neutral-600 hover:text-rose-300">✕</button>
                       </div>
                     </div>
+                    {(() => {
+                      const diags = classifyVerdict(t.verdict);
+                      if (diags.length === 0) return null;
+                      return (
+                        <div className="space-y-1.5 border-t border-white/8 px-2.5 py-2" data-testid={`diagnosis-${t.id}`}>
+                          {diags.map((d) => (
+                            <div key={d.axis} className="flex items-start gap-2 text-[10px] leading-snug">
+                              <span className="mt-px shrink-0 rounded bg-rose-500/20 px-1 py-0.5 font-semibold tabular-nums text-rose-300">{d.axis.replace('_match', '')} {d.score.toFixed(2)}</span>
+                              <span className="shrink-0 rounded bg-white/8 px-1 py-0.5 font-semibold text-neutral-300 uppercase">{d.layer}</span>
+                              <span className="text-neutral-500">{d.fix}</span>
+                            </div>
+                          ))}
+                          {t.repairInstruction && diags.some((d) => d.autoFixable) && (
+                            <button
+                              onClick={() => void applyRepair(t.id)}
+                              disabled={busy !== null}
+                              data-testid={`fix-${t.id}`}
+                              className="btn-grad mt-1 w-full rounded-md py-1.5 text-[11px] font-semibold disabled:opacity-50"
+                            >
+                              ⚡ Apply fix to {t.promptName} & generate new take
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

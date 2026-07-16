@@ -83,6 +83,8 @@ interface PipelineState {
 
   // Stage 3
   runPrompt: (name: string) => Promise<void>;
+  /** taxonomy auto-fix: append the judge's repair instruction to the prompt (surgical, by name), re-run */
+  applyRepair: (takeId: string) => Promise<void>;
   voicePrompt: (name: string) => Promise<void>;
   judgeTake: (takeId: string) => Promise<void>;
   animateTake: (takeId: string) => Promise<void>;
@@ -272,6 +274,20 @@ export const usePipeline = create<PipelineState>((set, get) => {
     shiftScene: (sceneIdx, dir) => mutate((d) => moveScene(d, sceneIdx, dir)),
 
     // drama: a prompt's dialogue line becomes a voice take via TTS
+    applyRepair: async (takeId) => {
+      const { doc } = get();
+      const take = doc.takes.find((t) => t.id === takeId);
+      const instruction = take?.repairInstruction?.trim();
+      if (!take || !instruction) return;
+      const hit = doc.scenes.flatMap((s) => s.prompts).find((p) => p.name === take.promptName);
+      if (!hit) return;
+      // one surgical edit: the repair rides on THIS prompt only, nothing else changes
+      if (!hit.text.includes(instruction)) {
+        get().updatePrompt(take.promptName, { text: `${hit.text} ${instruction}` });
+      }
+      await get().runPrompt(take.promptName);
+    },
+
     voicePrompt: async (name) => {
       const { doc } = get();
       const hit = doc.scenes.flatMap((s) => s.prompts).find((p) => p.name === name);
