@@ -93,12 +93,15 @@ export function FilmEditor({ projectId, title }: { projectId: string; title: str
 
   return (
     <main className="flex h-screen flex-col bg-neutral-950">
-      <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-2.5">
+      <header className="flex items-center justify-between border-b border-white/8 px-4 py-2.5">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-sm font-semibold text-neutral-100">Recut</Link>
+          <Link href="/" className="flex items-center gap-2">
+            <span className="brand-mark h-5 w-5 text-[10px] font-black">R</span>
+            <span className="text-sm font-bold tracking-tight text-neutral-100">Recut</span>
+          </Link>
           <span className="text-xs text-neutral-500">/ {title} · <span className="text-neutral-300">Edit</span></span>
         </div>
-        <Link href={`/project/${projectId}`} className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800" data-testid="back-to-canvas">
+        <Link href={`/project/${projectId}`} className="rounded-md border border-white/12 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5" data-testid="back-to-canvas">
           ← Back to canvas
         </Link>
       </header>
@@ -144,10 +147,10 @@ export function FilmEditor({ projectId, title }: { projectId: string; title: str
         </div>
 
         {/* Inspector: grade + export */}
-        <aside className="space-y-4 border-l border-neutral-800 p-4 text-sm">
+        <aside className="space-y-4 border-l border-white/8 p-4 text-sm">
           <div>
             <div className="mb-1 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">Look (LUT)</div>
-            <select value={lut} onChange={(e) => { setLut(e.target.value); setResultUrl(null); }} className="w-full rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-200 outline-none">
+            <select value={lut} onChange={(e) => { setLut(e.target.value); setResultUrl(null); }} className="w-full rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5 text-xs text-neutral-200 outline-none">
               {LUTS.map((l) => <option key={l.name} value={l.name}>{l.label}</option>)}
             </select>
           </div>
@@ -155,12 +158,12 @@ export function FilmEditor({ projectId, title }: { projectId: string; title: str
             <div className="mb-1 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">Aspect</div>
             <div className="flex gap-2">
               {[{ v: false, label: '16:9' }, { v: true, label: '9:16' }].map((a) => (
-                <button key={a.label} onClick={() => { setVertical(a.v); setResultUrl(null); }} className={`flex-1 rounded-md border px-2 py-1.5 text-xs ${vertical === a.v ? 'border-sky-400 bg-sky-500/15 text-sky-200' : 'border-neutral-700 text-neutral-400'}`}>{a.label}</button>
+                <button key={a.label} onClick={() => { setVertical(a.v); setResultUrl(null); }} className={`flex-1 rounded-md border px-2 py-1.5 text-xs ${vertical === a.v ? 'border-[#ff3d8b] bg-[#ff3d8b]/15 text-[#ff9ac4]' : 'border-white/12 text-neutral-400'}`}>{a.label}</button>
               ))}
             </div>
           </div>
 
-          <button onClick={exportFilm} disabled={exporting || ordered.length === 0} data-testid="export-film" className="w-full rounded-md bg-sky-500 py-2 text-sm font-semibold text-black hover:bg-sky-400 disabled:opacity-50">
+          <button onClick={exportFilm} disabled={exporting || ordered.length === 0} data-testid="export-film" className="btn-grad w-full rounded-md py-2 text-sm font-semibold disabled:opacity-50">
             {exporting ? 'Rendering the film…' : '▶ Export film'}
           </button>
           {error && <p className="rounded-md bg-rose-950/50 px-2 py-1.5 text-[11px] text-rose-300">{error}</p>}
