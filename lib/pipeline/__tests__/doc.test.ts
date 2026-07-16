@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   deleteScene,
+  keeperClips,
   moveScene,
+  voiceTracks,
   emptyPipeline,
   promptName,
   compilePromptText,
@@ -132,5 +134,34 @@ describe('scene delete and move (names renumber, takes follow)', () => {
     const d = withTakes();
     expect(moveScene(d, 0, -1)).toBe(d);
     expect(moveScene(d, 1, 1)).toBe(d);
+  });
+});
+
+describe('film harvest (keeper clips + voice tracks)', () => {
+  const filmDoc = (): PipelineDoc => {
+    const d = doc();
+    d.takes = [
+      { id: 'v1', promptName: '1A', kind: 'video', url: '/1a-old.mp4' },
+      { id: 'v2', promptName: '1A', kind: 'video', url: '/1a-new.mp4' },
+      { id: 'v3', promptName: '2A', kind: 'video', url: '/2a-a.mp4', keeper: true },
+      { id: 'v4', promptName: '2A', kind: 'video', url: '/2a-b.mp4' },
+      { id: 'img', promptName: '1B', kind: 'image', url: '/1b.png' },
+      { id: 'au', promptName: '1A', kind: 'audio', url: '/1a.wav' },
+    ];
+    return d;
+  };
+  it('keeper wins; otherwise newest video; images never included; scene order kept', () => {
+    const clips = keeperClips(filmDoc());
+    expect(clips).toEqual([
+      { promptName: '1A', url: '/1a-new.mp4' }, // no keeper -> newest
+      { promptName: '2A', url: '/2a-a.mp4' }, // explicit keeper wins over later take
+    ]);
+  });
+  it('voice tracks come out in scene order', () => {
+    expect(voiceTracks(filmDoc())).toEqual(['/1a.wav']);
+  });
+  it('film gate opens only with a video take', () => {
+    expect(stageReady(filmDoc()).film).toBe(true);
+    expect(stageReady(doc()).film).toBe(false);
   });
 });

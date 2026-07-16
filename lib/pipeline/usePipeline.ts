@@ -9,7 +9,9 @@ import {
   compilePromptText,
   deleteScene,
   emptyPipeline,
+  keeperClips,
   moveScene,
+  voiceTracks,
   promptName,
   resolveAssets,
   toSlug,
@@ -45,11 +47,16 @@ async function callGenerate(body: Record<string, unknown>): Promise<GenerateResp
 interface PipelineState {
   doc: PipelineDoc;
   loadedFor: string | null;
-  tab: 'assets' | 'shotlist' | 'takes';
+  tab: 'assets' | 'shotlist' | 'takes' | 'film';
   busy: string | null; // human label of the in-flight operation
   error: string | null;
   spentUsd: number;
   capUsd: number | null;
+  // Stage 4: film
+  filmUrl: string | null;
+  exporting: boolean;
+  lut: string;
+  vertical: boolean;
 
   load: (projectId: string) => Promise<void>;
   save: () => Promise<void>;
@@ -80,6 +87,11 @@ interface PipelineState {
   judgeTake: (takeId: string) => Promise<void>;
   animateTake: (takeId: string) => Promise<void>;
   removeTake: (takeId: string) => void;
+  setKeeper: (takeId: string) => void;
+  // Stage 4
+  setLut: (lut: string) => void;
+  setVertical: (vertical: boolean) => void;
+  exportFilm: () => Promise<void>;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -105,9 +117,13 @@ export const usePipeline = create<PipelineState>((set, get) => {
     error: null,
     spentUsd: 0,
     capUsd: null,
+    filmUrl: null,
+    exporting: false,
+    lut: 'warm-film',
+    vertical: false,
 
     load: async (projectId) => {
-      set({ loadedFor: null, doc: emptyPipeline(projectId), tab: 'assets', error: null });
+      set({ loadedFor: null, doc: emptyPipeline(projectId), tab: 'assets', error: null, filmUrl: null });
       try {
         const res = await fetch(`/api/pipeline/${projectId}`);
         if (res.ok) set({ doc: (await res.json()) as PipelineDoc });
@@ -364,5 +380,44 @@ export const usePipeline = create<PipelineState>((set, get) => {
     },
 
     removeTake: (takeId) => mutate((d) => ({ ...d, takes: d.takes.filter((t) => t.id !== takeId) })),
+
+    // exactly one keeper per prompt: starring a take un-stars its siblings
+    setKeeper: (takeId) =>
+      mutate((d) => {
+        const target = d.takes.find((t) => t.id === takeId);
+        if (!target) return d;
+        return {
+          ...d,
+          takes: d.takes.map((t) =>
+            t.promptName === target.promptName && t.kind === 'video'
+              ? { ...t, keeper: t.id === takeId ? !t.keeper : false }
+              : t,
+          ),
+        };
+      }),
+
+    setLut: (lut) => set({ lut, filmUrl: null }),
+    setVertical: (vertical) => set({ vertical, filmUrl: null }),
+
+    exportFilm: async () => {
+      const { doc, lut, vertical } = get();
+      const clips = keeperClips(doc).map((c) => c.url);
+      if (clips.length === 0) return;
+      set({ exporting: true, error: null, filmUrl: null });
+      try {
+        const res = await fetch('/api/assemble', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clips, audio: voiceTracks(doc), lut, vertical }),
+        });
+        const j = (await res.json().catch(() => ({}))) as { videoUrl?: string; error?: string };
+        if (!res.ok || !j.videoUrl) throw new Error(j.error ?? `HTTP ${res.status}`);
+        set({ filmUrl: j.videoUrl });
+      } catch (e) {
+        set({ error: String(e).slice(0, 160) });
+      } finally {
+        set({ exporting: false });
+      }
+    },
   };
 });

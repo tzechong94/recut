@@ -44,6 +44,8 @@ export interface TakeDoc {
   promptName: string;
   kind: 'image' | 'video' | 'audio';
   url: string;
+  /** the harvested keeper for its prompt (spec Stage 3: pull keeper phases across takes) */
+  keeper?: boolean;
   /** VLM judge output for this take */
   score?: number;
   verdict?: Record<string, unknown>;
@@ -105,11 +107,12 @@ export function resolveAssets(doc: PipelineDoc, name: string): AssetDoc[] {
     .filter((a): a is AssetDoc => Boolean(a && a.locked && a.imageUrl));
 }
 
-/** Stage gating: the shotlist opens with one locked asset; takes open with one prompt. */
-export function stageReady(doc: PipelineDoc): { shotlist: boolean; takes: boolean } {
+/** Stage gating: shotlist opens with one locked asset; takes with one prompt; film with one clip. */
+export function stageReady(doc: PipelineDoc): { shotlist: boolean; takes: boolean; film: boolean } {
   return {
     shotlist: doc.assets.some((a) => a.locked && a.imageUrl),
     takes: doc.scenes.some((s) => s.prompts.length > 0),
+    film: doc.takes.some((t) => t.kind === 'video'),
   };
 }
 
@@ -153,6 +156,34 @@ export function moveScene(doc: PipelineDoc, sceneIdx: number, dir: -1 | 1): Pipe
   const scenes = [...doc.scenes];
   [scenes[sceneIdx], scenes[j]] = [scenes[j]!, scenes[sceneIdx]!];
   return renumberScenes({ ...doc, scenes });
+}
+
+/**
+ * The film cut, in scene order: for each prompt, its keeper video take (else the newest
+ * video take). Prompts with no video takes contribute nothing. Pure.
+ */
+export function keeperClips(doc: PipelineDoc): Array<{ promptName: string; url: string }> {
+  const out: Array<{ promptName: string; url: string }> = [];
+  for (const scene of doc.scenes) {
+    for (const p of scene.prompts) {
+      const vids = doc.takes.filter((t) => t.promptName === p.name && t.kind === 'video');
+      if (vids.length === 0) continue;
+      const pick = vids.find((t) => t.keeper) ?? vids[vids.length - 1]!;
+      out.push({ promptName: p.name, url: pick.url });
+    }
+  }
+  return out;
+}
+
+/** Voice takes in scene order, mixed over the cut at export. Pure. */
+export function voiceTracks(doc: PipelineDoc): string[] {
+  const out: string[] = [];
+  for (const scene of doc.scenes) {
+    for (const p of scene.prompts) {
+      for (const t of doc.takes) if (t.promptName === p.name && t.kind === 'audio') out.push(t.url);
+    }
+  }
+  return out;
 }
 
 /** Slugify a display name into a registry slug: 'Mr Bean SOY' -> 'mr_bean_soy'. */

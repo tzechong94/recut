@@ -6,7 +6,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePipeline } from '../../lib/pipeline/usePipeline';
-import { compilePromptText, resolveAssets, stageReady, takesFor, type AssetDoc, type AssetKind } from '../../lib/pipeline/doc';
+import { compilePromptText, keeperClips, resolveAssets, stageReady, takesFor, voiceTracks, type AssetDoc, type AssetKind } from '../../lib/pipeline/doc';
+import { LUTS } from '../../lib/post/lut';
 
 const ASSET_KINDS: AssetKind[] = ['product', 'character', 'location', 'prop'];
 const KIND_ICON: Record<AssetKind, string> = { product: '📦', character: '🧍', location: '🏠', prop: '☕' };
@@ -22,6 +23,7 @@ export function PipelineWizard({ projectId, title }: { projectId: string; title:
     { key: 'assets', label: '1 · Assets', enabled: true, hint: 'Create, test, and lock every reusable reference' },
     { key: 'shotlist', label: '2 · Shotlist', enabled: gates.shotlist, hint: 'Lock at least one asset first' },
     { key: 'takes', label: '3 · Takes', enabled: gates.takes, hint: 'Write the shotlist first' },
+    { key: 'film', label: '4 · Film', enabled: gates.film, hint: 'Animate at least one take first' },
   ];
 
   return (
@@ -65,6 +67,7 @@ export function PipelineWizard({ projectId, title }: { projectId: string; title:
         {tab === 'assets' && <AssetsPanel />}
         {tab === 'shotlist' && <ShotlistPanel />}
         {tab === 'takes' && <TakesPanel />}
+        {tab === 'film' && <FilmPanel />}
       </div>
     </main>
   );
@@ -324,7 +327,7 @@ function ShotlistPanel() {
 /* ---------------- Stage 3: Takes ---------------- */
 
 function TakesPanel() {
-  const { doc, runPrompt, voicePrompt, judgeTake, animateTake, removeTake, busy } = usePipeline();
+  const { doc, runPrompt, voicePrompt, judgeTake, animateTake, removeTake, setKeeper, busy } = usePipeline();
   const prompts = doc.scenes.flatMap((s) => s.prompts);
   const [selected, setSelected] = useState<string | null>(prompts[0]?.name ?? null);
   const current = selected ?? prompts[0]?.name ?? null;
@@ -434,6 +437,16 @@ function TakesPanel() {
                         )}
                       </div>
                       <div className="flex items-center gap-1.5">
+                        {t.kind === 'video' && (
+                          <button
+                            onClick={() => setKeeper(t.id)}
+                            title="Keeper: this take represents the prompt in the film"
+                            data-testid={`keeper-${t.id}`}
+                            className={`rounded-md border px-2 py-1 text-[11px] ${t.keeper ? 'border-amber-400/60 bg-amber-400/15 text-amber-200' : 'border-white/12 text-neutral-400 hover:bg-white/5'}`}
+                          >
+                            {t.keeper ? '★ Keeper' : '☆ Keeper'}
+                          </button>
+                        )}
                         {t.kind === 'image' && (
                           <button onClick={() => void animateTake(t.id)} disabled={busy !== null} className="rounded-md border border-white/12 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-50">
                             🎬 Animate
@@ -451,6 +464,83 @@ function TakesPanel() {
           <p className="text-sm text-neutral-500">Write the shotlist first.</p>
         )}
       </div>
+    </section>
+  );
+}
+
+/* ---------------- Stage 4: Film ---------------- */
+
+function FilmPanel() {
+  const { doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl } = usePipeline();
+  const cut = keeperClips(doc);
+  const voices = voiceTracks(doc);
+
+  return (
+    <section className="mx-auto max-w-5xl px-6 py-8">
+      <h2 className="text-lg font-bold text-neutral-100">The film</h2>
+      <p className="mt-1 mb-6 max-w-2xl text-sm text-neutral-500">
+        The cut assembles each prompt's ★ keeper clip in scene order, mixes the voice takes over it, and bakes the
+        look on export. Change keepers in Takes; change order in the Shotlist.
+      </p>
+
+      {cut.length === 0 ? (
+        <div className="glass grid place-items-center rounded-2xl px-6 py-16 text-center">
+          <p className="text-sm text-neutral-500">No clips yet. Animate a take in Stage 3 first.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-[1fr_18rem] gap-6">
+          <div>
+            {filmUrl ? (
+              <video src={filmUrl} controls autoPlay className="w-full rounded-2xl border border-white/10 bg-black" data-testid="film-result" />
+            ) : (
+              <div className="glass grid aspect-video place-items-center rounded-2xl">
+                <p className="text-sm text-neutral-500">{exporting ? 'Rendering the film…' : 'Export to render the cut'}</p>
+              </div>
+            )}
+            <div className="mt-4">
+              <div className="mb-1.5 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">The cut · {cut.length} clip{cut.length === 1 ? '' : 's'}{voices.length ? ` · ${voices.length} voice` : ''}</div>
+              <div className="flex gap-2 overflow-x-auto pb-1" data-testid="film-cut">
+                {cut.map((c, i) => (
+                  <div key={c.promptName} className="relative shrink-0">
+                    <video src={c.url} muted playsInline className="h-20 w-32 rounded-lg border border-white/10 bg-black object-cover" />
+                    <span className="absolute top-1 left-1 rounded bg-black/70 px-1 font-mono text-[9px] font-bold text-neutral-200">{i + 1} · {c.promptName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <aside className="space-y-4">
+            <div>
+              <div className="mb-1 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">Look (LUT)</div>
+              <select value={lut} onChange={(e) => setLut(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-xs text-neutral-200 outline-none">
+                {LUTS.map((l) => (
+                  <option key={l.name} value={l.name}>{l.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div className="mb-1 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">Aspect</div>
+              <div className="flex gap-2">
+                {[{ v: false, label: '16:9' }, { v: true, label: '9:16' }].map((a) => (
+                  <button key={a.label} onClick={() => setVertical(a.v)} className={`flex-1 rounded-lg border px-2 py-2 text-xs ${vertical === a.v ? 'border-[#ff3d8b] bg-[#ff3d8b]/15 text-[#ff9ac4]' : 'border-white/12 text-neutral-400'}`}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => void exportFilm()} disabled={exporting || cut.length === 0} data-testid="export-film" className="btn-grad w-full rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50">
+              {exporting ? 'Rendering…' : '▶ Export film'}
+            </button>
+            {filmUrl && (
+              <a href={filmUrl} download="recut-film.mp4" className="block rounded-lg border border-white/12 py-2 text-center text-xs font-medium text-neutral-100 hover:bg-white/5">
+                ⬇ Download MP4
+              </a>
+            )}
+            <p className="text-[11px] leading-relaxed text-neutral-600">Export concatenates the keepers, bakes the LUT, and mixes the voice track. Free: no model calls.</p>
+          </aside>
+        </div>
+      )}
     </section>
   );
 }
