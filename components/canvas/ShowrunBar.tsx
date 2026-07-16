@@ -97,40 +97,40 @@ export function ShowrunBar() {
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/80 px-4 py-2">
-        <span className="text-xs font-semibold text-sky-300">Showrun</span>
+      <div className="flex items-center gap-2 border-b border-white/8 bg-[#0b0a11]/80 px-4 py-2 backdrop-blur">
+        <span className="grad-text text-xs font-bold tracking-tight">Showrun</span>
         <input
           value={premise}
           onChange={(e) => setPremise(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && phase === 'idle' && showrun()}
           placeholder="Describe your film in a sentence… (the agent plans the shots)"
           data-testid="premise"
-          className="flex-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-xs text-neutral-100 outline-none focus:border-neutral-600"
+          className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-neutral-100 outline-none transition placeholder:text-neutral-500 focus:border-[color:var(--c2)]"
         />
         <label className="flex items-center gap-1.5 text-[11px] text-neutral-400" title="Off = agent asks you to confirm/edit every step. On = it builds AND generates the whole film without stopping.">
-          <input type="checkbox" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} data-testid="autonomous" className="accent-sky-400" />
+          <input type="checkbox" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} data-testid="autonomous" className="accent-[#ff3d8b]" />
           ⚡ Fully autonomous
         </label>
-        <button onClick={showrun} disabled={phase === 'planning'} data-testid="showrun" className="rounded-md bg-sky-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60">
+        <button onClick={showrun} disabled={phase === 'planning'} data-testid="showrun" className="btn-grad rounded-lg px-3.5 py-1.5 text-xs font-semibold disabled:opacity-60">
           {phase === 'planning' ? 'Planning…' : 'Showrun'}
         </button>
         {error && <span className="text-[11px] text-rose-400">{error}</span>}
       </div>
 
       {proposal && (
-        <div className="absolute bottom-6 left-1/2 z-30 w-96 -translate-x-1/2 rounded-xl border border-sky-500/40 bg-neutral-900 p-4 shadow-2xl" data-testid="proposal">
+        <div className="absolute bottom-6 left-1/2 z-30 w-96 -translate-x-1/2 rounded-2xl border border-white/12 bg-[#0e0d15]/95 p-4 shadow-2xl backdrop-blur" data-testid="proposal">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold text-sky-300">Step {index + 1}/{graph!.nodes.length}</span>
-            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">{proposal.kind}</span>
+            <span className="grad-text text-xs font-bold">Step {index + 1}/{graph!.nodes.length}</span>
+            <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] text-neutral-400">{proposal.kind}</span>
           </div>
           <p className="mb-2 text-sm text-neutral-200">{proposal.note}</p>
           <div className="mb-1 text-[10px] font-medium tracking-wide text-neutral-500 uppercase">Prompt — edit before generating</div>
-          <textarea value={draftPrompt} onChange={(e) => setDraftPrompt(e.target.value)} rows={3} className="mb-3 w-full resize-none rounded-md border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-neutral-600" />
+          <textarea value={draftPrompt} onChange={(e) => setDraftPrompt(e.target.value)} rows={3} className="mb-3 w-full resize-none rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-[color:var(--c2)]" />
           <div className="flex gap-2">
-            <button onClick={approve} disabled={busy} data-testid="approve-step" className="flex-1 rounded-md bg-emerald-500 py-1.5 text-xs font-semibold text-black hover:bg-emerald-400 disabled:opacity-60">
+            <button onClick={approve} disabled={busy} data-testid="approve-step" className="btn-grad flex-1 rounded-lg py-1.5 text-xs font-semibold disabled:opacity-60">
               {busy ? 'Generating…' : 'Approve & generate →'}
             </button>
-            <button onClick={skip} disabled={busy} className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 disabled:opacity-40">Skip</button>
+            <button onClick={skip} disabled={busy} className="rounded-lg border border-white/12 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-40">Skip</button>
           </div>
         </div>
       )}

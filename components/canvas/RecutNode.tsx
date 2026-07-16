@@ -20,7 +20,7 @@ const CANON_KINDS: CanonKind[] = ['character', 'location', 'prop', 'style'];
 
 const STATUS_CLS: Record<RecutNodeData['status'], string> = {
   idle: 'bg-neutral-800 text-neutral-400',
-  running: 'bg-sky-500/20 text-sky-300 animate-pulse',
+  running: 'bg-[#ff3d8b]/20 text-[#ff9ac4] animate-pulse',
   done: 'bg-emerald-500/15 text-emerald-300',
   error: 'bg-rose-500/20 text-rose-300',
 };
@@ -59,13 +59,13 @@ export function RecutNode({ id, data, selected }: NodeProps) {
 
   const showsPrompt = !d.demo && d.kind !== 'upload' && d.kind !== 'canon';
   const producesSource = PRODUCES_IMAGE.includes(d.kind) || d.kind === 'video';
-  const borderCls = selected ? 'border-sky-400 ring-2 ring-sky-400/40' : d.stale ? 'border-amber-500/60' : d.kind === 'canon' ? 'border-fuchsia-500/40' : 'border-neutral-700';
+  const borderCls = selected ? 'border-[#ff3d8b] ring-2 ring-[#ff3d8b]/35' : d.stale ? 'border-amber-500/60' : d.kind === 'canon' ? 'border-fuchsia-500/40' : 'border-white/12';
 
   return (
-    <div className={`w-64 overflow-hidden rounded-xl border bg-neutral-900 shadow-xl ${borderCls}`}>
+    <div className={`w-64 overflow-hidden rounded-xl border bg-[#0e0d15] shadow-xl shadow-black/40 ${borderCls}`}>
       {CONSUMES.includes(d.kind) && <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-sky-400" />}
 
-      <header className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
+      <header className="flex items-center justify-between border-b border-white/8 px-3 py-2">
         <span className={`flex items-center gap-1 text-xs font-semibold ${ACCENT[d.kind]}`}>
           {d.kind === 'canon' && <span title="locked reference">🔒</span>}
           {d.kind === 'canon' ? d.name || 'Canon' : d.title}
@@ -159,7 +159,7 @@ export function RecutNode({ id, data, selected }: NodeProps) {
             <button
               onClick={() => runNode(id)}
               disabled={d.status === 'running'}
-              className="w-full rounded-md bg-sky-500 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60"
+              className="btn-grad w-full rounded-md py-1.5 text-xs font-semibold disabled:opacity-60"
             >
               {runLabel(d.kind, d.status)}
             </button>

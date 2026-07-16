@@ -63,11 +63,11 @@ export function TimelinePanel() {
   }
 
   return (
-    <div className="border-t border-neutral-800 bg-neutral-950" data-testid="timeline-panel">
-      <div className={`flex items-center justify-between px-4 py-2.5 ${clips.length ? 'bg-neutral-900' : 'bg-neutral-950'}`}>
+    <div className="border-t border-white/8 bg-[#0b0a11]" data-testid="timeline-panel">
+      <div className={`flex items-center justify-between px-4 py-2.5 ${clips.length ? 'bg-white/[0.02]' : ''}`}>
         <button onClick={() => setOpen((o) => !o)} data-testid="timeline-toggle" className={`flex items-center gap-2 text-xs font-semibold ${clips.length ? 'text-neutral-100' : 'text-neutral-500'}`}>
           {open ? '▾' : '▴'} 🎬 Timeline
-          <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-medium text-neutral-400">
+          <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-medium text-neutral-400">
             {clips.length} clip{clips.length === 1 ? '' : 's'}{audio.length ? ` · ${audio.length} voice` : ''}
           </span>
         </button>
@@ -76,7 +76,7 @@ export function TimelinePanel() {
             onClick={() => exportFilm(false)}
             disabled={exporting !== false}
             data-testid="export-bar"
-            className="rounded-md bg-sky-500 px-4 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60"
+            className="btn-grad rounded-md px-4 py-1.5 text-xs font-semibold disabled:opacity-60"
           >
             {exporting === '1080p' ? 'Stitching the film…' : '▶ Export film'}
           </button>
@@ -100,15 +100,15 @@ export function TimelinePanel() {
               {audio.length > 0 && <div className="mb-2 rounded bg-pink-500/10 px-2 py-1 text-[10px] text-pink-300">🔊 dialogue track: {audio.length} line{audio.length === 1 ? '' : 's'}</div>}
 
               <div className="flex flex-wrap items-center gap-2">
-                <select value={lut} onChange={(e) => setLut(e.target.value)} className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-200 outline-none">
+                <select value={lut} onChange={(e) => setLut(e.target.value)} className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5 text-xs text-neutral-200 outline-none">
                   {LUTS.map((l) => (
                     <option key={l.name} value={l.name}>{l.label}</option>
                   ))}
                 </select>
-                <button onClick={() => exportFilm(false)} disabled={exporting !== false} data-testid="export-film" className="rounded-md bg-sky-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-sky-400 disabled:opacity-60">
+                <button onClick={() => exportFilm(false)} disabled={exporting !== false} data-testid="export-film" className="btn-grad rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-60">
                   {exporting === '1080p' ? 'Assembling…' : 'Export film 1080p'}
                 </button>
-                <button onClick={() => exportFilm(true)} disabled={exporting !== false} className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-100 hover:bg-neutral-800 disabled:opacity-60">
+                <button onClick={() => exportFilm(true)} disabled={exporting !== false} className="rounded-md border border-white/12 px-3 py-1.5 text-xs text-neutral-100 hover:bg-white/5 disabled:opacity-60">
                   {exporting === '9x16' ? 'Assembling…' : '9:16'}
                 </button>
                 {error && <span className="text-[11px] text-rose-400">{error}</span>}

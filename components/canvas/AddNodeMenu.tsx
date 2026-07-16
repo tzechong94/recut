@@ -60,21 +60,21 @@ export function AddNodeMenu() {
       <button
         onClick={() => setOpen((o) => !o)}
         data-testid="add-node"
-        className="flex items-center gap-1.5 rounded-md bg-sky-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-sky-400"
+        className="btn-grad flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold"
       >
         ＋ Add node <span className="text-[9px] opacity-70">▾</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-40 mt-1 w-72 overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl">
+        <div className="absolute top-full left-0 z-40 mt-1 w-72 overflow-hidden rounded-xl border border-white/12 bg-[#0e0d15]/95 shadow-2xl backdrop-blur">
           {GROUPS.map((g) => (
-            <div key={g.label} className="border-b border-neutral-800 last:border-0">
+            <div key={g.label} className="border-b border-white/8 last:border-0">
               <div className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-neutral-500 uppercase">{g.label}</div>
               {g.items.map((it) => (
                 <button
                   key={it.kind}
                   onClick={() => add(it.kind)}
                   data-testid={`add-${it.kind}`}
-                  className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-neutral-800"
+                  className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-white/5"
                 >
                   <span className="mt-0.5 text-sm">{it.icon}</span>
                   <span>

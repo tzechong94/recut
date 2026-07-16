@@ -39,10 +39,10 @@ export function NodeInspector({ nodeId, onDelete, onDuplicate }: { nodeId: strin
   const set = (patch: Partial<RecutNodeData>) => updateNode(nodeId, patch);
 
   return (
-    <aside className="h-full w-72 shrink-0 overflow-y-auto border-l border-neutral-800 bg-neutral-950 p-4 text-sm" data-testid="node-inspector">
+    <aside className="h-full w-72 shrink-0 overflow-y-auto border-l border-white/10 bg-[#0b0a11] p-4 text-sm" data-testid="node-inspector">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold tracking-widest text-neutral-500 uppercase">{d.kind === 'canon' ? d.name || 'Canon' : d.title}</h2>
-        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">{KIND_CAPABILITY[d.kind]}</span>
+        <h2 className="text-xs font-semibold tracking-widest text-neutral-300 uppercase">{d.kind === 'canon' ? d.name || 'Canon' : d.title}</h2>
+        <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] text-neutral-400">{KIND_CAPABILITY[d.kind]}</span>
       </div>
 
       <div className="space-y-3.5">
@@ -72,8 +72,8 @@ export function NodeInspector({ nodeId, onDelete, onDuplicate }: { nodeId: strin
 
         {/* Cinematography presets */}
         {USES_CINE.includes(d.kind) && (
-          <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-2.5">
-            <div className="mb-2 text-[10px] font-semibold tracking-wide text-sky-300 uppercase">🎬 Camera &amp; light</div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
+            <div className="grad-text mb-2 text-[10px] font-semibold tracking-wide uppercase">🎬 Camera &amp; light</div>
             <div className="grid grid-cols-2 gap-2">
               <Preset label="Shot size" value={d.shotSize ?? ''} options={SHOT} onChange={(v) => set({ shotSize: v })} />
               <Preset label="Angle" value={d.angle ?? ''} options={ANGLE} onChange={(v) => set({ angle: v })} />
@@ -128,8 +128,8 @@ export function NodeInspector({ nodeId, onDelete, onDuplicate }: { nodeId: strin
         )}
         {d.error && <p className="rounded-md bg-rose-950/50 px-2 py-1.5 text-[11px] text-rose-300">{d.error}</p>}
 
-        <div className="flex gap-2 border-t border-neutral-800 pt-3">
-          <button onClick={onDuplicate} className="flex-1 rounded-md border border-neutral-700 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800">Duplicate</button>
+        <div className="flex gap-2 border-t border-white/8 pt-3">
+          <button onClick={onDuplicate} className="flex-1 rounded-md border border-white/12 py-1.5 text-xs text-neutral-300 hover:bg-white/5">Duplicate</button>
           <button onClick={onDelete} className="flex-1 rounded-md border border-rose-900 py-1.5 text-xs text-rose-300 hover:bg-rose-950/50">Delete</button>
         </div>
       </div>
