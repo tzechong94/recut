@@ -1,8 +1,21 @@
 'use client';
 
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { useCanvas, type RecutNodeData, type RecutNodeKind, type CanonKind, CONSUMES, PRODUCES_IMAGE } from '../../lib/canvas/store';
+import { useCanvas, type RecutNodeData, type RecutNodeKind, type CanonKind, CONSUMES, PRODUCES_IMAGE, KIND_CAPABILITY, KIND_COST } from '../../lib/canvas/store';
+import { selectModel } from '../../lib/gateway/router';
 import { TTS_VOICES } from '../../manifests/qwen-tts';
+
+// The concrete model the router will pick for this capability (never a hardcoded id here).
+function resolvedModel(kind: RecutNodeKind): string | null {
+  try {
+    return selectModel(KIND_CAPABILITY[kind]).id;
+  } catch {
+    return null;
+  }
+}
+function costLabel(usd: number): string {
+  return usd < 0.01 ? `~$${usd.toFixed(3)}` : `~$${usd.toFixed(2)}`;
+}
 
 const ACCENT: Record<RecutNodeKind, string> = {
   text2image: 'text-emerald-300',
@@ -50,6 +63,21 @@ export function RecutNode({ id, data, selected }: NodeProps) {
   const runNode = useCanvas((s) => s.runNode);
   const setCanonRef = useCanvas((s) => s.setCanonRef);
   const repairFrom = useCanvas((s) => s.repairFrom);
+  // Wired input stills for this node. Selected as a joined string so the node only re-renders
+  // when its own inputs change, not on every canvas edit.
+  const inputThumbs = useCanvas((s) => {
+    const urls: string[] = [];
+    for (const e of s.edges) {
+      if (e.target !== id) continue;
+      const src = s.nodes.find((n) => n.id === e.source);
+      if (src?.data.imageUrl) urls.push(src.data.imageUrl);
+    }
+    return urls.join('\n');
+  });
+  const inputs = inputThumbs ? inputThumbs.split('\n') : [];
+  const model = resolvedModel(d.kind);
+  const cost = KIND_COST[d.kind] ?? 0;
+  const showsMeta = !d.demo && d.kind !== 'upload' && d.kind !== 'canon';
 
   const onUpload = (file: File, asCanon = false) => {
     const reader = new FileReader();
@@ -80,6 +108,18 @@ export function RecutNode({ id, data, selected }: NodeProps) {
       {/* nodrag: interacting with the controls (esp. native <select>) must never start a node
           drag; nowheel: scrolling a textarea shouldn't zoom the canvas. Drag from the header. */}
       <div className="nodrag nowheel space-y-2 p-3">
+        {/* wired inputs — see what feeds this node without opening the inspector */}
+        {inputs.length > 0 && (
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] font-medium tracking-wide text-neutral-600 uppercase">in</span>
+            {inputs.slice(0, 3).map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={src} alt="input" className="h-7 w-9 rounded border border-white/10 object-cover" />
+            ))}
+            {inputs.length > 3 && <span className="text-[9px] text-neutral-600">+{inputs.length - 3}</span>}
+          </div>
+        )}
+
         {/* output preview */}
         {d.videoUrl ? (
           <video src={d.videoUrl} autoPlay muted loop playsInline controls className="h-32 w-full rounded bg-black object-cover" />
@@ -164,6 +204,14 @@ export function RecutNode({ id, data, selected }: NodeProps) {
               {runLabel(d.kind, d.status)}
             </button>
           </>
+        )}
+
+        {/* model + pre-run cost — legible capability/model/cost at a glance */}
+        {showsMeta && model && (
+          <div className="flex items-center justify-between border-t border-white/8 pt-1.5 text-[10px] text-neutral-500">
+            <span className="truncate font-mono" title={model}>{model}</span>
+            <span className="shrink-0 tabular-nums text-neutral-400">{costLabel(cost)}</span>
+          </div>
         )}
 
         {!d.demo && d.kind === 'critique' && typeof d.score === 'number' && d.score < 0.7 && d.repairInstruction && (
