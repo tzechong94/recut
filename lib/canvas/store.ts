@@ -73,6 +73,9 @@ export interface RecutNodeData {
   angle?: string;
   lens?: string;
   lighting?: string;
+  // marks this node's image as the project's Style Anchor — injected as a style reference into
+  // every other image generation so the whole film shares one look.
+  styleAnchor?: boolean;
   // demo mode: read-only node with pre-filled fixtures + an inspectable detail block
   demo?: boolean;
   step?: number;
@@ -225,6 +228,15 @@ function nearestUpstreamImage(id: string, nodes: RecutNode[], edges: Edge[]): Re
   return undefined;
 }
 
+/** The project's Style Anchor image: an explicit styleAnchor node, else a 'style' Canon. This is
+ *  injected as a style reference into every image generation to keep the whole film on one look. */
+function styleAnchorImage(nodes: RecutNode[]): string | undefined {
+  const explicit = nodes.find((n) => n.data.styleAnchor && n.data.imageUrl);
+  if (explicit) return explicit.data.imageUrl;
+  const styleCanon = nodes.find((n) => n.data.entityKind === 'style' && n.data.imageUrl);
+  return styleCanon?.data.imageUrl;
+}
+
 /** The nearest upstream canon node's locked reference image, if any. */
 function nearestCanonRef(id: string, nodes: RecutNode[], edges: Edge[]): string | undefined {
   const seen = new Set<string>();
@@ -342,6 +354,10 @@ export const useCanvas = create<CanvasState>((set, get) => ({
     // continuity scores against the nearest upstream canon reference, if wired
     const canonRef = node.data.kind === 'critique' ? nearestCanonRef(id, nodes, edges) : undefined;
 
+    // style consistency: every image gen (except the anchor itself) inherits the project's Style Anchor
+    const IMAGE_KINDS: RecutNodeKind[] = ['text2image', 'edit', 'compose', 'inpaint'];
+    const styleRef = !node.data.styleAnchor && IMAGE_KINDS.includes(node.data.kind) ? styleAnchorImage(nodes) : undefined;
+
     updateNode(id, { status: 'running', error: undefined });
     try {
       const res = await fetch('/api/generate', {
@@ -353,6 +369,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
           image: images[0],
           images,
           refs: canonRef ? [canonRef] : undefined,
+          styleRef,
           seed: node.data.seed,
           negative: node.data.negative,
           aspect: node.data.aspect,

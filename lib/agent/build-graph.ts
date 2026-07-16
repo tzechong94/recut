@@ -10,6 +10,7 @@ export interface PlanNode {
   prompt: string;
   name?: string;
   entityKind?: CanonKind;
+  styleAnchor?: boolean; // the Style plate — its image anchors the look of every other shot
   x: number;
   y: number;
   inputs: string[]; // upstream keys
@@ -28,12 +29,30 @@ export function buildGraphFromPlan(plan: StoryPlan): PlanGraph {
   // one style spine appended to every image prompt → consistent look across the whole film
   const styleSuffix = plan.style ? `. ${plan.style}` : '';
 
-  // cast column: each character is a locked Canon entity generated from its description
+  // Style plate FIRST: a representative frame that fixes the film's look. Flagged as the Style
+  // Anchor, so the store injects its image as a style reference into every character and shot.
+  const hasStyle = Boolean(plan.style);
+  if (hasStyle) {
+    nodes.push({
+      key: 'style',
+      kind: 'text2image',
+      prompt: `${plan.style}. A single representative frame that establishes the film's visual style: composition, colour palette, lighting, and rendering technique.`,
+      name: 'Style plate',
+      styleAnchor: true,
+      x: 40,
+      y: 40,
+      inputs: [],
+      note: 'Generate the style plate — anchors every shot to one look',
+    });
+  }
+
+  // cast column: each character generated from its description (inherits the style plate's look)
   const charKey = new Map<string, string>();
+  const castY0 = hasStyle ? 320 : 80;
   plan.characters.forEach((c, i) => {
     const key = `c${i}`;
     charKey.set(c.name, key);
-    nodes.push({ key, kind: 'text2image', prompt: `${c.description}. Full-body character portrait, plain background${styleSuffix}`, name: c.name, x: 40, y: 80 + i * 240, inputs: [], note: `Cast ${c.name}` });
+    nodes.push({ key, kind: 'text2image', prompt: `${c.description}. Full-body character portrait, plain background${styleSuffix}`, name: c.name, x: 40, y: castY0 + i * 240, inputs: [], note: `Cast ${c.name}` });
   });
 
   plan.shots.forEach((shot, j) => {

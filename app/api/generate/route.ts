@@ -22,6 +22,7 @@ interface Body {
   image?: string; // data URI or http(s) url — the primary input
   images?: string[]; // multiple inputs (compose)
   refs?: string[]; // reference images for critique
+  styleRef?: string; // the project's Style Anchor — injected so every shot shares one look
   negative?: string;
   seed?: number;
   aspect?: string;
@@ -29,6 +30,7 @@ interface Body {
 }
 
 const NEGATIVE = 'lowres, deformed, extra fingers, watermark, text';
+const STYLE_MATCH = 'Match the EXACT art style, rendering technique, colour palette, and lighting of the STYLE reference image.';
 
 /** Materialise a data-URI or remote url to a local temp file (for ffmpeg). */
 async function toLocalFile(image: string): Promise<string> {
@@ -62,9 +64,20 @@ export async function POST(req: Request): Promise<Response> {
 
   try {
     if (body.kind === 'text2image') {
+      const aspectHint = body.aspect === '9:16' ? ' vertical 9:16 composition,' : body.aspect === '16:9' ? ' widescreen 16:9 composition,' : '';
+      // With a Style Anchor, render THROUGH the edit model so the new scene actually inherits the
+      // reference's look (a text style description alone drifts shot-to-shot).
+      if (body.styleRef) {
+        const manifest = selectModel('image.edit', 'quality', { minRefImages: 1 });
+        gov.assertCanSpend(manifest.cost.amount);
+        const instruction = `${STYLE_MATCH} Do NOT copy the reference's subject or composition — render a completely NEW image of: ${body.prompt ?? ''}.${aspectHint} Avoid: ${body.negative ?? NEGATIVE}.`;
+        const payload = { messages: [{ role: 'user', content: [{ image: body.styleRef }, { text: instruction }] }] };
+        const r = await dashscopeImageCall(manifest.id, payload);
+        gov.record(manifest.cost.amount);
+        return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
+      }
       const manifest = selectModel('image.generate');
       gov.assertCanSpend(manifest.cost.amount);
-      const aspectHint = body.aspect === '9:16' ? ' vertical 9:16 composition,' : body.aspect === '16:9' ? ' widescreen 16:9 composition,' : '';
       const payload = { messages: [{ role: 'user', content: [{ text: `${body.prompt ?? ''}.${aspectHint} Avoid: ${body.negative ?? NEGATIVE}.` }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
@@ -78,24 +91,33 @@ export async function POST(req: Request): Promise<Response> {
 
     if (body.kind === 'edit' || body.kind === 'inpaint') {
       if (!body.image) return Response.json({ error: `${body.kind} needs an input image` }, { status: 400 });
-      const manifest = selectModel('image.edit', 'quality', { minRefImages: 1 });
+      // edit inherits the Style Anchor as a second reference (inpaint stays a local region edit)
+      const useStyle = body.kind === 'edit' && !!body.styleRef && body.styleRef !== body.image;
+      const manifest = selectModel('image.edit', 'quality', { minRefImages: useStyle ? 2 : 1 });
       gov.assertCanSpend(manifest.cost.amount);
       const instruction = body.kind === 'inpaint'
         ? `In the described region only, ${body.prompt ?? 'edit'}. Leave the rest of the image unchanged. ${KEEP}`
-        : `${KEEP} Change only the scene, pose, and framing as follows: ${body.prompt ?? 'edit the image'}`;
-      const payload = { messages: [{ role: 'user', content: [{ image: body.image }, { text: instruction }] }] };
+        : `${KEEP} Change only the scene, pose, and framing as follows: ${body.prompt ?? 'edit the image'}.${useStyle ? ` ${STYLE_MATCH} (The style reference is the LAST image.)` : ''}`;
+      const content = useStyle
+        ? [{ image: body.image }, { image: body.styleRef! }, { text: instruction }]
+        : [{ image: body.image }, { text: instruction }];
+      const payload = { messages: [{ role: 'user', content }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
       return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'compose') {
-      const imgs = (body.images ?? []).slice(0, 3);
-      if (imgs.length < 2) return Response.json({ error: 'compose needs 2+ connected image inputs' }, { status: 400 });
-      const manifest = selectModel('image.edit', 'quality', { minRefImages: 2 });
+      const allImgs = body.images ?? [];
+      if (allImgs.length < 2) return Response.json({ error: 'compose needs 2+ connected image inputs' }, { status: 400 });
+      // reserve one of the 3 ref slots for the Style Anchor when present (cap characters at 2)
+      const useStyle = !!body.styleRef && !allImgs.includes(body.styleRef);
+      const chars = useStyle ? allImgs.slice(0, 2) : allImgs.slice(0, 3);
+      const refImgs = useStyle ? [...chars, body.styleRef!] : chars;
+      const manifest = selectModel('image.edit', 'quality', { minRefImages: refImgs.length });
       gov.assertCanSpend(manifest.cost.amount);
-      const instruction = `Compose the characters from the reference images into ONE coherent scene. ${KEEP} Scene: ${body.prompt ?? 'the characters together in one scene'}`;
-      const payload = { messages: [{ role: 'user', content: [...imgs.map((i) => ({ image: i })), { text: instruction }] }] };
+      const instruction = `Compose the characters from the reference images into ONE coherent scene. ${KEEP} ${useStyle ? `${STYLE_MATCH} (The LAST image is the style reference.) ` : ''}Scene: ${body.prompt ?? 'the characters together in one scene'}`;
+      const payload = { messages: [{ role: 'user', content: [...refImgs.map((i) => ({ image: i })), { text: instruction }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
       return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });

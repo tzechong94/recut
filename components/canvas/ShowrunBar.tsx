@@ -25,7 +25,7 @@ export function ShowrunBar() {
   function applyNode(key: string, prompt: string): void {
     const g = graph!;
     const pn = g.nodes.find((n) => n.key === key)!;
-    const id = addConfiguredNode(pn.kind, { x: pn.x, y: pn.y }, { prompt, name: pn.name, entityKind: pn.entityKind, status: 'idle' });
+    const id = addConfiguredNode(pn.kind, { x: pn.x, y: pn.y }, { prompt, name: pn.name, entityKind: pn.entityKind, styleAnchor: pn.styleAnchor, status: 'idle' });
     keyToId.current[key] = id;
     for (const e of g.edges) if (e.to === key && keyToId.current[e.from]) connectIds(keyToId.current[e.from]!, id);
   }
@@ -48,7 +48,7 @@ export function ShowrunBar() {
         // Agent mode: build the whole graph now, then generate every node autonomously.
         const map: Record<string, string> = {};
         for (const pn of j.graph.nodes) {
-          map[pn.key] = addConfiguredNode(pn.kind, { x: pn.x, y: pn.y }, { prompt: pn.prompt, name: pn.name, entityKind: pn.entityKind, status: 'idle' });
+          map[pn.key] = addConfiguredNode(pn.kind, { x: pn.x, y: pn.y }, { prompt: pn.prompt, name: pn.name, entityKind: pn.entityKind, styleAnchor: pn.styleAnchor, status: 'idle' });
         }
         for (const e of j.graph.edges) if (map[e.from] && map[e.to]) connectIds(map[e.from]!, map[e.to]!);
         setPhase('idle');

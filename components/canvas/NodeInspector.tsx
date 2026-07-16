@@ -110,6 +110,13 @@ export function NodeInspector({ nodeId, onDelete, onDuplicate }: { nodeId: strin
           </div>
         )}
 
+        {isImage && (
+          <label className="flex cursor-pointer items-center justify-between rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-2">
+            <span className="text-[11px] text-neutral-300">⭐ Style anchor <span className="text-neutral-500">· all shots match this look</span></span>
+            <input type="checkbox" checked={Boolean(d.styleAnchor)} onChange={(e) => set({ styleAnchor: e.target.checked })} className="accent-[#ff3d8b]" />
+          </label>
+        )}
+
         {d.kind === 'dialogue' && (
           <div>
             <Label>Voice</Label>
