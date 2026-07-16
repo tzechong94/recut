@@ -22,5 +22,8 @@ export default defineConfig({
     url: BASE,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // Tests write projects to an isolated store so they never pollute the real .recut/projects
+    // the app reads, and run in replay so they cost nothing.
+    env: { RECUT_DATA_DIR: '.recut-test/projects', RECUT_MODE: 'replay' },
   },
 });

@@ -4,6 +4,9 @@ export interface ProjectMeta {
   id: string;
   title: string;
   createdAt: number;
+  updatedAt: number;
+  nodeCount: number;
+  thumbUrl: string | null;
 }
 
 export async function listProjects(): Promise<ProjectMeta[]> {
@@ -12,10 +15,10 @@ export async function listProjects(): Promise<ProjectMeta[]> {
   return ((await res.json()) as { projects: ProjectMeta[] }).projects;
 }
 
-export async function getProject(id: string): Promise<ProjectMeta | undefined> {
+export async function getProject(id: string): Promise<{ id: string; title: string; createdAt: number } | undefined> {
   const res = await fetch(`/api/projects/${id}`);
   if (!res.ok) return undefined;
-  const p = (await res.json()) as ProjectMeta;
+  const p = (await res.json()) as { id: string; title: string; createdAt: number };
   return { id: p.id, title: p.title, createdAt: p.createdAt };
 }
 

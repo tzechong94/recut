@@ -1,19 +1,113 @@
 @import 'tailwindcss';
 
+/* ============================================================
+   Recut design system — shared with the landing page.
+   Deep charcoal · coral→magenta→violet signature gradient · glass.
+   ============================================================ */
 :root {
-  --background: #0b0c0e;
-  --foreground: #e7e9ec;
+  --bg:        #07070c;
+  --bg-2:      #0c0c16;
+  --panel:     rgba(255, 255, 255, 0.028);
+  --panel-2:   rgba(255, 255, 255, 0.05);
+  --border:    rgba(255, 255, 255, 0.09);
+  --border-2:  rgba(255, 255, 255, 0.16);
+  --text:      #f3f1f6;
+  --muted:     #a9a6b8;
+  --muted-2:   #726f82;
+
+  --c1:        #ff6a4d; /* coral   */
+  --c2:        #ff3d8b; /* magenta */
+  --c3:        #a855ff; /* violet  */
+  --accent:    #ff5a70;
+
+  --grad:      linear-gradient(120deg, var(--c1), var(--c2) 55%, var(--c3));
+  --grad-soft: linear-gradient(120deg, rgba(255, 106, 77, 0.16), rgba(168, 85, 255, 0.16));
+
+  --radius:    14px;
+  --radius-lg: 22px;
+  --ease:      cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  --background: var(--bg);
+  --foreground: var(--text);
 }
 
 html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Canvas edges: bright + thick so the wiring between nodes is obvious on the dark canvas. */
+/* Radial brand ambience — sits behind the index/marketing surfaces. Full-screen opaque
+   app views (canvas, editor) paint over it, so it only shows where we want it. */
+.brand-ambience::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 600px at 82% -8%, rgba(255, 61, 139, 0.16), transparent 60%),
+    radial-gradient(760px 560px at 6% 10%, rgba(168, 85, 255, 0.13), transparent 62%),
+    radial-gradient(1200px 800px at 50% 116%, rgba(255, 106, 77, 0.09), transparent 60%);
+}
+
+::selection { background: rgba(255, 61, 139, 0.32); color: #fff; }
+
+/* ---------------- Brand primitives ---------------- */
+.grad-text {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.serif-em {
+  font-family: var(--font-instrument), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--grad);
+  color: #fff;
+  box-shadow: 0 6px 18px -6px rgba(255, 61, 139, 0.7);
+}
+.btn-grad {
+  background: var(--grad);
+  color: #fff;
+  box-shadow: 0 8px 26px -10px rgba(255, 61, 139, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), opacity 0.2s;
+}
+.btn-grad:hover { transform: translateY(-1px); box-shadow: 0 14px 38px -12px rgba(255, 61, 139, 0.72); }
+.btn-grad:disabled { opacity: 0.5; transform: none; box-shadow: none; cursor: not-allowed; }
+.glass {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+}
+
+/* Gradient ring on hover for cards — masked border trick from the landing page. */
+.card-ring { position: relative; }
+.card-ring::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(150deg, rgba(255, 106, 77, 0.55), transparent 42%, rgba(168, 85, 255, 0.5));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease);
+  pointer-events: none;
+}
+.card-ring:hover::before { opacity: 1; }
+
+/* ---------------- Canvas wiring (unchanged behavior, brand-tinted) ---------------- */
 .react-flow__edge-path {
   stroke: #38bdf8 !important;
   stroke-width: 2.5px !important;
@@ -27,4 +121,3 @@ body {
   height: 11px !important;
   border: 2px solid #0b0c0e !important;
 }
-

@@ -14,3 +14,6 @@ playwright-report/
 .recut/spend.json
 spikes/spike-run.log
 .recut/
+
+# isolated e2e project store
+.recut-test/
