@@ -13,7 +13,7 @@ const MAX_ZOOM = 320;
 
 export function EditStage() {
   const {
-    doc, vertical, setVertical, exportFilm, exporting, filmUrl, clearFilm,
+    doc, vertical, setVertical, exportFilm, exporting, filmUrl,
     updateSegment, splitSegmentAt, removeSegment, moveSegmentTo, resetTimeline, setTimeline, insertSegment,
   } = usePipeline();
 
@@ -29,6 +29,7 @@ export function EditStage() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const playerRef = useRef<HTMLVideoElement>(null);
+  const downloaded = useRef<string | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const justDragged = useRef(false);
   const undoStack = useRef<Array<FilmSegment[] | undefined>>([]);
@@ -84,11 +85,10 @@ export function EditStage() {
   const play = useCallback(() => {
     const v = playerRef.current;
     if (!v || segs.length === 0) return;
-    clearFilm();
     if (T >= total - 0.01) seek(0, true);
     else seek(T, true);
     setIsPlaying(true);
-  }, [T, total, segs.length, seek, clearFilm]);
+  }, [T, total, segs.length, seek]);
 
   const pause = useCallback(() => {
     playerRef.current?.pause();
@@ -121,6 +121,19 @@ export function EditStage() {
     v.addEventListener('ended', onEnded);
     return () => { v.removeEventListener('timeupdate', onTime); v.removeEventListener('ended', onEnded); };
   }, [segs, prefix, durations, seek, pause, total]);
+
+  // iMovie model: export renders in the background, then simply SAVES the file locally.
+  // The editor never changes state; a finished export auto-downloads once.
+  useEffect(() => {
+    if (!filmUrl || downloaded.current === filmUrl) return;
+    downloaded.current = filmUrl;
+    const a = document.createElement('a');
+    a.href = filmUrl;
+    a.download = `recut-film-${Date.now()}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, [filmUrl]);
 
   // show the first frame once segments/durations exist
   useEffect(() => {
@@ -255,13 +268,7 @@ export function EditStage() {
         </aside>
         {/* player: always the film */}
         <div className="relative min-h-0">
-          {filmUrl ? (
-            <div className="relative h-full">
-              <video src={filmUrl} controls autoPlay className="h-full w-full rounded-2xl border border-emerald-500/30 bg-black object-contain" data-testid="film-result" />
-              <button onClick={clearFilm} className="absolute top-2 right-2 rounded-md bg-black/70 px-2 py-1 text-[11px] text-neutral-200 hover:bg-black" title="Back to editing">✕ back to edit</button>
-              <span className="absolute top-2 left-2 rounded bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-bold text-black">EXPORTED</span>
-            </div>
-          ) : (
+          {(
             <div className="relative h-full">
               <video ref={playerRef} muted={muted} playsInline className="h-full w-full rounded-2xl border border-white/10 bg-black object-contain" onClick={() => (isPlaying ? pause() : play())} />
               {!isPlaying && segs.length > 0 && (
@@ -294,7 +301,13 @@ export function EditStage() {
           <button onClick={() => void exportFilm()} disabled={exporting || segs.length === 0} data-testid="export-film" className="btn-grad w-full rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50">
             {exporting ? 'Rendering…' : '▶ Export film'}
           </button>
-          {filmUrl && <a href={filmUrl} download="recut-film.mp4" className="block rounded-lg border border-white/12 py-2 text-center text-xs font-medium text-neutral-100 hover:bg-white/5">⬇ Download MP4</a>}
+          {filmUrl && (
+            <div className="space-y-1 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-2.5 py-2" data-testid="film-result">
+              <p className="text-[11px] font-semibold text-emerald-300">✓ Exported and downloaded</p>
+              <a href={filmUrl} download="recut-film.mp4" data-testid="download-film" className="block text-[11px] text-neutral-300 underline hover:text-white">⬇ download again</a>
+            </div>
+          )}
+          <p className="text-[10px] leading-relaxed text-neutral-700">Export saves an MP4 to your downloads. It never changes your timeline.</p>
         </aside>
       </div>
 
