@@ -27,12 +27,12 @@ export default function DemoIndex() {
           Watch the agent make a <span className="serif-em grad-text">film</span>.
         </h1>
         <p className="mt-4 max-w-xl text-[15px] text-neutral-400">
-          Each demo steps through a real project: cast → script → shots → the cut. Every frame is media the pipeline
-          actually generated.
+          Each demo opens the REAL product on a real project with a guided tour: popups point at the actual controls
+          while you step through cast → script → shots → the cut.
         </p>
         <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="demo-list">
           {projects.map((p) => (
-            <Link key={p.id} href={`/demo/${p.id}`} className="card-ring group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] transition hover:-translate-y-1" data-testid={`demo-${p.id}`}>
+            <Link key={p.id} href={`/project/${p.id}/pipeline?tour=1`} className="card-ring group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] transition hover:-translate-y-1" data-testid={`demo-${p.id}`}>
               <div className="relative aspect-video w-full overflow-hidden bg-neutral-900">
                 {p.thumbUrl?.endsWith('.mp4') ? (
                   <video src={p.thumbUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />

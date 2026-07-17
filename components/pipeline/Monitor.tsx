@@ -19,6 +19,7 @@ import {
 } from '../../lib/pipeline/doc';
 import { classifyVerdict } from '../../lib/pipeline/taxonomy';
 import { EditStage } from './EditStage';
+import { Tour } from './Tour';
 
 const ASSET_KINDS: AssetKind[] = ['product', 'character', 'location', 'prop'];
 const KIND_ICON: Record<AssetKind, string> = { product: '📦', character: '🧍', location: '🏠', prop: '☕' };
@@ -35,7 +36,19 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
   const { doc, load, busy, error, spentUsd, capUsd } = usePipeline();
   const [sel, setSel] = useState<Sel>({ t: 'casting' });
   const [castSource, setCastSource] = useState<CastSource | undefined>(undefined);
+  const [tourOn, setTourOn] = useState(false);
   const booted = useRef(false);
+
+  // guided demo: same UI, coach-marks anchored to the real controls (?tour=1)
+  useEffect(() => {
+    setTourOn(new URLSearchParams(window.location.search).get('tour') === '1');
+  }, [projectId]);
+  const exitTour = () => {
+    setTourOn(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('tour');
+    window.history.replaceState(null, '', url.toString());
+  };
 
   useEffect(() => {
     booted.current = false;
@@ -102,6 +115,7 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
 
       {error && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{error}</div>}
 
+      {tourOn && <Tour setSel={setSel} onExit={exitTour} />}
       <div className={`grid min-h-0 flex-1 ${showRail ? 'grid-cols-[13rem_1fr]' : 'grid-cols-1'}`}>
         {showRail && <CastRail setSel={setSel} setCastSource={setCastSource} />}
         <div className="flex min-h-0 flex-col">
