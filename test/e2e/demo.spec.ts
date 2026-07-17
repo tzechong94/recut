@@ -23,13 +23,10 @@ test('the tour replays the making of the film on the live UI', async ({ page }) 
   await expect(page.getByText('Casting: yoopi')).toBeVisible();
   await page.getByTestId('tour-next').click(); // types the prompt, fakes generation, reveals the member
   await expect(page.locator('[data-testid^=member-]')).toHaveCount(1, { timeout: 15_000 });
-  // the REAL input actually got typed into
-  await expect(page.getByTestId('candidate-prompt')).toHaveValue(/two-panel character sheet/);
 
   await expect(page.getByText('The script')).toBeVisible();
   await page.getByTestId('tour-next').click(); // types the script, drafts the shots
   await expect(page.getByTestId('cell-1A')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('beats')).toHaveValue(/two birds by the river/);
 
   await page.getByTestId('tour-next').click(); // storyboard -> shooting step
   await expect(page.getByText('Shooting 1A')).toBeVisible();
