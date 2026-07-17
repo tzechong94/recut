@@ -92,6 +92,9 @@ export interface PipelineDoc {
   filmOrder?: string[];
   /** prompt names removed from the film in the Edit stage (takes stay; the film skips them) */
   filmExcluded?: string[];
+  /** the edit decision list: once the user trims/splits/reorders, this is the film. Absent =
+   *  derived from keeper clips. Segments reference takes; a take can appear more than once. */
+  timeline?: FilmSegment[];
 }
 
 export function emptyPipeline(projectId: string): PipelineDoc {
@@ -266,6 +269,46 @@ export function voiceTracks(doc: PipelineDoc): string[] {
     }
   }
   return out;
+}
+
+/** One segment of the film: a window into a video take. */
+export interface FilmSegment {
+  id: string;
+  takeId: string;
+  /** window in seconds; end undefined = to the take's end */
+  start: number;
+  end?: number;
+}
+
+/** The default timeline derived from keeper clips (one full segment per keeper). */
+export function deriveTimeline(doc: PipelineDoc): FilmSegment[] {
+  return keeperClips(doc).map((c) => ({ id: `seg_${c.takeId}`, takeId: c.takeId, start: c.trimIn ?? 0, end: c.trimOut }));
+}
+
+/** The film as playable segments: doc.timeline when present (dangling takes dropped), else derived. */
+export function filmSegments(doc: PipelineDoc): Array<FilmSegment & { url: string; promptName: string }> {
+  const byId = new Map(doc.takes.map((t) => [t.id, t]));
+  const base = doc.timeline ?? deriveTimeline(doc);
+  const out: Array<FilmSegment & { url: string; promptName: string }> = [];
+  for (const seg of base) {
+    const take = byId.get(seg.takeId);
+    if (!take || take.kind !== 'video') continue;
+    out.push({ ...seg, url: take.url, promptName: take.promptName });
+  }
+  return out;
+}
+
+/** Split a segment at `at` seconds (absolute clip time). Returns a new timeline, or the same
+ *  array if `at` is outside the segment's window (with a small margin so slivers can't happen). */
+export function splitSegment(timeline: FilmSegment[], segId: string, at: number, minLen = 0.15): FilmSegment[] {
+  const i = timeline.findIndex((s) => s.id === segId);
+  if (i === -1) return timeline;
+  const seg = timeline[i]!;
+  if (at < seg.start + minLen) return timeline;
+  if (seg.end !== undefined && at > seg.end - minLen) return timeline;
+  const a: FilmSegment = { ...seg, id: `${seg.id}_a${Math.round(at * 10)}`, end: at };
+  const b: FilmSegment = { ...seg, id: `${seg.id}_b${Math.round(at * 10)}`, start: at };
+  return [...timeline.slice(0, i), a, b, ...timeline.slice(i + 1)];
 }
 
 /** Slugify a display name into a registry slug: 'Mr Bean SOY' -> 'mr_bean_soy'. */

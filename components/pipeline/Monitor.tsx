@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { usePipeline } from '../../lib/pipeline/usePipeline';
 import {
   compilePromptText,
+  filmSegments,
   keeperClips,
   resolveAssets,
   takesFor,
@@ -561,132 +562,175 @@ function StageTake({ t }: { t: TakeDoc }) {
 }
 
 function ExportStage() {
-  const { doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl, setFilmOrder, setTrim, toggleClipInFilm } = usePipeline();
-  const cut = keeperClips(doc);
+  const { doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl, updateSegment, splitSegmentAt, removeSegment, moveSegmentTo, resetTimeline } = usePipeline();
+  const segs = filmSegments(doc);
   const voices = voiceTracks(doc);
-  const excluded = doc.filmExcluded ?? [];
   const [selected, setSelected] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null);
+  const [pxPerSec, setPxPerSec] = useState(56);
+  const [durations, setDurations] = useState<Record<string, number>>({});
   const playerRef = useRef<HTMLVideoElement>(null);
-  const sel = cut.find((c) => c.promptName === selected) ?? null;
+  const railRef = useRef<HTMLDivElement>(null);
+  const justDragged = useRef(false); // an edge-drag's mouse-up must not toggle selection
+  const sel = segs.find((sg) => sg.id === selected) ?? null;
 
-  const reorder = (from: string, to: string) => {
-    if (from === to) return;
-    const names = cut.map((c) => c.promptName);
-    const i = names.indexOf(from);
-    const j = names.indexOf(to);
-    if (i === -1 || j === -1) return;
-    names.splice(j, 0, names.splice(i, 1)[0]!);
-    setFilmOrder(names);
+  // scroll = timeline zoom (native listener: React wheel handlers can't preventDefault)
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setPxPerSec((z) => Math.max(24, Math.min(240, z * (e.deltaY > 0 ? 0.88 : 1.14))));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  const durOf = (sg: (typeof segs)[number]) => durations[sg.takeId] ?? 5;
+  const lenOf = (sg: (typeof segs)[number]) => Math.max(0.15, (sg.end ?? durOf(sg)) - sg.start);
+
+  // edge-drag trimming
+  const dragEdge = (e: React.PointerEvent, sg: (typeof segs)[number], edge: 'l' | 'r') => {
+    e.preventDefault();
+    e.stopPropagation();
+    const x0 = e.clientX;
+    const s0 = sg.start;
+    const e0 = sg.end ?? durOf(sg);
+    const dur = durOf(sg);
+    const onMove = (ev: PointerEvent) => {
+      const ds = (ev.clientX - x0) / pxPerSec;
+      if (edge === 'l') updateSegment(sg.id, { start: Math.max(0, Math.min(s0 + ds, e0 - 0.15)) });
+      else updateSegment(sg.id, { end: Math.max(s0 + 0.15, Math.min(e0 + ds, dur)) });
+    };
+    const onUp = () => {
+      justDragged.current = true;
+      setTimeout(() => { justDragged.current = false; }, 200);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   };
 
-  // sequence preview: play each keeper phase (trims honored), advance automatically
+  // sequence preview honoring segment windows
   useEffect(() => {
     const v = playerRef.current;
     if (!v || playing === null) return;
-    const clip = cut[playing];
-    if (!clip) { setPlaying(null); return; }
-    v.src = clip.url;
-    v.currentTime = clip.trimIn ?? 0;
+    const sg = segs[playing];
+    if (!sg) { setPlaying(null); return; }
+    v.src = sg.url;
+    v.currentTime = sg.start;
     void v.play().catch(() => undefined);
     const onTime = () => {
-      if (clip.trimOut !== undefined && v.currentTime >= clip.trimOut) v.dispatchEvent(new Event('ended'));
+      const stop = sg.end ?? durations[sg.takeId];
+      if (stop !== undefined && v.currentTime >= stop) v.dispatchEvent(new Event('ended'));
     };
-    const onEnded = () => setPlaying((i) => (i === null || i + 1 >= cut.length ? null : i + 1));
+    const onEnded = () => setPlaying((i) => (i === null || i + 1 >= segs.length ? null : i + 1));
     v.addEventListener('timeupdate', onTime);
     v.addEventListener('ended', onEnded);
     return () => { v.removeEventListener('timeupdate', onTime); v.removeEventListener('ended', onEnded); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
+  // selecting a segment loads it in the player at its start (for scrubbing + split)
+  useEffect(() => {
+    const v = playerRef.current;
+    if (!v || !sel || playing !== null) return;
+    v.src = sel.url;
+    v.currentTime = sel.start;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
+
+  const total = segs.reduce((n, sg) => n + lenOf(sg), 0);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-4" data-testid="export-stage">
+      {/* hidden metadata probes: learn each take's real duration */}
+      {[...new Map(segs.map((sg) => [sg.takeId, sg.url])).entries()].map(([takeId, url]) => (
+        <video
+          key={takeId}
+          src={url}
+          preload="metadata"
+          className="hidden"
+          onLoadedMetadata={(e) => setDurations((d) => (d[takeId] ? d : { ...d, [takeId]: e.currentTarget.duration }))}
+        />
+      ))}
       <div className="grid grid-cols-[1fr_16rem] gap-5">
         <div>
           {filmUrl && playing === null ? (
             <video src={filmUrl} controls autoPlay className="w-full rounded-2xl border border-white/10 bg-black" data-testid="film-result" />
           ) : (
             <div className="relative">
-              <video ref={playerRef} muted playsInline className="aspect-video w-full rounded-2xl border border-white/10 bg-black" />
-              {playing === null && (
-                <button
-                  onClick={() => cut.length && setPlaying(0)}
-                  data-testid="preview-sequence"
-                  className="absolute inset-0 grid place-items-center rounded-2xl text-5xl text-white/70 hover:text-white"
-                  title="Preview the cut (trims applied)"
-                >
+              <video ref={playerRef} controls={playing === null && !!sel} muted playsInline className="aspect-video w-full rounded-2xl border border-white/10 bg-black" />
+              {playing === null && !sel && (
+                <button onClick={() => segs.length && setPlaying(0)} data-testid="preview-sequence" className="absolute inset-0 grid place-items-center rounded-2xl text-5xl text-white/70 hover:text-white" title="Preview the cut (trims applied)">
                   ▶
                 </button>
               )}
               {playing !== null && (
-                <span className="absolute top-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-neutral-200">
-                  {playing + 1}/{cut.length} · {cut[playing]?.promptName}
-                </span>
+                <span className="absolute top-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-neutral-200">{playing + 1}/{segs.length} · {segs[playing]?.promptName}</span>
               )}
             </div>
           )}
 
           <div className="mt-3">
-            <div className="mb-1.5 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">
-              The cut · {cut.length} clip{cut.length === 1 ? '' : 's'}{voices.length ? ` · ${voices.length} voice` : ''} · click to trim, drag to reorder
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[10px] font-bold tracking-wide text-neutral-500 uppercase">
+                Timeline · {segs.length} segment{segs.length === 1 ? '' : 's'} · {total.toFixed(1)}s{voices.length ? ` · ${voices.length} voice` : ''}
+              </span>
+              <span className="text-[10px] text-neutral-600">scroll to zoom · drag edges to trim · drag body to reorder</span>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1" data-testid="film-cut">
-              {cut.map((c, i) => (
-                <div
-                  key={c.promptName}
-                  draggable
-                  onClick={() => { setSelected(selected === c.promptName ? null : c.promptName); setPlaying(null); }}
-                  onDragStart={(e) => e.dataTransfer.setData('clip', c.promptName)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData('clip'); if (from) reorder(from, c.promptName); }}
-                  data-testid={`film-clip-${c.promptName}`}
-                  className={`relative shrink-0 cursor-pointer rounded-lg ${selected === c.promptName ? 'ring-2 ring-[#ff3d8b]' : ''}`}
-                >
-                  <video src={c.url} muted playsInline preload="metadata" className="pointer-events-none h-20 w-32 rounded-lg border border-white/10 bg-black object-cover" />
-                  <span className="absolute top-1 left-1 rounded bg-black/70 px-1 font-mono text-[9px] font-bold text-neutral-200">{i + 1} · {c.promptName}</span>
-                  {(c.trimIn !== undefined || c.trimOut !== undefined) && (
-                    <span className="absolute right-1 bottom-1 rounded bg-amber-400/90 px-1 font-mono text-[8px] font-bold text-black">✂ {c.trimIn ?? 0}-{c.trimOut ?? '∞'}s</span>
-                  )}
-                </div>
-              ))}
-              {excluded.map((name) => (
-                <button
-                  key={name}
-                  onClick={() => toggleClipInFilm(name)}
-                  data-testid={`restore-${name}`}
-                  title="Removed from the film: click to restore"
-                  className="grid h-20 w-32 shrink-0 place-items-center rounded-lg border border-dashed border-white/15 text-[10px] text-neutral-600 hover:border-white/30 hover:text-neutral-400"
-                >
-                  {name} removed ↩
-                </button>
-              ))}
+            <div ref={railRef} className="overflow-x-auto rounded-xl border border-white/8 bg-black/30 p-2" data-testid="film-cut">
+              <div className="flex h-24 items-stretch gap-1">
+                {segs.map((sg) => {
+                  const w = Math.max(36, lenOf(sg) * pxPerSec);
+                  const isSel = selected === sg.id;
+                  return (
+                    <div
+                      key={sg.id}
+                      draggable
+                      onClick={() => { if (justDragged.current) return; setSelected(isSel ? null : sg.id); setPlaying(null); }}
+                      onDragStart={(e) => e.dataTransfer.setData('seg', sg.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData('seg'); if (from) moveSegmentTo(from, sg.id); }}
+                      data-testid={`seg-${sg.id}`}
+                      style={{ width: w }}
+                      className={`group relative shrink-0 cursor-pointer overflow-hidden rounded-lg border bg-neutral-900 ${isSel ? 'border-[#ff3d8b] ring-2 ring-[#ff3d8b]/40' : 'border-white/10 hover:border-white/25'}`}
+                      title={`${sg.promptName} · ${sg.start.toFixed(1)}-${(sg.end ?? durOf(sg)).toFixed(1)}s`}
+                    >
+                      <video src={sg.url} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
+                      <span className="absolute top-1 left-2 rounded bg-black/70 px-1 font-mono text-[9px] font-bold text-neutral-200">{sg.promptName}</span>
+                      <span className="absolute bottom-1 left-2 rounded bg-black/70 px-1 font-mono text-[8px] text-neutral-400">{lenOf(sg).toFixed(1)}s</span>
+                      {/* trim handles */}
+                      <div onPointerDown={(e) => dragEdge(e, sg, 'l')} className="absolute inset-y-0 left-0 w-2.5 cursor-ew-resize bg-gradient-to-r from-[#ff3d8b]/70 to-transparent opacity-0 group-hover:opacity-100" title="drag to trim in-point" />
+                      <div onPointerDown={(e) => dragEdge(e, sg, 'r')} className="absolute inset-y-0 right-0 w-2.5 cursor-ew-resize bg-gradient-to-l from-[#ff3d8b]/70 to-transparent opacity-0 group-hover:opacity-100" title="drag to trim out-point" />
+                    </div>
+                  );
+                })}
+                {segs.length === 0 && <p className="grid w-full place-items-center text-xs text-neutral-600">No clips yet: star keepers in Shots, they land here.</p>}
+              </div>
             </div>
 
             {sel && (
-              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2" data-testid="trim-panel">
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2" data-testid="trim-panel">
                 <span className="grad-text font-mono text-xs font-black">{sel.promptName}</span>
-                <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
-                  in
-                  <input
-                    type="number" min={0} step={0.1} value={sel.trimIn ?? 0}
-                    onChange={(e) => setTrim(sel.takeId, Number(e.target.value) || undefined, sel.trimOut)}
-                    data-testid="trim-in"
-                    className="w-16 rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] tabular-nums text-neutral-200 outline-none"
-                  />
-                </label>
-                <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
-                  out
-                  <input
-                    type="number" min={0} step={0.1} value={sel.trimOut ?? ''} placeholder="end"
-                    onChange={(e) => setTrim(sel.takeId, sel.trimIn, e.target.value === '' ? undefined : Number(e.target.value))}
-                    data-testid="trim-out"
-                    className="w-16 rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] tabular-nums text-neutral-200 outline-none"
-                  />
-                </label>
-                <button onClick={() => setTrim(sel.takeId, undefined, undefined)} className="rounded-md border border-white/12 px-2 py-1 text-[11px] text-neutral-400 hover:bg-white/5">reset ✂</button>
-                <button onClick={() => { toggleClipInFilm(sel.promptName); setSelected(null); }} data-testid="remove-clip" className="rounded-md border border-white/12 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950/40">remove from film</button>
-                <span className="text-[10px] text-neutral-600">seconds · trims bake into the export and the ▶ preview</span>
+                <span className="font-mono text-[10px] tabular-nums text-neutral-500">{sel.start.toFixed(2)}s → {(sel.end ?? durOf(sel)).toFixed(2)}s</span>
+                <button
+                  onClick={() => { const at = playerRef.current?.currentTime ?? 0; splitSegmentAt(sel.id, at); setSelected(null); }}
+                  data-testid="split-seg"
+                  title="Split this segment at the player's current position"
+                  className="btn-grad rounded-md px-2.5 py-1 text-[11px] font-semibold"
+                >
+                  ✂ Split at playhead
+                </button>
+                <button onClick={() => { removeSegment(sel.id); setSelected(null); }} data-testid="remove-seg" className="rounded-md border border-white/12 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950/40">remove</button>
+                <span className="text-[10px] text-neutral-600">scrub the player above, then split; edges trim live</span>
               </div>
+            )}
+            {doc.timeline && (
+              <button onClick={resetTimeline} className="mt-1.5 text-[10px] text-neutral-600 underline hover:text-neutral-400" title="Discard all trims/splits and rebuild from the starred keepers">
+                reset timeline to keepers
+              </button>
             )}
           </div>
         </div>
@@ -708,11 +752,11 @@ function ExportStage() {
               ))}
             </div>
           </div>
-          <button onClick={() => void exportFilm()} disabled={exporting || cut.length === 0} data-testid="export-film" className="btn-grad w-full rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50">
+          <button onClick={() => void exportFilm()} disabled={exporting || segs.length === 0} data-testid="export-film" className="btn-grad w-full rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50">
             {exporting ? 'Rendering…' : '▶ Export film'}
           </button>
           {filmUrl && <a href={filmUrl} download="recut-film.mp4" className="block rounded-lg border border-white/12 py-2 text-center text-xs font-medium text-neutral-100 hover:bg-white/5">⬇ Download MP4</a>}
-          <p className="text-[11px] leading-relaxed text-neutral-600">Trim keeper phases, drop clips, reorder, preview, then export: concat + LUT + voice mix, no model calls.</p>
+          <p className="text-[11px] leading-relaxed text-neutral-600">Segments export exactly as cut: trim + split windows, order, LUT, voice mix. No model calls.</p>
         </aside>
       </div>
     </div>

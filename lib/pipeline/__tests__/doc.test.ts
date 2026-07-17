@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   deletePrompt,
+  deriveTimeline,
+  filmSegments,
+  splitSegment,
   deleteScene,
   keeperClips,
   moveScene,
@@ -251,5 +254,44 @@ describe('film exclusion + trims ride on keeper clips', () => {
     const clips = keeperClips(d);
     expect(clips.map((c) => c.promptName)).toEqual(['1A']);
     expect(clips[0]).toMatchObject({ takeId: 'v1', trimIn: 0.5, trimOut: 3 });
+  });
+});
+
+describe('film timeline (EDL): derive, resolve, split', () => {
+  const tlDoc = (): PipelineDoc => {
+    const d = doc();
+    d.takes = [
+      { id: 'v1', promptName: '1A', kind: 'video', url: '/1a.mp4', trimIn: 0.5 },
+      { id: 'v2', promptName: '2A', kind: 'video', url: '/2a.mp4', keeper: true },
+    ];
+    return d;
+  };
+  it('derives one full segment per keeper clip, honoring legacy trims', () => {
+    const tl = deriveTimeline(tlDoc());
+    expect(tl).toHaveLength(2);
+    expect(tl[0]).toMatchObject({ takeId: 'v1', start: 0.5, end: undefined });
+  });
+  it('filmSegments resolves takes and drops dangling segments', () => {
+    const d = tlDoc();
+    d.timeline = [
+      { id: 's1', takeId: 'v2', start: 0, end: 2 },
+      { id: 'sx', takeId: 'GONE', start: 0 },
+      { id: 's2', takeId: 'v2', start: 3, end: 4.5 }, // same take twice (split result)
+    ];
+    const segs = filmSegments(d);
+    expect(segs.map((s) => s.id)).toEqual(['s1', 's2']);
+    expect(segs[0]!.url).toBe('/2a.mp4');
+  });
+  it('splitSegment cuts one segment into two adjoining windows', () => {
+    const tl = [{ id: 's1', takeId: 'v1', start: 1, end: 5 }];
+    const out = splitSegment(tl, 's1', 3);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ start: 1, end: 3 });
+    expect(out[1]).toMatchObject({ start: 3, end: 5 });
+  });
+  it('split too close to an edge is a no-op (no sliver segments)', () => {
+    const tl = [{ id: 's1', takeId: 'v1', start: 1, end: 5 }];
+    expect(splitSegment(tl, 's1', 1.05)).toBe(tl);
+    expect(splitSegment(tl, 's1', 4.95)).toBe(tl);
   });
 });

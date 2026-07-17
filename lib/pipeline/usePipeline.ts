@@ -9,10 +9,13 @@ import {
   compilePromptText,
   deletePrompt,
   deleteScene,
+  deriveTimeline,
   emptyPipeline,
+  filmSegments,
   keeperClips,
   mentionedSlugs,
   moveScene,
+  splitSegment,
   voiceTracks,
   promptName,
   resolveAssets,
@@ -126,6 +129,12 @@ interface PipelineState {
   removeTake: (takeId: string) => void;
   setKeeper: (takeId: string) => void;
   setTrim: (takeId: string, trimIn?: number, trimOut?: number) => void;
+  // timeline (EDL) editing: materialized on first edit, then authoritative
+  updateSegment: (segId: string, patch: { start?: number; end?: number }) => void;
+  splitSegmentAt: (segId: string, at: number) => void;
+  removeSegment: (segId: string) => void;
+  moveSegmentTo: (segId: string, beforeSegId: string) => void;
+  resetTimeline: () => void;
   // Stage 4
   setLut: (lut: string) => void;
   setVertical: (vertical: boolean) => void;
@@ -609,12 +618,33 @@ export const usePipeline = create<PipelineState>((set, get) => {
         takes: d.takes.map((t) => (t.id === takeId ? { ...t, trimIn, trimOut } : t)),
       })),
 
+    updateSegment: (segId, patch) =>
+      mutate((d) => {
+        const tl = d.timeline ?? deriveTimeline(d);
+        return { ...d, timeline: tl.map((sg) => (sg.id === segId ? { ...sg, ...patch } : sg)) };
+      }),
+    splitSegmentAt: (segId, at) =>
+      mutate((d) => ({ ...d, timeline: splitSegment(d.timeline ?? deriveTimeline(d), segId, at) })),
+    removeSegment: (segId) =>
+      mutate((d) => ({ ...d, timeline: (d.timeline ?? deriveTimeline(d)).filter((sg) => sg.id !== segId) })),
+    moveSegmentTo: (segId, beforeSegId) =>
+      mutate((d) => {
+        const tl = [...(d.timeline ?? deriveTimeline(d))];
+        const i = tl.findIndex((sg) => sg.id === segId);
+        const j = tl.findIndex((sg) => sg.id === beforeSegId);
+        if (i === -1 || j === -1 || i === j) return d;
+        const [moved] = tl.splice(i, 1);
+        tl.splice(tl.findIndex((sg) => sg.id === beforeSegId), 0, moved!);
+        return { ...d, timeline: tl };
+      }),
+    resetTimeline: () => mutate((d) => ({ ...d, timeline: undefined })),
+
     setLut: (lut) => set({ lut, filmUrl: null }),
     setVertical: (vertical) => set({ vertical, filmUrl: null }),
 
     exportFilm: async () => {
       const { doc, lut, vertical } = get();
-      const clips = keeperClips(doc).map((c) => ({ url: c.url, trimIn: c.trimIn, trimOut: c.trimOut }));
+      const clips = filmSegments(doc).map((sg) => ({ url: sg.url, trimIn: sg.start > 0 ? sg.start : undefined, trimOut: sg.end }));
       if (clips.length === 0) return;
       set({ exporting: true, error: null, filmUrl: null });
       try {
