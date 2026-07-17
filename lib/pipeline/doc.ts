@@ -66,6 +66,9 @@ export interface TakeDoc {
   url: string;
   /** the harvested keeper for its prompt (spec Stage 3: pull keeper phases across takes) */
   keeper?: boolean;
+  /** keeper-phase trim window in seconds (Edit stage) */
+  trimIn?: number;
+  trimOut?: number;
   /** VLM judge output for this take */
   score?: number;
   verdict?: Record<string, unknown>;
@@ -87,6 +90,8 @@ export interface PipelineDoc {
   takes: TakeDoc[];
   /** manual film order (prompt names); scene order when absent */
   filmOrder?: string[];
+  /** prompt names removed from the film in the Edit stage (takes stay; the film skips them) */
+  filmExcluded?: string[];
 }
 
 export function emptyPipeline(projectId: string): PipelineDoc {
@@ -118,13 +123,30 @@ export function compilePromptText(doc: PipelineDoc, name: string): string {
   const parts: string[] = [];
   const prefix = hit.scene.styleOverride?.trim() || doc.stylePrefix.trim();
   if (prefix) parts.push(prefix);
-  parts.push(hit.prompt.text.trim());
+  // @slug mentions read as plain names in the compiled prompt
+  parts.push(hit.prompt.text.trim().replace(/@([a-z0-9_]+)/g, '$1'));
   const cine = [hit.prompt.shotSize, hit.prompt.angle, hit.prompt.lens, hit.prompt.light].filter(Boolean).join(', ');
   if (cine) parts.push(cine);
-  if (hit.prompt.assetSlugs.length) {
-    parts.push(`Use the attached reference images for: ${hit.prompt.assetSlugs.join(', ')}. Keep each exactly on-model.`);
+  // ENUMERATED reference binding: tell the model which image is which entity, and that
+  // entities are distinct. Without this, two same-species characters get averaged together.
+  const attached = resolveAssets(doc, name);
+  if (attached.length) {
+    const bindings = attached.map((a, i) => `Reference image ${i + 1} is ${a.slug} (${a.kind})`).join('; ');
+    parts.push(`${bindings}. Each reference is a DISTINCT ${attached.length > 1 ? 'entity; never merge, swap, or average their features' : 'entity'}; keep each exactly on-model.`);
   }
   return parts.filter(Boolean).join('. ');
+}
+
+/** Slugs @mentioned in a cut's text that exist in the registry (locked or not). */
+export function mentionedSlugs(text: string, allSlugs: string[]): string[] {
+  const out: string[] = [];
+  const re = /@([a-z0-9_]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const slug = m[1]!;
+    if (allSlugs.includes(slug) && !out.includes(slug)) out.push(slug);
+  }
+  return out;
 }
 
 /** Resolve a prompt's asset slugs to locked assets, preserving slug order. Unlocked/missing are skipped. */
@@ -201,20 +223,30 @@ export function moveScene(doc: PipelineDoc, sceneIdx: number, dir: -1 | 1): Pipe
  * The film cut, in scene order: for each prompt, its keeper video take (else the newest
  * video take). Prompts with no video takes contribute nothing. Pure.
  */
-export function keeperClips(doc: PipelineDoc): Array<{ promptName: string; url: string }> {
-  const out: Array<{ promptName: string; url: string }> = [];
+export interface KeeperClip {
+  promptName: string;
+  url: string;
+  takeId: string;
+  trimIn?: number;
+  trimOut?: number;
+}
+
+export function keeperClips(doc: PipelineDoc): KeeperClip[] {
+  const excluded = new Set(doc.filmExcluded ?? []);
+  const out: KeeperClip[] = [];
   for (const scene of doc.scenes) {
     for (const p of scene.prompts) {
+      if (excluded.has(p.name)) continue;
       const vids = doc.takes.filter((t) => t.promptName === p.name && t.kind === 'video');
       if (vids.length === 0) continue;
       const pick = vids.find((t) => t.keeper) ?? vids[vids.length - 1]!;
-      out.push({ promptName: p.name, url: pick.url });
+      out.push({ promptName: p.name, url: pick.url, takeId: pick.id, trimIn: pick.trimIn, trimOut: pick.trimOut });
     }
   }
   // manual film order wins where present: listed names first (that have clips), rest follow scene order
   if (doc.filmOrder?.length) {
     const byName = new Map(out.map((c) => [c.promptName, c]));
-    const ordered: typeof out = [];
+    const ordered: KeeperClip[] = [];
     for (const n of doc.filmOrder) {
       const hit = byName.get(n);
       if (hit) { ordered.push(hit); byName.delete(n); }

@@ -11,6 +11,7 @@ import {
   deleteScene,
   emptyPipeline,
   keeperClips,
+  mentionedSlugs,
   moveScene,
   voiceTracks,
   promptName,
@@ -116,6 +117,7 @@ interface PipelineState {
   /** batch: n takes for a cut; mode 'video' = direct r2v, 'frame' = image keyframes */
   batchTakes: (name: string, n: number, mode?: 'video' | 'frame', durationSec?: number) => Promise<void>;
   setFilmOrder: (names: string[]) => void;
+  toggleClipInFilm: (name: string) => void;
   /** taxonomy auto-fix: append the judge's repair instruction to the prompt (surgical, by name), re-run */
   applyRepair: (takeId: string) => Promise<void>;
   voicePrompt: (name: string) => Promise<void>;
@@ -123,6 +125,7 @@ interface PipelineState {
   animateTake: (takeId: string) => Promise<void>;
   removeTake: (takeId: string) => void;
   setKeeper: (takeId: string) => void;
+  setTrim: (takeId: string, trimIn?: number, trimOut?: number) => void;
   // Stage 4
   setLut: (lut: string) => void;
   setVertical: (vertical: boolean) => void;
@@ -357,13 +360,25 @@ export const usePipeline = create<PipelineState>((set, get) => {
     },
 
     updatePrompt: (name, patch) =>
-      mutate((d) => ({
-        ...d,
-        scenes: d.scenes.map((s) => ({
-          ...s,
-          prompts: s.prompts.map((p) => (p.name === name ? { ...p, ...patch } : p)),
-        })),
-      })),
+      mutate((d) => {
+        // typing @slug in the text auto-attaches that cast member (the Higgsfield @ move)
+        let extra: string[] = [];
+        if (typeof patch.text === 'string') {
+          const locked = d.assets.filter((a) => a.locked && a.imageUrl).map((a) => a.slug);
+          extra = mentionedSlugs(patch.text, locked);
+        }
+        return {
+          ...d,
+          scenes: d.scenes.map((s) => ({
+            ...s,
+            prompts: s.prompts.map((p) =>
+              p.name === name
+                ? { ...p, ...patch, ...(extra.length ? { assetSlugs: [...new Set([...(patch.assetSlugs ?? p.assetSlugs), ...extra])] } : {}) }
+                : p,
+            ),
+          })),
+        };
+      }),
     addCoverage: (sceneIdx) =>
       mutate((d) => {
         const scene = d.scenes[sceneIdx];
@@ -415,6 +430,13 @@ export const usePipeline = create<PipelineState>((set, get) => {
     },
 
     setFilmOrder: (names) => mutate((d) => ({ ...d, filmOrder: names })),
+    toggleClipInFilm: (name) =>
+      mutate((d) => {
+        const ex = new Set(d.filmExcluded ?? []);
+        if (ex.has(name)) ex.delete(name);
+        else ex.add(name);
+        return { ...d, filmExcluded: [...ex] };
+      }),
 
     applyRepair: async (takeId) => {
       const { doc } = get();
@@ -581,12 +603,18 @@ export const usePipeline = create<PipelineState>((set, get) => {
         };
       }),
 
+    setTrim: (takeId, trimIn, trimOut) =>
+      mutate((d) => ({
+        ...d,
+        takes: d.takes.map((t) => (t.id === takeId ? { ...t, trimIn, trimOut } : t)),
+      })),
+
     setLut: (lut) => set({ lut, filmUrl: null }),
     setVertical: (vertical) => set({ vertical, filmUrl: null }),
 
     exportFilm: async () => {
       const { doc, lut, vertical } = get();
-      const clips = keeperClips(doc).map((c) => c.url);
+      const clips = keeperClips(doc).map((c) => ({ url: c.url, trimIn: c.trimIn, trimOut: c.trimOut }));
       if (clips.length === 0) return;
       set({ exporting: true, error: null, filmUrl: null });
       try {

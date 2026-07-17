@@ -561,9 +561,15 @@ function StageTake({ t }: { t: TakeDoc }) {
 }
 
 function ExportStage() {
-  const { doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl, setFilmOrder } = usePipeline();
+  const { doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl, setFilmOrder, setTrim, toggleClipInFilm } = usePipeline();
   const cut = keeperClips(doc);
   const voices = voiceTracks(doc);
+  const excluded = doc.filmExcluded ?? [];
+  const [selected, setSelected] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const playerRef = useRef<HTMLVideoElement>(null);
+  const sel = cut.find((c) => c.promptName === selected) ?? null;
+
   const reorder = (from: string, to: string) => {
     if (from === to) return;
     const names = cut.map((c) => c.promptName);
@@ -573,37 +579,118 @@ function ExportStage() {
     names.splice(j, 0, names.splice(i, 1)[0]!);
     setFilmOrder(names);
   };
+
+  // sequence preview: play each keeper phase (trims honored), advance automatically
+  useEffect(() => {
+    const v = playerRef.current;
+    if (!v || playing === null) return;
+    const clip = cut[playing];
+    if (!clip) { setPlaying(null); return; }
+    v.src = clip.url;
+    v.currentTime = clip.trimIn ?? 0;
+    void v.play().catch(() => undefined);
+    const onTime = () => {
+      if (clip.trimOut !== undefined && v.currentTime >= clip.trimOut) v.dispatchEvent(new Event('ended'));
+    };
+    const onEnded = () => setPlaying((i) => (i === null || i + 1 >= cut.length ? null : i + 1));
+    v.addEventListener('timeupdate', onTime);
+    v.addEventListener('ended', onEnded);
+    return () => { v.removeEventListener('timeupdate', onTime); v.removeEventListener('ended', onEnded); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-4" data-testid="export-stage">
       <div className="grid grid-cols-[1fr_16rem] gap-5">
         <div>
-          {filmUrl ? (
+          {filmUrl && playing === null ? (
             <video src={filmUrl} controls autoPlay className="w-full rounded-2xl border border-white/10 bg-black" data-testid="film-result" />
           ) : (
-            <div className="glass grid aspect-video place-items-center rounded-2xl">
-              <p className="text-sm text-neutral-500">{exporting ? 'Rendering the film…' : 'Export to render the cut'}</p>
+            <div className="relative">
+              <video ref={playerRef} muted playsInline className="aspect-video w-full rounded-2xl border border-white/10 bg-black" />
+              {playing === null && (
+                <button
+                  onClick={() => cut.length && setPlaying(0)}
+                  data-testid="preview-sequence"
+                  className="absolute inset-0 grid place-items-center rounded-2xl text-5xl text-white/70 hover:text-white"
+                  title="Preview the cut (trims applied)"
+                >
+                  ▶
+                </button>
+              )}
+              {playing !== null && (
+                <span className="absolute top-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-neutral-200">
+                  {playing + 1}/{cut.length} · {cut[playing]?.promptName}
+                </span>
+              )}
             </div>
           )}
+
           <div className="mt-3">
-            <div className="mb-1.5 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">The cut · {cut.length} clip{cut.length === 1 ? '' : 's'}{voices.length ? ` · ${voices.length} voice` : ''} · drag to reorder</div>
+            <div className="mb-1.5 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">
+              The cut · {cut.length} clip{cut.length === 1 ? '' : 's'}{voices.length ? ` · ${voices.length} voice` : ''} · click to trim, drag to reorder
+            </div>
             <div className="flex gap-2 overflow-x-auto pb-1" data-testid="film-cut">
               {cut.map((c, i) => (
                 <div
                   key={c.promptName}
                   draggable
+                  onClick={() => { setSelected(selected === c.promptName ? null : c.promptName); setPlaying(null); }}
                   onDragStart={(e) => e.dataTransfer.setData('clip', c.promptName)}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData('clip'); if (from) reorder(from, c.promptName); }}
                   data-testid={`film-clip-${c.promptName}`}
-                  className="relative shrink-0 cursor-grab active:cursor-grabbing"
+                  className={`relative shrink-0 cursor-pointer rounded-lg ${selected === c.promptName ? 'ring-2 ring-[#ff3d8b]' : ''}`}
                 >
                   <video src={c.url} muted playsInline preload="metadata" className="pointer-events-none h-20 w-32 rounded-lg border border-white/10 bg-black object-cover" />
                   <span className="absolute top-1 left-1 rounded bg-black/70 px-1 font-mono text-[9px] font-bold text-neutral-200">{i + 1} · {c.promptName}</span>
+                  {(c.trimIn !== undefined || c.trimOut !== undefined) && (
+                    <span className="absolute right-1 bottom-1 rounded bg-amber-400/90 px-1 font-mono text-[8px] font-bold text-black">✂ {c.trimIn ?? 0}-{c.trimOut ?? '∞'}s</span>
+                  )}
                 </div>
               ))}
+              {excluded.map((name) => (
+                <button
+                  key={name}
+                  onClick={() => toggleClipInFilm(name)}
+                  data-testid={`restore-${name}`}
+                  title="Removed from the film: click to restore"
+                  className="grid h-20 w-32 shrink-0 place-items-center rounded-lg border border-dashed border-white/15 text-[10px] text-neutral-600 hover:border-white/30 hover:text-neutral-400"
+                >
+                  {name} removed ↩
+                </button>
+              ))}
             </div>
+
+            {sel && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2" data-testid="trim-panel">
+                <span className="grad-text font-mono text-xs font-black">{sel.promptName}</span>
+                <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
+                  in
+                  <input
+                    type="number" min={0} step={0.1} value={sel.trimIn ?? 0}
+                    onChange={(e) => setTrim(sel.takeId, Number(e.target.value) || undefined, sel.trimOut)}
+                    data-testid="trim-in"
+                    className="w-16 rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] tabular-nums text-neutral-200 outline-none"
+                  />
+                </label>
+                <label className="flex items-center gap-1.5 text-[11px] text-neutral-400">
+                  out
+                  <input
+                    type="number" min={0} step={0.1} value={sel.trimOut ?? ''} placeholder="end"
+                    onChange={(e) => setTrim(sel.takeId, sel.trimIn, e.target.value === '' ? undefined : Number(e.target.value))}
+                    data-testid="trim-out"
+                    className="w-16 rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] tabular-nums text-neutral-200 outline-none"
+                  />
+                </label>
+                <button onClick={() => setTrim(sel.takeId, undefined, undefined)} className="rounded-md border border-white/12 px-2 py-1 text-[11px] text-neutral-400 hover:bg-white/5">reset ✂</button>
+                <button onClick={() => { toggleClipInFilm(sel.promptName); setSelected(null); }} data-testid="remove-clip" className="rounded-md border border-white/12 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950/40">remove from film</button>
+                <span className="text-[10px] text-neutral-600">seconds · trims bake into the export and the ▶ preview</span>
+              </div>
+            )}
           </div>
         </div>
+
         <aside className="space-y-3">
           <div>
             <div className="mb-1 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">Look (LUT)</div>
@@ -625,6 +712,7 @@ function ExportStage() {
             {exporting ? 'Rendering…' : '▶ Export film'}
           </button>
           {filmUrl && <a href={filmUrl} download="recut-film.mp4" className="block rounded-lg border border-white/12 py-2 text-center text-xs font-medium text-neutral-100 hover:bg-white/5">⬇ Download MP4</a>}
+          <p className="text-[11px] leading-relaxed text-neutral-600">Trim keeper phases, drop clips, reorder, preview, then export: concat + LUT + voice mix, no model calls.</p>
         </aside>
       </div>
     </div>
@@ -717,6 +805,8 @@ function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void 
   const { doc, updatePrompt, batchTakes, voicePrompt, animateTake, removePrompt, busy } = usePipeline();
   const [variations, setVariations] = useState(1);
   const [duration, setDuration] = useState(5);
+  const [mention, setMention] = useState<{ token: string; start: number } | null>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const p = doc.scenes.flatMap((s) => s.prompts).find((x) => x.name === name);
   useEffect(() => {
     if (!p) {
@@ -775,14 +865,52 @@ function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void 
         </div>
       </div>
       <div className="flex items-start gap-2">
-        <textarea
-          value={p.text}
-          onChange={(e) => updatePrompt(name, { text: e.target.value })}
-          rows={4}
-          placeholder="the cut: action, blocking, choreography move by move…"
-          data-testid="cut-prompt"
-          className="max-h-44 flex-1 resize-y rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs leading-relaxed text-neutral-200 outline-none focus:border-[color:var(--c2)]"
-        />
+        <div className="relative flex-1">
+          {mention && (() => {
+            const matches = lockedSlugs.filter((sl) => sl.startsWith(mention.token)).slice(0, 6);
+            if (!matches.length) return null;
+            return (
+              <div className="absolute bottom-full left-2 z-50 mb-1 overflow-hidden rounded-lg border border-white/15 bg-[#14121d] shadow-2xl" data-testid="mention-menu">
+                {matches.map((sl) => (
+                  <button
+                    key={sl}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const el = promptRef.current;
+                      const text = p.text;
+                      const before = text.slice(0, mention.start);
+                      const after = text.slice(mention.start + mention.token.length + 1);
+                      updatePrompt(name, { text: `${before}@${sl} ${after}` });
+                      setMention(null);
+                      el?.focus();
+                    }}
+                    className="block w-full px-3 py-1.5 text-left font-mono text-[11px] text-neutral-200 hover:bg-white/8"
+                  >
+                    @{sl}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+          <textarea
+            ref={promptRef}
+            value={p.text}
+            onChange={(e) => {
+              const v = e.target.value;
+              updatePrompt(name, { text: v });
+              // detect an @token at the caret for the mention menu
+              const caret = e.target.selectionStart ?? v.length;
+              const upto = v.slice(0, caret);
+              const m = upto.match(/@([a-z0-9_]*)$/);
+              setMention(m ? { token: m[1] ?? '', start: caret - (m[1]?.length ?? 0) - 1 } : null);
+            }}
+            onBlur={() => setTimeout(() => setMention(null), 150)}
+            rows={4}
+            placeholder="the cut: action, blocking, choreography… type @ to reference a cast member"
+            data-testid="cut-prompt"
+            className="max-h-44 w-full resize-y rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs leading-relaxed text-neutral-200 outline-none focus:border-[color:var(--c2)]"
+          />
+        </div>
         <div className="flex w-64 flex-col gap-1.5">
           <input
             value={p.dialogue ?? ''}

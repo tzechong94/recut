@@ -8,8 +8,14 @@ import { lutByName } from '../../../lib/post/lut';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface ClipIn {
+  url: string;
+  trimIn?: number;
+  trimOut?: number;
+}
 interface Body {
-  clips?: string[]; // public paths, e.g. /clips/x.mp4 or /generated/x.mp4
+  /** public paths (/clips/x.mp4, /generated/x.mp4), plain or with trim windows */
+  clips?: Array<string | ClipIn>;
   audio?: string[];
   lut?: string;
   vertical?: boolean;
@@ -30,7 +36,14 @@ export async function POST(req: Request): Promise<Response> {
   } catch {
     return Response.json({ error: 'bad json' }, { status: 400 });
   }
-  const clips = (body.clips ?? []).map(localOf);
+  const norm = (body.clips ?? []).map((c) => (typeof c === 'string' ? { url: c } : c));
+  const clips = norm.map((c) => {
+    const path = localOf(c.url);
+    if (!path) return null;
+    const trimIn = typeof c.trimIn === 'number' && c.trimIn > 0 ? c.trimIn : undefined;
+    const trimOut = typeof c.trimOut === 'number' && c.trimOut > 0 ? c.trimOut : undefined;
+    return { path, trimIn, trimOut };
+  });
   if (clips.length === 0 || clips.some((c) => c === null)) {
     return Response.json({ error: 'need clips that exist under public/' }, { status: 400 });
   }
@@ -43,7 +56,7 @@ export async function POST(req: Request): Promise<Response> {
   const out = join(genDir, name);
   const lut = lutByName(body.lut ?? 'teal-orange');
   const args = buildAssembleArgs({
-    clips: clips as string[],
+    clips: clips as Array<{ path: string; trimIn?: number; trimOut?: number }>,
     audio: audio.length ? audio : undefined,
     lutCube: resolve(process.cwd(), 'public', lut.cube.replace(/^\//, '')),
     out,

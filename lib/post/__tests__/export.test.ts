@@ -94,3 +94,19 @@ describe('Ken Burns arg builder', () => {
     expect(args[args.indexOf('-t') + 1]).toBe('3');
   });
 });
+
+describe('assemble with keeper-phase trims', () => {
+  it('trim windows shorten the assembled film accordingly', () => {
+    const args = buildAssembleArgs({
+      clips: [
+        { path: '/a.mp4', trimIn: 1, trimOut: 2.5 },
+        '/b.mp4',
+      ],
+      lutCube: '/lut.cube',
+      out: '/out.mp4',
+    });
+    const filter = args[args.indexOf('-filter_complex') + 1]!;
+    expect(filter).toContain('trim=start=1:end=2.5,setpts=PTS-STARTPTS');
+    expect(filter).not.toContain('[1:v]trim'); // untrimmed clip has no trim stage
+  });
+});

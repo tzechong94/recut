@@ -46,21 +46,38 @@ export function buildExportArgs(spec: ExportSpec): string[] {
  * Assemble ordered clips + bake the LUT + (optionally) lay a concatenated audio track over the
  * whole cut. This is the "finish a film" path from the canvas timeline.
  */
-export function buildAssembleArgs(spec: ExportSpec & { audio?: string[] }): string[] {
+export interface ClipSpec {
+  path: string;
+  /** trim window in seconds (keeper-phase editing); omitted = full clip */
+  trimIn?: number;
+  trimOut?: number;
+}
+
+export function buildAssembleArgs(spec: Omit<ExportSpec, 'clips'> & { clips: Array<string | ClipSpec>; audio?: string[] }): string[] {
   const fps = spec.fps ?? 24;
-  const n = spec.clips.length;
+  const clips = spec.clips.map((c) => (typeof c === 'string' ? { path: c } : c));
+  const n = clips.length;
   if (n === 0) throw new Error('assemble needs at least one clip');
   const audio = spec.audio ?? [];
   const [W, H] = spec.vertical ? [1080, 1920] : [1920, 1080];
 
-  const inputs = [...spec.clips, ...audio].flatMap((c) => ['-i', c]);
+  const inputs = [...clips.map((c) => c.path), ...audio].flatMap((c) => ['-i', c]);
   // i2v clips can each be a different size, so NORMALISE every clip to the target frame
   // (scale + pad/crop + reset SAR + fps) BEFORE concat — concat requires identical inputs.
+  // Trims run first (trim + setpts) so each clip contributes only its keeper phase.
   const geom = spec.vertical
     ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1,fps=${fps}`
     : `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps}`;
-  const perClip = spec.clips.map((_, i) => `[${i}:v]${geom}[v${i}]`).join(';');
-  const concatV = spec.clips.map((_, i) => `[v${i}]`).join('') + `concat=n=${n}:v=1:a=0[cat]`;
+  const trimOf = (c: ClipSpec): string => {
+    if (c.trimIn === undefined && c.trimOut === undefined) return '';
+    const args = [
+      ...(c.trimIn !== undefined ? [`start=${c.trimIn}`] : []),
+      ...(c.trimOut !== undefined ? [`end=${c.trimOut}`] : []),
+    ].join(':');
+    return `trim=${args},setpts=PTS-STARTPTS,`;
+  };
+  const perClip = clips.map((c, i) => `[${i}:v]${trimOf(c)}${geom}[v${i}]`).join(';');
+  const concatV = clips.map((_, i) => `[v${i}]`).join('') + `concat=n=${n}:v=1:a=0[cat]`;
   let filter = `${perClip};${concatV};[cat]lut3d=file='${spec.lutCube}'[v]`;
 
   const maps = ['-map', '[v]'];

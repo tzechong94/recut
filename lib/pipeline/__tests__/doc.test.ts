@@ -6,6 +6,7 @@ import {
   moveScene,
   voiceTracks,
   emptyPipeline,
+  mentionedSlugs,
   promptName,
   compilePromptText,
   resolveAssets,
@@ -61,8 +62,10 @@ describe('compilePromptText merge order', () => {
     const t1 = compilePromptText(doc(), '1B');
     expect(t1.startsWith('soft daylight')).toBe(true);
   });
-  it('asset anchors appended by slug', () => {
-    expect(compilePromptText(doc(), '1A')).toContain('sofa, hero');
+  it('reference bindings list only LOCKED (actually attached) assets', () => {
+    const t = compilePromptText(doc(), '1A');
+    expect(t).toContain('Reference image 1 is sofa'); // locked
+    expect(t).not.toContain('is hero ('); // unlocked: not attached, so never bound
   });
   it('deterministic: identical input, identical output', () => {
     expect(compilePromptText(doc(), '1A')).toBe(compilePromptText(doc(), '1A'));
@@ -153,7 +156,7 @@ describe('film harvest (keeper clips + voice tracks)', () => {
   };
   it('keeper wins; otherwise newest video; images never included; scene order kept', () => {
     const clips = keeperClips(filmDoc());
-    expect(clips).toEqual([
+    expect(clips.map(({ promptName, url }) => ({ promptName, url }))).toEqual([
       { promptName: '1A', url: '/1a-new.mp4' }, // no keeper -> newest
       { promptName: '2A', url: '/2a-a.mp4' }, // explicit keeper wins over later take
     ]);
@@ -172,7 +175,7 @@ describe('cinematography presets compile into the prompt', () => {
     const d = doc();
     d.scenes[0]!.prompts[0] = { ...d.scenes[0]!.prompts[0]!, shotSize: 'close-up', angle: 'low angle', lens: '85mm portrait lens', light: 'Rembrandt lighting' };
     const t = compilePromptText(d, '1A');
-    expect(t).toContain('the hero sinks into the sofa. close-up, low angle, 85mm portrait lens, Rembrandt lighting. Use the attached');
+    expect(t).toContain('the hero sinks into the sofa. close-up, low angle, 85mm portrait lens, Rembrandt lighting. Reference image 1');
   });
   it('no presets, no extra segment (back-compat)', () => {
     expect(compilePromptText(doc(), '1B')).not.toContain('undefined');
@@ -213,5 +216,40 @@ describe('deletePrompt (cut-level delete)', () => {
   it('unknown name is a no-op', () => {
     const d = doc();
     expect(deletePrompt(d, '9Z')).toBe(d);
+  });
+});
+
+describe('reference binding + @mentions', () => {
+  it('compiled prompt ENUMERATES which image is which entity and forbids merging', () => {
+    const d = doc();
+    d.assets.push({ id: 'a3', slug: 'yeepi', kind: 'character', imageUrl: '/y.png', locked: true });
+    d.scenes[0]!.prompts[0]!.assetSlugs = ['sofa', 'yeepi'];
+    const t = compilePromptText(d, '1A');
+    expect(t).toContain('Reference image 1 is sofa (product)');
+    expect(t).toContain('Reference image 2 is yeepi (character)');
+    expect(t).toContain('never merge, swap, or average');
+  });
+  it('@slug in the text compiles to the plain name', () => {
+    const d = doc();
+    d.scenes[0]!.prompts[0]!.text = '@sofa glows while @hero naps';
+    expect(compilePromptText(d, '1A')).toContain('sofa glows while hero naps');
+    expect(compilePromptText(d, '1A')).not.toContain('@sofa');
+  });
+  it('mentionedSlugs finds only registered slugs, deduped', () => {
+    expect(mentionedSlugs('pan from @yoopi to @yeepi and @yoopi again, ignore @ghost', ['yoopi', 'yeepi'])).toEqual(['yoopi', 'yeepi']);
+  });
+});
+
+describe('film exclusion + trims ride on keeper clips', () => {
+  it('excluded prompt names drop out of the film; trims carried', () => {
+    const d = doc();
+    d.takes = [
+      { id: 'v1', promptName: '1A', kind: 'video', url: '/1a.mp4', trimIn: 0.5, trimOut: 3 },
+      { id: 'v2', promptName: '2A', kind: 'video', url: '/2a.mp4' },
+    ];
+    d.filmExcluded = ['2A'];
+    const clips = keeperClips(d);
+    expect(clips.map((c) => c.promptName)).toEqual(['1A']);
+    expect(clips[0]).toMatchObject({ takeId: 'v1', trimIn: 0.5, trimOut: 3 });
   });
 });
