@@ -65,7 +65,8 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
 
   const hasShots = doc.scenes.length > 0;
   const hasKeepers = keeperClips(doc).length > 0;
-  const showRail = sel.t === 'casting' || sel.t === 'script';
+  // rail everywhere except the edit room: seeing the cast helps while directing shots
+  const showRail = sel.t !== 'export';
   const steps: Array<{ key: string; label: string; active: boolean; enabled: boolean; go: () => void }> = [
     { key: 'cast', label: 'Cast', active: sel.t === 'casting', enabled: true, go: () => setSel({ t: 'casting' }) },
     { key: 'script', label: 'Script', active: sel.t === 'script', enabled: true, go: () => setSel({ t: 'script' }) },
