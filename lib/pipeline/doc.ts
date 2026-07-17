@@ -23,12 +23,15 @@ export interface AssetDoc {
   y?: number;
 }
 
-/** A generated candidate waiting in the tray; promoted to an AssetDoc by dragging to the board. */
+/** A generated candidate in the tray; dragging to the board creates an asset INSTANCE from it.
+ *  The candidate stays in the tray (it is a palette, not a queue) and is marked used. */
 export interface CandidateDoc {
   id: string;
   kind: AssetKind;
   url: string;
   prompt: string;
+  /** at least one board asset was created from this candidate */
+  used?: boolean;
 }
 
 export interface PromptDoc {

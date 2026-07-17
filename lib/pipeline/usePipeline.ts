@@ -216,8 +216,13 @@ export const usePipeline = create<PipelineState>((set, get) => {
         let slug = base;
         let i = 2;
         while (d.assets.some((a) => a.slug === slug)) slug = `${base}_${i++}`;
-        const asset: AssetDoc = { id: cand.id, slug, kind: cand.kind, imageUrl: cand.url, locked: false, x: pos.x, y: pos.y };
-        return { ...d, assets: [...d.assets, asset], candidates: (d.candidates ?? []).filter((c) => c.id !== candidateId) };
+        // fresh asset id: the same candidate can be placed more than once; the tray keeps it
+        const asset: AssetDoc = { id: crypto.randomUUID().slice(0, 8), slug, kind: cand.kind, imageUrl: cand.url, locked: false, x: pos.x, y: pos.y };
+        return {
+          ...d,
+          assets: [...d.assets, asset],
+          candidates: (d.candidates ?? []).map((c) => (c.id === candidateId ? { ...c, used: true } : c)),
+        };
       }),
 
     discardCandidate: (candidateId) =>

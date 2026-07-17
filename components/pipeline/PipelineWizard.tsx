@@ -148,8 +148,8 @@ function AssetsPanel() {
                 <option key={k} value={k}>{KIND_ICON[k]} {k}</option>
               ))}
             </select>
-            <select value={count} onChange={(e) => setCount(Number(e.target.value))} className="glass rounded-lg px-2 py-1.5 text-xs text-neutral-200 outline-none">
-              {[2, 3, 4, 6].map((n) => (
+            <select value={count} onChange={(e) => setCount(Number(e.target.value))} title="How many variations per go" className="glass rounded-lg px-2 py-1.5 text-xs text-neutral-200 outline-none">
+              {[1, 2, 3, 4, 6].map((n) => (
                 <option key={n} value={n}>×{n}</option>
               ))}
             </select>
@@ -212,6 +212,7 @@ function AssetsPanel() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={c.url} alt="" className="aspect-video w-full object-cover" />
                   <span className="absolute top-1 left-1 rounded bg-black/60 px-1 text-[9px]">{KIND_ICON[c.kind]}</span>
+                  {c.used && <span className="absolute bottom-1 left-1 rounded bg-emerald-500/85 px-1 text-[8px] font-bold text-black">✓ on board</span>}
                   <button
                     onClick={() => discardCandidate(c.id)}
                     className="absolute top-1 right-1 hidden rounded bg-black/70 px-1 text-[10px] text-rose-300 group-hover:block"
@@ -442,9 +443,10 @@ function Preset({ value, options, label, onChange }: { value: string; options: s
 }
 
 function CutRow({ scene, p }: { scene: SceneDoc; p: PromptDoc }) {
-  const { doc, updatePrompt, runPrompt, batchTakes, voicePrompt, busy } = usePipeline();
+  const { doc, updatePrompt, batchTakes, voicePrompt, busy } = usePipeline();
   const takes = takesFor(doc, p.name);
   const lockedSlugs = doc.assets.filter((a) => a.locked && a.imageUrl).map((a) => a.slug);
+  const [variations, setVariations] = useState(1);
 
   return (
     <div className="mb-3 rounded-xl border border-white/8 bg-black/20 p-3" data-testid={`cut-${p.name}`}>
@@ -491,11 +493,13 @@ function CutRow({ scene, p }: { scene: SceneDoc; p: PromptDoc }) {
             🔊 Voice
           </button>
         )}
-        <button onClick={() => void runPrompt(p.name)} disabled={busy !== null} data-testid={`run-${p.name}`} className="btn-grad rounded-md px-3.5 py-1 text-[11px] font-semibold disabled:opacity-50">
-          {busy === `running ${p.name}` ? 'Generating…' : takes.length ? '↻ New take' : '▶ Take'}
-        </button>
-        <button onClick={() => void batchTakes(p.name, 3)} disabled={busy !== null} title="Three takes back to back — shortlist the best, then animate it" data-testid={`batch-${p.name}`} className="rounded-md border border-white/12 px-2 py-1 text-[11px] font-semibold text-neutral-300 hover:bg-white/5 disabled:opacity-50">
-          ×3
+        <select value={variations} onChange={(e) => setVariations(Number(e.target.value))} title="How many image variations per go (images first; animate the keeper after)" data-testid={`variations-${p.name}`} className="rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] text-neutral-300 outline-none">
+          {[1, 2, 3, 4].map((n) => (
+            <option key={n} value={n}>×{n}</option>
+          ))}
+        </select>
+        <button onClick={() => void batchTakes(p.name, variations)} disabled={busy !== null} data-testid={`run-${p.name}`} title="Generates image keyframes only; animate your keeper take afterwards" className="btn-grad rounded-md px-3.5 py-1 text-[11px] font-semibold disabled:opacity-50">
+          {busy === `running ${p.name}` ? 'Generating…' : takes.length ? `↻ New take${variations > 1 ? 's' : ''}` : `▶ Take${variations > 1 ? 's' : ''}`}
         </button>
       </div>
       <p className="mt-1.5 line-clamp-2 font-mono text-[10px] leading-relaxed text-neutral-600" title={compilePromptText(doc, p.name)}>
