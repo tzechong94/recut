@@ -137,7 +137,9 @@ export function EditStage() {
       const rect = el.getBoundingClientRect();
       const cursorX = e.clientX - rect.left;
       setPxPerSec((z) => {
-        const nz = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z * (e.deltaY > 0 ? 0.88 : 1.14)));
+        // proportional to scroll delta and gentle: trackpads fire many small events
+        const factor = Math.exp(-e.deltaY * 0.0018);
+        const nz = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z * Math.max(0.8, Math.min(1.25, factor))));
         const tUnder = (el.scrollLeft + cursorX) / z;
         requestAnimationFrame(() => { el.scrollLeft = Math.max(0, tUnder * nz - cursorX); });
         return nz;
