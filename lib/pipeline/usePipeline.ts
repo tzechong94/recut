@@ -81,6 +81,9 @@ interface PipelineState {
 
   // Stage 2
   setStylePrefix: (prefix: string) => void;
+  lockStyle: (locked: boolean) => void;
+  /** AI: expand the user's plain words into a proper style prefix */
+  draftStyle: (hint: string) => Promise<void>;
   setSceneOverride: (sceneIdx: number, override: string) => void;
   planShotlist: (beats: string) => Promise<void>;
   updatePrompt: (name: string, patch: Partial<PromptDoc>) => void;
@@ -238,6 +241,21 @@ export const usePipeline = create<PipelineState>((set, get) => {
     lockAsset: (id, locked) => get().updateAsset(id, { locked }),
 
     setStylePrefix: (stylePrefix) => mutate((d) => ({ ...d, stylePrefix })),
+    lockStyle: (styleLocked) => mutate((d) => ({ ...d, styleLocked })),
+    draftStyle: async (hint) => {
+      set({ busy: 'styling', error: null });
+      try {
+        const res = await fetch('/api/agent/style', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hint }) });
+        const j = (await res.json()) as { style?: string; error?: string; spentUsd?: number };
+        if (!res.ok || !j.style) throw new Error(j.error ?? `HTTP ${res.status}`);
+        if (typeof j.spentUsd === 'number') set({ spentUsd: j.spentUsd });
+        mutate((d) => ({ ...d, stylePrefix: j.style!, styleLocked: false }));
+      } catch (e) {
+        set({ error: String(e).slice(0, 160) });
+      } finally {
+        set({ busy: null });
+      }
+    },
     setSceneOverride: (sceneIdx, override) =>
       mutate((d) => ({
         ...d,

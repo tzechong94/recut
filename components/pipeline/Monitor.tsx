@@ -290,18 +290,83 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
 }
 
 function StylePrefixRow() {
-  const { doc, setStylePrefix } = usePipeline();
+  const { doc, setStylePrefix, lockStyle, draftStyle, busy } = usePipeline();
+  const [open, setOpen] = useState(false);
+  const [hint, setHint] = useState('');
+  const locked = Boolean(doc.styleLocked);
+
+  // collapsed: one calm line showing the committed look
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        data-testid="style-bar"
+        className="flex w-full items-center gap-2 border-b border-white/8 px-4 py-1.5 text-left hover:bg-white/[0.03]"
+        title={locked ? 'Global style (locked). Click to view or edit.' : 'Click to define the film\'s one look'}
+      >
+        <span className="grad-text shrink-0 text-[9px] font-bold tracking-wide uppercase">Global style</span>
+        {doc.stylePrefix ? (
+          <>
+            <span className="truncate text-[11px] text-neutral-300">{doc.stylePrefix}</span>
+            <span className="ml-auto shrink-0 text-[10px]">{locked ? '🔒' : <span className="text-amber-300/90">unlocked ✎</span>}</span>
+          </>
+        ) : (
+          <span className="text-[11px] text-neutral-600">not set: click to define the film\'s one look (or let AI draft it from a few words)</span>
+        )}
+      </button>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2 border-b border-white/8 px-4 py-1.5">
-      <span className="grad-text shrink-0 text-[9px] font-bold tracking-wide uppercase">✎ Style prefix</span>
-      <input
+    <div className="space-y-2 border-b border-white/8 bg-white/[0.02] px-4 py-3" data-testid="style-editor">
+      <div className="flex items-center gap-2">
+        <span className="grad-text shrink-0 text-[9px] font-bold tracking-wide uppercase">Global style</span>
+        <span className="text-[10px] text-neutral-600">the film\'s one look, glued to every cut; scene overrides win inside their scene</span>
+      </div>
+      {/* AI draft from plain words */}
+      <div className="flex items-center gap-2">
+        <input
+          value={hint}
+          onChange={(e) => setHint(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && hint.trim() && void draftStyle(hint)}
+          placeholder="say it simply: 'warm and cozy, like an apple ad' or 'ghibli watercolor'…"
+          data-testid="style-hint"
+          className="flex-1 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[11px] text-neutral-200 outline-none placeholder:text-neutral-600 focus:border-[color:var(--c2)]"
+        />
+        <button
+          onClick={() => hint.trim() && void draftStyle(hint)}
+          disabled={busy !== null || !hint.trim()}
+          data-testid="style-ai"
+          className="btn-grad shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+        >
+          {busy === 'styling' ? 'Drafting…' : '✨ AI draft'}
+        </button>
+      </div>
+      <textarea
         value={doc.stylePrefix}
         onChange={(e) => setStylePrefix(e.target.value)}
-        placeholder="the film's one look: lighting, camera, colour, realism rules, glued to every cut… (click to edit)"
-        title="The global look, glued to every cut. Edit once, changes everywhere."
+        disabled={locked}
+        rows={3}
+        placeholder="…or write it yourself: medium, lighting, camera character, palette, realism rules"
         data-testid="style-prefix"
-        className="w-full rounded-md border border-white/8 bg-black/20 px-2 py-1 text-[11px] text-neutral-300 outline-none transition placeholder:text-neutral-700 hover:border-white/20 focus:border-[color:var(--c2)]"
+        className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-[11px] leading-relaxed text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-[color:var(--c2)] disabled:opacity-60"
       />
+      <div className="flex items-center gap-2">
+        {locked ? (
+          <button onClick={() => lockStyle(false)} data-testid="style-unlock" className="rounded-lg border border-white/12 px-3 py-1.5 text-[11px] text-neutral-300 hover:bg-white/5">Unlock to edit</button>
+        ) : (
+          <button
+            onClick={() => { lockStyle(true); setOpen(false); }}
+            disabled={!doc.stylePrefix.trim()}
+            data-testid="style-lock"
+            className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-bold text-black hover:bg-emerald-400 disabled:opacity-40"
+          >
+            🔒 Save & lock
+          </button>
+        )}
+        <button onClick={() => setOpen(false)} className="rounded-lg border border-white/12 px-3 py-1.5 text-[11px] text-neutral-400 hover:bg-white/5">Close</button>
+        {!locked && doc.stylePrefix && <span className="text-[10px] text-amber-300/80">unlocked: edits apply to every future generation</span>}
+      </div>
     </div>
   );
 }

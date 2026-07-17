@@ -78,6 +78,8 @@ export interface PipelineDoc {
   script?: string;
   /** global Style Prefix (spec Stage 2): glued to every prompt; change once, changes everywhere */
   stylePrefix: string;
+  /** user has committed the style (UI lock: read-only until unlocked) */
+  styleLocked?: boolean;
   assets: AssetDoc[];
   /** candidate tray: batch-generated options not yet shortlisted onto the board */
   candidates?: CandidateDoc[];
