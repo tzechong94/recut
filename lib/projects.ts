@@ -7,6 +7,7 @@ export interface ProjectMeta {
   updatedAt: number;
   clipCount: number;
   thumbUrl: string | null;
+  demoHidden?: boolean;
 }
 
 export async function listProjects(): Promise<ProjectMeta[]> {

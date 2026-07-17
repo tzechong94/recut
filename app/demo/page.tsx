@@ -9,7 +9,7 @@ import { listProjects, type ProjectMeta } from '../../lib/projects';
 export default function DemoIndex() {
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   useEffect(() => {
-    listProjects().then((ps) => setProjects(ps.filter((p) => p.clipCount > 0)));
+    listProjects().then((ps) => setProjects(ps.filter((p) => p.clipCount > 0 && !p.demoHidden)));
   }, []);
 
   return (

@@ -13,6 +13,8 @@ export interface StoredProject {
   createdAt: number;
   nodes: unknown[];
   edges: unknown[];
+  /** curation flag: keep the project out of the /demo judge index */
+  demoHidden?: boolean;
 }
 // A gallery card: enough to render a project tile without loading its whole graph.
 export interface ProjectMeta {
@@ -23,6 +25,7 @@ export interface ProjectMeta {
   /** video clips in the pipeline (the product is no longer node-based) */
   clipCount: number;
   thumbUrl: string | null;
+  demoHidden?: boolean;
 }
 
 // The project store root. Overridable via RECUT_DATA_DIR so e2e/tests write to an isolated
@@ -52,7 +55,7 @@ export function listProjects(): ProjectMeta[] {
   const d = dir();
   return readdirSync(d)
     .filter((f) => f.endsWith('.json'))
-    .map((f) => {
+    .map((f): ProjectMeta | null => {
       try {
         const full = join(d, f);
         const p = JSON.parse(readFileSync(full, 'utf8')) as StoredProject;
@@ -70,6 +73,7 @@ export function listProjects(): ProjectMeta[] {
           updatedAt: statSync(full).mtimeMs,
           clipCount: clips.length,
           thumbUrl,
+          demoHidden: p.demoHidden === true,
         };
       } catch {
         return null;
