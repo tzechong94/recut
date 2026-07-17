@@ -603,12 +603,12 @@ function CastingControls({ castSource, setCastSource }: { castSource?: CastSourc
   return (
     <div className="space-y-1.5 border-t border-white/8 bg-[#0b0a11] px-4 py-2.5" data-testid="casting-controls">
       <div className="flex items-center gap-2">
-        <select value={kind} onChange={(e) => setKind(e.target.value as AssetKind)} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
+        <select value={kind} onChange={(e) => setKind(e.target.value as AssetKind)} data-testid="cast-kind" className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
           {ASSET_KINDS.map((k) => (
             <option key={k} value={k}>{KIND_ICON[k]} {k}</option>
           ))}
         </select>
-        <select value={count} onChange={(e) => setCount(Number(e.target.value))} title="Variations per go" className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
+        <select value={count} onChange={(e) => setCount(Number(e.target.value))} title="Variations per go" data-testid="cast-count" className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
           {[1, 2, 3, 4, 6].map((n) => (
             <option key={n} value={n}>×{n}</option>
           ))}

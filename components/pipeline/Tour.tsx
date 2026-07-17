@@ -30,6 +30,15 @@ async function typeInto(selector: string, text: string): Promise<void> {
   }
 }
 
+/** Set a REAL React-controlled <select> (native setter + change event). */
+function selectValue(selector: string, value: string): void {
+  const el = document.querySelector(selector) as HTMLSelectElement | null;
+  if (!el) return;
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!;
+  setter.call(el, value);
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function castingPromptFor(a: AssetDoc): string {
   const nice = a.slug.replace(/_/g, ' ');
   if (a.kind === 'character') return `two-panel character sheet of ${nice}: closeup face and full body on a clean background, exactly on-model`;
@@ -104,6 +113,9 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
         body: 'The prompt goes right here. Generate candidates, crown the winner, lock it into the cast rail.',
         nextLabel: `✨ Generate ${a.slug}`,
         action: async (line: (s: string | null) => void) => {
+          selectValue('[data-testid=cast-kind]', a.kind); // character / location, not the default
+          selectValue('[data-testid=cast-count]', '1');
+          await sleep(250);
           await typeInto('[data-testid=candidate-prompt]', castingPromptFor(a));
           line('candidate 1/1');
           await sleep(1300);
