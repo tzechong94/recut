@@ -77,12 +77,14 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
     setDemoMode(true);
 
     const cast = f.assets.filter((a) => a.locked && a.imageUrl).slice(0, 3);
-    const sceneSteps: TourStep[] = f.scenes.map((scene, si) => {
+    // each scene is two beats: GENERATE (the fake render + reveal), then LINGER on the
+    // result so the judge can actually press play before the tour moves on
+    const sceneSteps: TourStep[] = f.scenes.flatMap((scene, si) => {
       const names = scene.prompts.map((p) => p.name);
-      return {
-        target: '[data-testid=cut-stage]',
+      const shoot: TourStep = {
+        target: '[data-testid=cut-controls]',
         title: `Shooting ${names.join(' + ')}`,
-        body: `The cut's description + the locked cast go straight to the video model as bound references. (Generation is replayed instantly here; live it takes 1-2 minutes.)`,
+        body: `This cut's description + the locked cast go straight to the video model as bound references. (Replayed instantly here; live it takes 1-2 minutes.)`,
         nextLabel: `🎥 Generate ${names[0]}`,
         prep: () => setSel({ t: 'cut', name: names[0]! }),
         action: async (line) => {
@@ -91,9 +93,16 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
           const upto = f.scenes.slice(0, si + 1).flatMap((sc) => sc.prompts.map((p) => p.name));
           stage({ takes: f.takes.filter((t) => upto.includes(t.promptName)) });
           line(null);
-          await sleep(400);
+          await sleep(300);
         },
       };
+      const review: TourStep = {
+        target: '[data-testid=cut-stage]',
+        title: `${names[0]} is in`,
+        body: 'Press ▶ on the clip to watch what was just generated. The ★ marks it as the keeper: the take that represents this cut in the film. Take your time; Next when ready.',
+        nextLabel: si + 1 < f.scenes.length ? `On to Scene ${si + 2} →` : 'To the edit →',
+      };
+      return [shoot, review];
     });
 
     steps.current = [
