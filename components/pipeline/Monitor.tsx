@@ -777,10 +777,10 @@ function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void 
         <textarea
           value={p.text}
           onChange={(e) => updatePrompt(name, { text: e.target.value })}
-          rows={2}
+          rows={4}
           placeholder="the cut: action, blocking, choreography move by move…"
           data-testid="cut-prompt"
-          className="flex-1 resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs leading-relaxed text-neutral-200 outline-none focus:border-[color:var(--c2)]"
+          className="max-h-44 flex-1 resize-y rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs leading-relaxed text-neutral-200 outline-none focus:border-[color:var(--c2)]"
         />
         <div className="flex w-64 flex-col gap-1.5">
           <input
