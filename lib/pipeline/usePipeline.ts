@@ -150,6 +150,11 @@ interface PipelineState {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let dirty = false; // this tab has unsaved mutations; clean tabs never save (stale-tab guard)
+let demoMode = false; // guided-demo replay: staged doc states must NEVER persist
+
+export function setDemoMode(on: boolean): void {
+  demoMode = on;
+}
 
 const backupKey = (id: string) => `recut-backup-${id}`;
 function writeBackup(doc: PipelineDoc): void {
@@ -171,6 +176,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     if (s.loadedFor !== s.doc.projectId) return; // never mutate before load completes
     const next = fn(s.doc);
     set({ doc: next });
+    if (demoMode) return; // replay states are ephemeral: no dirty, no backup, no save
     dirty = true;
     writeBackup(next); // crash backup: survives a dead server + refresh
     if (saveTimer) clearTimeout(saveTimer);
@@ -215,7 +221,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     save: async () => {
       const { doc, loadedFor } = get();
       if (loadedFor !== doc.projectId || !doc.projectId) return;
-      if (!dirty) return; // clean tabs never save: a stale background tab must not clobber
+      if (!dirty || demoMode) return; // clean tabs and demo replays never save
       try {
         // keepalive: a flush on tab-hide/unload still lands even as the page goes away
         const res = await fetch(`/api/pipeline/${doc.projectId}`, {

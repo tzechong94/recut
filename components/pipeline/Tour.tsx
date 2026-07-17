@@ -1,56 +1,202 @@
 'use client';
 
-// The guided demo tour: the REAL product UI with coach-mark popups anchored to the actual
-// controls. Each step can steer the Monitor (switch stage, select a cut) before pointing.
+// The guided demo: a SIMULATED live session on the real product. The project starts empty;
+// each Next types the real prompts into the real inputs, shows a believable generating beat,
+// then reveals the project's pre-made media as if freshly created. Nothing persists
+// (store demo mode) and nothing is spent: it is a scripted replay of how the film was made.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePipeline } from '../../lib/pipeline/usePipeline';
+import { usePipeline, setDemoMode } from '../../lib/pipeline/usePipeline';
+import type { AssetDoc, PipelineDoc } from '../../lib/pipeline/doc';
 
 export type TourSel = { t: 'cut'; name: string } | { t: 'casting' } | { t: 'script' } | { t: 'export' };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Type into a REAL React-controlled input using the native value setter (demo magic). */
+async function typeInto(selector: string, text: string): Promise<void> {
+  const el = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
+  if (!el) return;
+  el.focus();
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')!.set!;
+  const chunk = Math.max(1, Math.ceil(text.length / 90)); // whole prompt lands in ~2s
+  let cur = '';
+  for (let i = 0; i < text.length; i += chunk) {
+    cur = text.slice(0, i + chunk);
+    setter.call(el, cur);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(22);
+  }
+}
+
+function castingPromptFor(a: AssetDoc): string {
+  const nice = a.slug.replace(/_/g, ' ');
+  if (a.kind === 'character') return `two-panel character sheet of ${nice}: closeup face and full body on a clean background, exactly on-model`;
+  if (a.kind === 'location') return `${nice}, seen from a three-quarter angle, warm natural light, no people`;
+  return `clean reference sheet of ${nice}, front and three-quarter views`;
+}
+
 interface TourStep {
-  /** css selector of the anchor; null = centered modal */
   target: string | null;
   title: string;
   body: string;
-  placement?: 'right' | 'left' | 'below' | 'above';
-  /** steer the app before pointing (switch stage, select first cut, …) */
-  before?: (ctx: { setSel: (s: TourSel) => void; firstCut?: string }) => void;
+  nextLabel?: string;
+  prep?: () => void; // steer the UI before showing the popup
+  action?: (setBusyLine: (s: string | null) => void) => Promise<void>; // runs when Next is clicked
 }
 
-const STEPS: TourStep[] = [
-  { target: null, title: 'This is Recut', body: 'What you see is the real product, not a mockup. Step through how this film was made: → / space to advance, esc to explore freely.' },
-  { target: '[data-testid=rail]', title: '1 · The cast', body: 'Locked references, named by slug. Every shot binds to these exact images: that is what keeps characters on-model across the whole film.', placement: 'right', before: ({ setSel }) => setSel({ t: 'casting' }) },
-  { target: '[data-testid=candidate-prompt]', title: 'Casting works like this', body: 'Describe a member here, generate a batch of candidates, click one to iterate on it, ＋ Cast the winner, then name and 🔒 lock it in the rail.', placement: 'above' },
-  { target: '[data-testid=beats]', title: '2 · The script', body: 'Paste a script or a one-line premise. The director skill breaks it into named cuts with blocking, acting beats, and camera presets, referencing your cast by name.', placement: 'right', before: ({ setSel }) => setSel({ t: 'script' }) },
-  { target: '[data-testid=storyboard]', title: '3 · The storyboard', body: 'The film’s spine. One cell per cut; thumbnails fill in as shots complete. Click any cell to work on that cut; ★ marks a chosen keeper.', placement: 'below', before: ({ setSel, firstCut }) => firstCut && setSel({ t: 'cut', name: firstCut }) },
-  { target: '[data-testid=cut-controls]', title: 'Directing a cut', body: 'The prompt, camera presets (shot/angle/lens/light), and @cast references live here. 🎥 Takes generates video DIRECTLY from this description with the locked cast as references.', placement: 'above' },
-  { target: '[data-testid=cut-stage]', title: 'Compare, then keep', body: 'Takes land here, big, side by side. Judge scores advise; your eye decides. ★ the keeper: it represents this cut in the film.', placement: 'below' },
-  { target: '[data-testid=film-cut]', title: '4 · The edit', body: 'A real timeline: drag edges to trim, S splits at the playhead, drag clips from the media panel, scroll to zoom, ⌘Z undoes. The player above always plays YOUR cut.', placement: 'above', before: ({ setSel }) => setSel({ t: 'export' }) },
-  { target: '[data-testid=export-film]', title: 'Export', body: 'One click renders the timeline with ffmpeg (trims, order, native audio beds, voice mix) and saves the MP4 locally. It never touches your edit.', placement: 'left' },
-  { target: null, title: 'Every other tool gives you shots.', body: 'Recut gives you a series. Explore this project freely: everything you just saw is live.' },
-];
-
 export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit: () => void }) {
-  const doc = usePipeline((s) => s.doc);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const raf = useRef<number>(0);
-  const step = STEPS[i]!;
-  const firstCut = doc.scenes[0]?.prompts[0]?.name;
+  const [running, setRunning] = useState<string | null>(null);
+  const raf = useRef(0);
+  const full = useRef<PipelineDoc | null>(null);
+  const steps = useRef<TourStep[]>([]);
 
-  const go = useCallback((n: number) => {
-    const ni = Math.max(0, Math.min(n, STEPS.length - 1));
-    const s = STEPS[ni]!;
-    s.before?.({ setSel, firstCut });
+  const stage = useCallback((patch: Partial<PipelineDoc>) => {
+    const cur = usePipeline.getState().doc;
+    usePipeline.setState({ doc: { ...cur, ...patch } });
+  }, []);
+  const busyLine = useCallback((s: string | null) => usePipeline.setState({ busy: s }), []);
+
+  // build the script of the show from the finished project, then strip the stage bare
+  useEffect(() => {
+    const doc = usePipeline.getState().doc;
+    full.current = JSON.parse(JSON.stringify(doc)) as PipelineDoc;
+    const f = full.current;
+    setDemoMode(true);
+
+    const cast = f.assets.filter((a) => a.locked && a.imageUrl).slice(0, 3);
+    const sceneSteps: TourStep[] = f.scenes.map((scene, si) => {
+      const names = scene.prompts.map((p) => p.name);
+      return {
+        target: '[data-testid=cut-stage]',
+        title: `Shooting ${names.join(' + ')}`,
+        body: `The cut's description + the locked cast go straight to the video model as bound references. (Generation is replayed instantly here; live it takes 1-2 minutes.)`,
+        nextLabel: `🎥 Generate ${names[0]}`,
+        prep: () => setSel({ t: 'cut', name: names[0]! }),
+        action: async (line) => {
+          line(`rendering ${names.join(', ')}`);
+          await sleep(1500);
+          const upto = f.scenes.slice(0, si + 1).flatMap((sc) => sc.prompts.map((p) => p.name));
+          stage({ takes: f.takes.filter((t) => upto.includes(t.promptName)) });
+          line(null);
+          await sleep(400);
+        },
+      };
+    });
+
+    steps.current = [
+      {
+        target: null,
+        title: 'This is Recut, live',
+        body: 'The real product, an empty project. Watch the agent cast, script, shoot, and cut this film in front of you. → or the buttons to drive.',
+        prep: () => {
+          stage({ assets: [], candidates: [], scenes: [], takes: [], timeline: undefined, stylePrefix: '', script: '' });
+          setSel({ t: 'casting' });
+        },
+        nextLabel: 'Start casting →',
+      },
+      ...cast.map((a, ci) => ({
+        target: '[data-testid=candidate-prompt]',
+        title: `Casting: ${a.slug}`,
+        body: 'The prompt goes right here. Generate candidates, crown the winner, lock it into the cast rail.',
+        nextLabel: `✨ Generate ${a.slug}`,
+        action: async (line: (s: string | null) => void) => {
+          await typeInto('[data-testid=candidate-prompt]', castingPromptFor(a));
+          line('candidate 1/1');
+          await sleep(1300);
+          stage({ candidates: [{ id: `demo_${a.id}`, kind: a.kind, url: a.imageUrl!, prompt: castingPromptFor(a) }] });
+          line(null);
+          await sleep(900);
+          const prev = usePipeline.getState().doc.assets;
+          stage({ assets: [...prev, a], candidates: [] });
+          await sleep(400);
+        },
+      })),
+      {
+        target: '[data-testid=beats]',
+        title: 'The script',
+        body: 'Paste a script or a premise. The director skill (seedance discipline) writes named cuts with blocking, acting beats, and camera presets, bound to the cast by name.',
+        nextLabel: '🎬 Draft the shots',
+        prep: () => setSel({ t: 'script' }),
+        action: async (line) => {
+          await typeInto('[data-testid=beats]', (f.script ?? '').trim() || 'A short film about the cast.');
+          line('directing');
+          await sleep(1500);
+          stage({ scenes: f.scenes, stylePrefix: f.stylePrefix, script: f.script });
+          line(null);
+          await sleep(300);
+        },
+      },
+      {
+        target: '[data-testid=storyboard]',
+        title: 'The shotlist lands',
+        body: 'One cell per cut: the film’s spine. Camera presets arrived pre-set from the director; every cut lists its @cast references. Now we shoot.',
+        prep: () => {
+          const firstName = f.scenes[0]?.prompts[0]?.name;
+          if (firstName) setSel({ t: 'cut', name: firstName });
+        },
+      },
+      ...sceneSteps,
+      {
+        target: '[data-testid=film-cut]',
+        title: 'The edit',
+        body: 'Keepers land on a real timeline: drag edges to trim, S splits at the playhead, drag clips in from the media panel, scroll to zoom, ⌘Z undoes.',
+        prep: () => setSel({ t: 'export' }),
+      },
+      {
+        target: '[data-testid=export-film]',
+        title: 'Export',
+        body: 'ffmpeg renders the timeline: trims, order, the clips’ native audio beds, the voice line mixed over. Saves an MP4 locally; never touches the edit.',
+      },
+      {
+        target: null,
+        title: 'Every other tool gives you shots.',
+        body: 'Recut gives you a series. This project is now fully live: explore anything you just watched.',
+        nextLabel: 'Explore ✓',
+        prep: () => {
+          if (full.current) usePipeline.setState({ doc: full.current });
+        },
+      },
+    ];
+    steps.current[0]!.prep?.();
+    setI(0);
+
+    return () => {
+      if (full.current) usePipeline.setState({ doc: full.current, busy: null });
+      setDemoMode(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const step = steps.current[i];
+
+  const go = useCallback(async (n: number) => {
+    if (running) return;
+    const cur = steps.current[i];
+    if (n > i && cur?.action) {
+      setRunning(cur.nextLabel ?? 'working');
+      try { await cur.action(busyLine); } finally { setRunning(null); busyLine(null); }
+    }
+    const ni = Math.max(0, Math.min(n, steps.current.length - 1));
+    steps.current[ni]?.prep?.();
     setI(ni);
-  }, [setSel, firstCut]);
+  }, [i, running, busyLine]);
 
-  // track the anchor's rect (post-steer layout settles async, so poll via rAF)
+  const exit = useCallback(() => {
+    if (full.current) usePipeline.setState({ doc: full.current, busy: null });
+    setDemoMode(false);
+    onExit();
+  }, [onExit]);
+
+  // anchor tracking
   useEffect(() => {
     const tick = () => {
-      if (step.target) {
-        const el = document.querySelector(step.target);
+      const target = steps.current[i]?.target;
+      if (target) {
+        const el = document.querySelector(target);
         if (el) {
           const r = el.getBoundingClientRect();
           setRect((old) => (old && Math.abs(old.x - r.x) < 1 && Math.abs(old.y - r.y) < 1 && Math.abs(old.width - r.width) < 1 ? old : r));
@@ -60,66 +206,61 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
     };
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [step.target]);
+  }, [i]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); go(i + 1); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); go(i - 1); }
-      else if (e.key === 'Escape') { e.preventDefault(); onExit(); }
+      if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); void go(i + 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); void go(i - 1); }
+      else if (e.key === 'Escape') { e.preventDefault(); exit(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [i, go, onExit]);
+  }, [i, go, exit]);
 
-  // popup placement relative to the anchor, clamped to the viewport
+  if (!step) return null;
+  const W = 350;
   const pos = (() => {
-    const W = 340;
-    const H = 170;
-    if (!rect) return { left: window.innerWidth / 2 - W / 2, top: window.innerHeight / 2 - H / 2, centered: true };
+    if (!rect) return { left: window.innerWidth / 2 - W / 2, top: window.innerHeight / 2 - 110 };
     const pad = 14;
     let left = rect.right + pad;
     let top = rect.top;
-    if (step.placement === 'left') { left = rect.left - W - pad; top = rect.top; }
-    if (step.placement === 'below') { left = rect.left; top = rect.bottom + pad; }
-    if (step.placement === 'above') { left = rect.left; top = rect.top - H - pad; }
-    left = Math.max(12, Math.min(left, window.innerWidth - W - 12));
-    top = Math.max(12, Math.min(top, window.innerHeight - H - 12));
-    return { left, top, centered: false };
+    if (left + W > window.innerWidth - 12) left = Math.max(12, rect.left - W - pad);
+    if (top + 210 > window.innerHeight) top = Math.max(12, window.innerHeight - 222);
+    if (rect.height > window.innerHeight * 0.6) top = Math.max(12, rect.top + 40);
+    return { left, top };
   })();
 
   return (
     <>
-      {/* spotlight ring around the anchored control */}
       {rect && (
         <div
           className="pointer-events-none fixed z-[90] rounded-xl transition-all duration-300"
-          style={{
-            left: rect.left - 6, top: rect.top - 6, width: rect.width + 12, height: rect.height + 12,
-            boxShadow: '0 0 0 3px rgba(255,61,139,.85), 0 0 0 9999px rgba(0,0,0,.45)',
-          }}
+          style={{ left: rect.left - 6, top: rect.top - 6, width: rect.width + 12, height: rect.height + 12, boxShadow: '0 0 0 3px rgba(255,61,139,.85), 0 0 0 9999px rgba(0,0,0,.45)' }}
         />
       )}
       {!rect && <div className="pointer-events-none fixed inset-0 z-[90] bg-black/55" />}
 
-      <div className="fixed z-[95] w-[340px] rounded-2xl border border-white/15 bg-[#14121d] p-4 shadow-2xl" style={{ left: pos.left, top: pos.top }} data-testid="tour-popup">
+      <div className="fixed z-[95] w-[350px] rounded-2xl border border-white/15 bg-[#14121d] p-4 shadow-2xl" style={{ left: pos.left, top: pos.top }} data-testid="tour-popup">
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="grad-text text-[10px] font-bold tracking-wide uppercase">Guided demo · {i + 1}/{STEPS.length}</span>
-          <button onClick={onExit} data-testid="tour-exit" className="text-xs text-neutral-500 hover:text-neutral-200" title="Exit the tour (esc)">✕</button>
+          <span className="grad-text text-[10px] font-bold tracking-wide uppercase">Live demo · {i + 1}/{steps.current.length}</span>
+          <button onClick={exit} data-testid="tour-exit" className="text-xs text-neutral-500 hover:text-neutral-200" title="Exit (esc)">✕</button>
         </div>
         <h3 className="text-base font-extrabold tracking-tight text-neutral-100">{step.title}</h3>
         <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">{step.body}</p>
         <div className="mt-3 flex items-center justify-between">
-          <button onClick={() => go(i - 1)} disabled={i === 0} className="rounded-lg border border-white/12 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-30">← Back</button>
+          <button onClick={() => void go(i - 1)} disabled={i === 0 || !!running} className="rounded-lg border border-white/12 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-30">←</button>
           <div className="flex items-center gap-1">
-            {STEPS.map((_, d) => (
+            {steps.current.map((_, d) => (
               <span key={d} className={`h-1 rounded-full ${d === i ? 'w-4 bg-[#ff3d8b]' : 'w-1 bg-white/20'}`} />
             ))}
           </div>
-          {i < STEPS.length - 1 ? (
-            <button onClick={() => go(i + 1)} data-testid="tour-next" className="btn-grad rounded-lg px-4 py-1.5 text-xs font-semibold">Next →</button>
+          {i < steps.current.length - 1 ? (
+            <button onClick={() => void go(i + 1)} disabled={!!running} data-testid="tour-next" className="btn-grad rounded-lg px-4 py-1.5 text-xs font-semibold disabled:opacity-60">
+              {running ? '● generating…' : (step.nextLabel ?? 'Next →')}
+            </button>
           ) : (
-            <button onClick={onExit} data-testid="tour-next" className="btn-grad rounded-lg px-4 py-1.5 text-xs font-semibold">Explore ✓</button>
+            <button onClick={exit} data-testid="tour-next" className="btn-grad rounded-lg px-4 py-1.5 text-xs font-semibold">Explore ✓</button>
           )}
         </div>
       </div>

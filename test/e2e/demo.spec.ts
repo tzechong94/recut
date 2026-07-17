@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-// The judge demo is the REAL product with a guided tour (?tour=1): coach-marks anchored to
-// the actual controls, steering the Monitor through the stages.
+// The judge demo is a SIMULATED live session on the real product: starts empty, types the
+// prompts into the real inputs, fakes generation, reveals the pre-made media step by step.
 const DOC = {
   projectId: 'tour-e2e', rev: 1, stylePrefix: 'soft watercolor',
   script: 'two birds by the river',
@@ -10,34 +10,38 @@ const DOC = {
   takes: [{ id: 'v1', promptName: '1A', kind: 'video', url: '/clips/1000.mp4', keeper: true }],
 };
 
-test('guided tour steers the real Monitor through the stages', async ({ page }) => {
+test('the tour replays the making of the film on the live UI', async ({ page }) => {
   await page.route('**/api/pipeline/tour-e2e', (r) => r.fulfill({ json: DOC }));
   await page.route('**/api/projects/tour-e2e', (r) => r.fulfill({ json: { id: 'tour-e2e', title: 'Tour Film', createdAt: 0 } }));
   await page.goto('/project/tour-e2e/pipeline?tour=1');
   await expect(page.getByTestId('tour-popup')).toBeVisible();
-  await expect(page.getByText('This is Recut')).toBeVisible();
+  await expect(page.getByText('This is Recut, live')).toBeVisible();
+  // the stage was stripped bare: no cast in the rail yet
+  await expect(page.locator('[data-testid^=member-]')).toHaveCount(0);
 
-  await page.getByTestId('tour-next').click(); // cast: steers to casting, anchors the rail
-  await expect(page.getByText('1 · The cast')).toBeVisible();
-  await expect(page.getByTestId('rail')).toBeVisible();
+  await page.getByTestId('tour-next').click(); // -> casting step
+  await expect(page.getByText('Casting: yoopi')).toBeVisible();
+  await page.getByTestId('tour-next').click(); // types the prompt, fakes generation, reveals the member
+  await expect(page.locator('[data-testid^=member-]')).toHaveCount(1, { timeout: 15_000 });
+  // the REAL input actually got typed into
+  await expect(page.getByTestId('candidate-prompt')).toHaveValue(/two-panel character sheet/);
 
-  await page.getByTestId('tour-next').click(); // casting prompt anchor
-  await expect(page.getByTestId('candidate-prompt')).toBeVisible();
+  await expect(page.getByText('The script')).toBeVisible();
+  await page.getByTestId('tour-next').click(); // types the script, drafts the shots
+  await expect(page.getByTestId('cell-1A')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('beats')).toHaveValue(/two birds by the river/);
 
-  await page.getByTestId('tour-next').click(); // script: steers to the script stage
-  await expect(page.getByTestId('beats')).toBeVisible();
+  await page.getByTestId('tour-next').click(); // storyboard -> shooting step
+  await expect(page.getByText('Shooting 1A')).toBeVisible();
+  await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(0); // not shot yet
+  await page.getByTestId('tour-next').click(); // fake-render reveals the clip
+  await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(1, { timeout: 15_000 });
 
-  await page.getByTestId('tour-next').click(); // storyboard: selects the first cut
-  await expect(page.getByText('3 · The storyboard')).toBeVisible();
-  await page.getByTestId('tour-next').click(); // cut controls
-  await expect(page.getByTestId('cut-controls')).toBeVisible();
-  await page.getByTestId('tour-next').click(); // stage
-  await page.getByTestId('tour-next').click(); // edit: steers to the timeline
+  await page.getByTestId('tour-next').click(); // edit
   await expect(page.getByTestId('film-cut')).toBeVisible();
   await page.getByTestId('tour-next').click(); // export anchor
-  await page.getByTestId('tour-next').click(); // end card
-  await page.getByTestId('tour-next').click(); // Explore ✓ exits
+  await page.getByTestId('tour-next').click(); // end card restores the full project
+  await page.getByTestId('tour-next').click(); // Explore ✓
   await expect(page.getByTestId('tour-popup')).toHaveCount(0);
-  // the product is fully live after the tour (left on the Edit stage)
   await expect(page.getByTestId('export-stage')).toBeVisible();
 });
