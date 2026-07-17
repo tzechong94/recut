@@ -18,6 +18,17 @@ export interface AssetDoc {
   state?: string;
   /** judge scores recorded at lock time (motion test, spec 1.6) */
   judge?: { identity?: number; lighting?: number; realism?: number };
+  /** freeform board position (Figma-style curation); undefined = grid fallback */
+  x?: number;
+  y?: number;
+}
+
+/** A generated candidate waiting in the tray; promoted to an AssetDoc by dragging to the board. */
+export interface CandidateDoc {
+  id: string;
+  kind: AssetKind;
+  url: string;
+  prompt: string;
 }
 
 export interface PromptDoc {
@@ -63,8 +74,12 @@ export interface PipelineDoc {
   /** global Style Prefix (spec Stage 2): glued to every prompt; change once, changes everywhere */
   stylePrefix: string;
   assets: AssetDoc[];
+  /** candidate tray: batch-generated options not yet shortlisted onto the board */
+  candidates?: CandidateDoc[];
   scenes: SceneDoc[];
   takes: TakeDoc[];
+  /** manual film order (prompt names); scene order when absent */
+  filmOrder?: string[];
 }
 
 export function emptyPipeline(projectId: string): PipelineDoc {
@@ -179,6 +194,17 @@ export function keeperClips(doc: PipelineDoc): Array<{ promptName: string; url: 
       const pick = vids.find((t) => t.keeper) ?? vids[vids.length - 1]!;
       out.push({ promptName: p.name, url: pick.url });
     }
+  }
+  // manual film order wins where present: listed names first (that have clips), rest follow scene order
+  if (doc.filmOrder?.length) {
+    const byName = new Map(out.map((c) => [c.promptName, c]));
+    const ordered: typeof out = [];
+    for (const n of doc.filmOrder) {
+      const hit = byName.get(n);
+      if (hit) { ordered.push(hit); byName.delete(n); }
+    }
+    for (const c of out) if (byName.has(c.promptName)) ordered.push(c);
+    return ordered;
   }
   return out;
 }

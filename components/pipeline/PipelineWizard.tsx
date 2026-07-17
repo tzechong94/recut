@@ -38,6 +38,19 @@ export function PipelineWizard({ projectId, title }: { projectId: string; title:
     void load(projectId);
   }, [projectId, load]);
 
+  // flush the debounced autosave when the tab hides or unloads, so the last drag never vanishes
+  useEffect(() => {
+    const flush = () => void usePipeline.getState().save();
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', flush);
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, []);
+
   const gates = stageReady(doc);
   const tabs: Array<{ key: typeof tab; label: string; enabled: boolean; hint: string }> = [
     { key: 'assets', label: '1 · Assets', enabled: true, hint: 'Create, test, and lock every reusable reference' },
@@ -91,129 +104,217 @@ export function PipelineWizard({ projectId, title }: { projectId: string; title:
   );
 }
 
-/* ---------------- Stage 1: Assets ---------------- */
+/* ---------------- Stage 1: Assets (generator + tray > curation board) ---------------- */
 
 function AssetsPanel() {
-  const { doc, addAsset, updateAsset, removeAsset, generateAsset, setAssetImage, lockAsset } = usePipeline();
-  const [name, setName] = useState('');
-  const [kind, setKind] = useState<AssetKind>('product');
+  const { doc, generateCandidates, promoteCandidate, discardCandidate, moveAsset, updateAsset, removeAsset, lockAsset, setAssetImage, addAsset, busy } = usePipeline();
+  const [prompt, setPrompt] = useState('');
+  const [kind, setKind] = useState<AssetKind>('character');
+  const [count, setCount] = useState(4);
+  const [fromImage, setFromImage] = useState<string | undefined>(undefined);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const candidates = doc.candidates ?? [];
+
+  const readFile = (file: File, cb: (dataUri: string) => void) => {
+    const r = new FileReader();
+    r.onload = () => cb(String(r.result));
+    r.readAsDataURL(file);
+  };
+
+  // drop from the tray (candidate/<id>) promotes; drop of a board card (asset/<id>) repositions
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = Math.max(0, e.clientX - rect.left - 110);
+    const y = Math.max(0, e.clientY - rect.top - 70);
+    const cand = e.dataTransfer.getData('candidate');
+    const asset = e.dataTransfer.getData('asset');
+    if (cand) promoteCandidate(cand, { x, y });
+    else if (asset) moveAsset(asset, { x, y });
+  };
 
   return (
-    <section className="mx-auto max-w-5xl px-6 py-8">
-      <h2 className="text-lg font-bold text-neutral-100">Asset Bible</h2>
-      <p className="mt-1 mb-6 max-w-2xl text-sm text-neutral-500">
-        Create, test, and lock every reusable reference before generating a single scene. Locked assets are named by
-        registry slug and attached to every cut that references them.
-      </p>
+    <section className="grid h-full grid-cols-[20rem_1fr]" data-testid="assets-board">
+      {/* left: generator + candidate tray */}
+      <aside className="flex min-h-0 flex-col border-r border-white/8">
+        <div className="space-y-2 border-b border-white/8 p-4">
+          <div className="grad-text text-[10px] font-bold tracking-wide uppercase">Generate candidates</div>
+          <div className="flex gap-1.5">
+            <select value={kind} onChange={(e) => setKind(e.target.value as AssetKind)} className="glass rounded-lg px-2 py-1.5 text-xs text-neutral-200 outline-none">
+              {ASSET_KINDS.map((k) => (
+                <option key={k} value={k}>{KIND_ICON[k]} {k}</option>
+              ))}
+            </select>
+            <select value={count} onChange={(e) => setCount(Number(e.target.value))} className="glass rounded-lg px-2 py-1.5 text-xs text-neutral-200 outline-none">
+              {[2, 3, 4, 6].map((n) => (
+                <option key={n} value={n}>×{n}</option>
+              ))}
+            </select>
+            <button onClick={() => fileRef.current?.click()} title={fromImage ? 'Source photo attached: candidates are edits of it' : 'Start from a photo (e.g. your real product)'} className={`rounded-lg border px-2 py-1.5 text-xs ${fromImage ? 'border-[#ff3d8b]/60 bg-[#ff3d8b]/15 text-[#ff9ac4]' : 'border-white/12 text-neutral-400 hover:bg-white/5'}`}>
+              {fromImage ? '📎 photo' : '⬆ photo'}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && readFile(e.target.files[0], setFromImage)} />
+          </div>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            placeholder="describe the asset: 'two-panel character sheet, closeup face + full body on gray, a farm girl in red overalls…'"
+            data-testid="candidate-prompt"
+            className="w-full resize-none rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-neutral-200 outline-none placeholder:text-neutral-600 focus:border-[color:var(--c2)]"
+          />
+          <button
+            onClick={() => prompt.trim() && void generateCandidates(kind, prompt, count, fromImage)}
+            disabled={busy !== null || !prompt.trim()}
+            data-testid="generate-candidates"
+            className="btn-grad w-full rounded-lg py-2 text-xs font-semibold disabled:opacity-50"
+          >
+            {busy?.startsWith('candidate') ? `Generating ${busy.slice(10)}…` : `Generate ${count} candidates`}
+          </button>
+          <button
+            onClick={() => uploadRef.current?.click()}
+            className="w-full rounded-lg border border-white/12 py-1.5 text-[11px] text-neutral-400 hover:bg-white/5"
+          >
+            ⬆ Upload straight to the board
+          </button>
+          <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            readFile(f, (uri) => {
+              const a = addAsset(f.name.replace(/\.[a-z]+$/i, ''), kind);
+              setAssetImage(a.id, uri);
+            });
+          }} />
+        </div>
 
-      <div className="mb-6 flex gap-2">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && name.trim() && (addAsset(name, kind), setName(''))}
-          placeholder="Asset name (becomes its registry slug)…"
-          data-testid="new-asset-name"
-          className="glass flex-1 rounded-xl px-3.5 py-2.5 text-sm text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-[color:var(--c2)]"
-        />
-        <select value={kind} onChange={(e) => setKind(e.target.value as AssetKind)} className="glass rounded-xl px-3 py-2.5 text-sm text-neutral-200 outline-none">
-          {ASSET_KINDS.map((k) => (
-            <option key={k} value={k}>{KIND_ICON[k]} {k}</option>
-          ))}
-        </select>
-        <button onClick={() => name.trim() && (addAsset(name, kind), setName(''))} data-testid="add-asset" className="btn-grad rounded-xl px-5 py-2.5 text-sm font-semibold">
-          Add asset
-        </button>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3" data-testid="candidate-tray">
+          <div className="mb-2 px-1 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">
+            Tray · {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
+          </div>
+          {candidates.length === 0 ? (
+            <p className="px-1 text-[11px] leading-relaxed text-neutral-600">
+              Generate a batch: candidates land here. Drag the keepers onto the board; discard the rest.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {candidates.map((c) => (
+                <div
+                  key={c.id}
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData('candidate', c.id)}
+                  data-testid={`candidate-${c.id}`}
+                  className="group relative cursor-grab overflow-hidden rounded-lg border border-white/10 bg-white/[0.02] active:cursor-grabbing"
+                  title={c.prompt}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.url} alt="" className="aspect-video w-full object-cover" />
+                  <span className="absolute top-1 left-1 rounded bg-black/60 px-1 text-[9px]">{KIND_ICON[c.kind]}</span>
+                  <button
+                    onClick={() => discardCandidate(c.id)}
+                    className="absolute top-1 right-1 hidden rounded bg-black/70 px-1 text-[10px] text-rose-300 group-hover:block"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* right: the curation board */}
+      <div
+        ref={boardRef}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={onDrop}
+        data-testid="board"
+        className="relative min-h-full overflow-auto"
+        style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1.4px)', backgroundSize: '22px 22px' }}
+      >
+        {doc.assets.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 grid place-items-center">
+            <p className="max-w-xs text-center text-sm text-neutral-600">
+              The board. Drag your shortlisted candidates here, name them, and 🔒 lock them into the bible.
+            </p>
+          </div>
+        )}
+        {doc.assets.map((a, i) => (
+          <BoardCard
+            key={a.id}
+            a={a}
+            fallback={{ x: 28 + (i % 4) * 250, y: 28 + Math.floor(i / 4) * 230 }}
+            onUpdate={updateAsset}
+            onRemove={removeAsset}
+            onLock={lockAsset}
+            onReplace={(id, file) => readFile(file, (uri) => setAssetImage(id, uri))}
+          />
+        ))}
       </div>
-
-      {doc.assets.length === 0 ? (
-        <div className="glass grid place-items-center rounded-2xl px-6 py-16 text-center">
-          <p className="text-sm text-neutral-400">No assets yet</p>
-          <p className="mt-1 max-w-sm text-xs text-neutral-600">Start with your product or hero: name it, add a photo or generate a sheet, then lock it.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {doc.assets.map((a) => (
-            <AssetCard key={a.id} a={a} onUpdate={updateAsset} onRemove={removeAsset} onGenerate={generateAsset} onUpload={setAssetImage} onLock={lockAsset} />
-          ))}
-        </div>
-      )}
     </section>
   );
 }
 
-function AssetCard({
-  a, onUpdate, onRemove, onGenerate, onUpload, onLock,
+function BoardCard({
+  a, fallback, onUpdate, onRemove, onLock, onReplace,
 }: {
   a: AssetDoc;
+  fallback: { x: number; y: number };
   onUpdate: (id: string, patch: Partial<AssetDoc>) => void;
   onRemove: (id: string) => void;
-  onGenerate: (id: string, prompt: string, fromImage?: string) => Promise<void>;
-  onUpload: (id: string, dataUri: string) => void;
   onLock: (id: string, locked: boolean) => void;
+  onReplace: (id: string, file: File) => void;
 }) {
-  const [prompt, setPrompt] = useState('');
-  const busy = usePipeline((s) => s.busy);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const upload = (file: File) => {
-    const r = new FileReader();
-    r.onload = () => onUpload(a.id, String(r.result));
-    r.readAsDataURL(file);
-  };
+  const x = a.x ?? fallback.x;
+  const y = a.y ?? fallback.y;
 
   return (
-    <div className={`overflow-hidden rounded-2xl border ${a.locked ? 'border-emerald-500/40' : 'border-white/10'} bg-white/[0.02]`} data-testid={`asset-${a.slug}`}>
+    <div
+      draggable
+      onDragStart={(e) => e.dataTransfer.setData('asset', a.id)}
+      data-testid={`board-${a.slug}`}
+      className={`absolute w-56 cursor-grab overflow-hidden rounded-xl border shadow-xl shadow-black/50 active:cursor-grabbing ${a.locked ? 'border-emerald-500/50' : 'border-white/12'} bg-[#0e0d15]`}
+      style={{ left: x, top: y }}
+    >
       <div className="relative aspect-video bg-neutral-900">
         {a.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={a.imageUrl} alt={a.slug} className="h-full w-full object-cover" />
+          <img src={a.imageUrl} alt={a.slug} className="h-full w-full object-cover" draggable={false} />
         ) : (
-          <div className="grid h-full w-full place-items-center text-3xl opacity-40">{KIND_ICON[a.kind]}</div>
+          <div className="grid h-full w-full place-items-center text-2xl opacity-40">{KIND_ICON[a.kind]}</div>
         )}
-        {a.locked && <span className="absolute top-2 left-2 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-bold text-black">🔒 LOCKED</span>}
+        {a.locked && <span className="absolute top-1.5 left-1.5 rounded bg-emerald-500/90 px-1 py-0.5 text-[9px] font-bold text-black">🔒 LOCKED</span>}
       </div>
-      <div className="space-y-2 p-3">
-        <div className="flex items-center gap-2">
+      <div className="space-y-1.5 p-2">
+        <div className="flex items-center gap-1.5">
           <input
             value={a.slug}
             disabled={a.locked}
             onChange={(e) => onUpdate(a.id, { slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
-            className="w-full rounded-md border border-white/10 bg-black/30 px-2 py-1 font-mono text-xs text-neutral-200 outline-none disabled:opacity-60"
+            className="w-full rounded border border-white/10 bg-black/30 px-1.5 py-0.5 font-mono text-[11px] text-neutral-200 outline-none disabled:opacity-60"
           />
-          <span className="shrink-0 text-[10px] text-neutral-500">{a.kind}</span>
+          <span className="shrink-0 text-[9px] text-neutral-500">{a.kind}</span>
         </div>
-        {!a.locked && (
-          <>
-            <input
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={a.imageUrl ? 'refine: turn the photo into a clean sheet…' : 'describe it, or upload a photo…'}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none placeholder:text-neutral-600"
-            />
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => prompt.trim() && void onGenerate(a.id, prompt, a.imageUrl)}
-                disabled={busy !== null || !prompt.trim()}
-                className="btn-grad flex-1 rounded-md py-1.5 text-[11px] font-semibold disabled:opacity-50"
-              >
-                {a.imageUrl ? '↻ Regenerate' : 'Generate'}
-              </button>
-              <button onClick={() => fileRef.current?.click()} className="rounded-md border border-white/12 px-2.5 py-1.5 text-[11px] text-neutral-300 hover:bg-white/5">⬆ Photo</button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-              <button onClick={() => onRemove(a.id)} className="rounded-md border border-white/12 px-2 py-1.5 text-[11px] text-rose-300 hover:bg-rose-950/40">✕</button>
-            </div>
-          </>
-        )}
-        <button
-          onClick={() => onLock(a.id, !a.locked)}
-          disabled={!a.imageUrl}
-          data-testid={`lock-${a.slug}`}
-          className={`w-full rounded-md py-1.5 text-[11px] font-semibold disabled:opacity-40 ${
-            a.locked ? 'border border-white/12 text-neutral-400 hover:bg-white/5' : 'bg-emerald-500 text-black hover:bg-emerald-400'
-          }`}
-        >
-          {a.locked ? 'Unlock to edit' : '🔒 Lock asset'}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onLock(a.id, !a.locked)}
+            disabled={!a.imageUrl}
+            data-testid={`lock-${a.slug}`}
+            className={`flex-1 rounded py-1 text-[10px] font-semibold disabled:opacity-40 ${a.locked ? 'border border-white/12 text-neutral-400 hover:bg-white/5' : 'bg-emerald-500 text-black hover:bg-emerald-400'}`}
+          >
+            {a.locked ? 'Unlock' : '🔒 Lock'}
+          </button>
+          {!a.locked && (
+            <>
+              <button onClick={() => fileRef.current?.click()} title="Replace image" className="rounded border border-white/12 px-1.5 py-1 text-[10px] text-neutral-400 hover:bg-white/5">⬆</button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && onReplace(a.id, e.target.files[0])} />
+              <button onClick={() => onRemove(a.id)} className="rounded border border-white/12 px-1.5 py-1 text-[10px] text-rose-300 hover:bg-rose-950/40">✕</button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

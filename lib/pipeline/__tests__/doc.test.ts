@@ -177,3 +177,16 @@ describe('cinematography presets compile into the prompt', () => {
     expect(compilePromptText(doc(), '1B')).not.toContain('undefined');
   });
 });
+
+describe('filmOrder overrides scene order in keeperClips', () => {
+  it('listed names first, unlisted keep scene order, unknown names ignored', () => {
+    const d = doc();
+    d.takes = [
+      { id: 'v1', promptName: '1A', kind: 'video', url: '/1a.mp4' },
+      { id: 'v2', promptName: '1B', kind: 'video', url: '/1b.mp4' },
+      { id: 'v3', promptName: '2A', kind: 'video', url: '/2a.mp4' },
+    ];
+    d.filmOrder = ['2A', 'ZZ', '1A'];
+    expect(keeperClips(d).map((c) => c.promptName)).toEqual(['2A', '1A', '1B']);
+  });
+});

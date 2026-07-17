@@ -17,6 +17,7 @@ import {
   toSlug,
   type AssetDoc,
   type AssetKind,
+  type CandidateDoc,
   type PipelineDoc,
   type PromptDoc,
   type TakeDoc,
@@ -65,6 +66,12 @@ interface PipelineState {
 
   // Stage 1
   addAsset: (name: string, kind: AssetKind) => AssetDoc;
+  /** batch-generate n candidates into the tray (Figma-style curation: generate many, shortlist) */
+  generateCandidates: (kind: AssetKind, prompt: string, n: number, fromImage?: string) => Promise<void>;
+  /** drag a candidate onto the board: it becomes an (unlocked) asset at that position */
+  promoteCandidate: (candidateId: string, pos: { x: number; y: number }) => void;
+  discardCandidate: (candidateId: string) => void;
+  moveAsset: (id: string, pos: { x: number; y: number }) => void;
   updateAsset: (id: string, patch: Partial<AssetDoc>) => void;
   removeAsset: (id: string) => void;
   generateAsset: (id: string, prompt: string, fromImage?: string) => Promise<void>;
@@ -85,6 +92,9 @@ interface PipelineState {
 
   // Stage 3
   runPrompt: (name: string) => Promise<void>;
+  /** batch: n image takes for a cut (images are cheap; shortlist, then animate the keeper) */
+  batchTakes: (name: string, n: number) => Promise<void>;
+  setFilmOrder: (names: string[]) => void;
   /** taxonomy auto-fix: append the judge's repair instruction to the prompt (surgical, by name), re-run */
   applyRepair: (takeId: string) => Promise<void>;
   voicePrompt: (name: string) => Promise<void>;
@@ -138,11 +148,13 @@ export const usePipeline = create<PipelineState>((set, get) => {
     save: async () => {
       const { doc, loadedFor } = get();
       if (loadedFor !== doc.projectId || !doc.projectId) return;
+      // keepalive: a flush on tab-hide/unload still lands even as the page goes away
       await fetch(`/api/pipeline/${doc.projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(doc),
-      });
+        keepalive: true,
+      }).catch(() => undefined);
     },
     setTab: (tab) => set({ tab }),
     patchDoc: (patch) => mutate((d) => ({ ...d, ...patch })),
@@ -174,6 +186,46 @@ export const usePipeline = create<PipelineState>((set, get) => {
         set({ busy: null });
       }
     },
+    generateCandidates: async (kind, prompt, n, fromImage) => {
+      const { doc } = get();
+      const style = doc.stylePrefix ? `${doc.stylePrefix}. ` : '';
+      for (let i = 0; i < n; i++) {
+        set({ busy: `candidate ${i + 1}/${n}`, error: null });
+        try {
+          const j = fromImage
+            ? await callGenerate({ kind: 'edit', image: fromImage, prompt: `${style}${prompt}`, aspect: '16:9' })
+            : await callGenerate({ kind: 'text2image', prompt: `${style}${prompt}`, aspect: '16:9' });
+          trackSpend(j);
+          if (j.imageUrl) {
+            const cand: CandidateDoc = { id: crypto.randomUUID().slice(0, 8), kind, url: j.imageUrl, prompt };
+            mutate((d) => ({ ...d, candidates: [...(d.candidates ?? []), cand] }));
+          }
+        } catch (e) {
+          set({ error: String(e).slice(0, 160) });
+          break; // a failed call (e.g. budget refusal) stops the batch, never loops on errors
+        }
+      }
+      set({ busy: null });
+    },
+
+    promoteCandidate: (candidateId, pos) =>
+      mutate((d) => {
+        const cand = (d.candidates ?? []).find((c) => c.id === candidateId);
+        if (!cand) return d;
+        const base = toSlug(cand.prompt.split(/[,.]/)[0] ?? cand.kind).slice(0, 24) || cand.kind;
+        let slug = base;
+        let i = 2;
+        while (d.assets.some((a) => a.slug === slug)) slug = `${base}_${i++}`;
+        const asset: AssetDoc = { id: cand.id, slug, kind: cand.kind, imageUrl: cand.url, locked: false, x: pos.x, y: pos.y };
+        return { ...d, assets: [...d.assets, asset], candidates: (d.candidates ?? []).filter((c) => c.id !== candidateId) };
+      }),
+
+    discardCandidate: (candidateId) =>
+      mutate((d) => ({ ...d, candidates: (d.candidates ?? []).filter((c) => c.id !== candidateId) })),
+
+    moveAsset: (id, pos) =>
+      mutate((d) => ({ ...d, assets: d.assets.map((a) => (a.id === id ? { ...a, x: pos.x, y: pos.y } : a)) })),
+
     setAssetImage: (id, dataUri) => get().updateAsset(id, { imageUrl: dataUri, locked: false }),
     lockAsset: (id, locked) => get().updateAsset(id, { locked }),
 
@@ -301,6 +353,15 @@ export const usePipeline = create<PipelineState>((set, get) => {
     shiftScene: (sceneIdx, dir) => mutate((d) => moveScene(d, sceneIdx, dir)),
 
     // drama: a prompt's dialogue line becomes a voice take via TTS
+    batchTakes: async (name, n) => {
+      for (let i = 0; i < n; i++) {
+        await get().runPrompt(name);
+        if (get().error) break; // budget refusal or API error stops the batch
+      }
+    },
+
+    setFilmOrder: (names) => mutate((d) => ({ ...d, filmOrder: names })),
+
     applyRepair: async (takeId) => {
       const { doc } = get();
       const take = doc.takes.find((t) => t.id === takeId);
