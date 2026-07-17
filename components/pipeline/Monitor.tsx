@@ -652,7 +652,11 @@ function ExportStage() {
           src={url}
           preload="metadata"
           className="hidden"
-          onLoadedMetadata={(e) => setDurations((d) => (d[takeId] ? d : { ...d, [takeId]: e.currentTarget.duration }))}
+          onLoadedMetadata={(e) => {
+            // read synchronously: React nulls currentTarget before the async state updater runs
+            const dur = e.currentTarget?.duration;
+            if (dur && Number.isFinite(dur)) setDurations((d) => (d[takeId] ? d : { ...d, [takeId]: dur }));
+          }}
         />
       ))}
       <div className="grid grid-cols-[1fr_16rem] gap-5">
