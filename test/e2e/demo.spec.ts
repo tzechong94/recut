@@ -38,6 +38,6 @@ test('guided tour steers the real Monitor through the stages', async ({ page }) 
   await page.getByTestId('tour-next').click(); // end card
   await page.getByTestId('tour-next').click(); // Explore ✓ exits
   await expect(page.getByTestId('tour-popup')).toHaveCount(0);
-  // the product is fully live after the tour
-  await expect(page.getByTestId('cut-controls')).toBeVisible();
+  // the product is fully live after the tour (left on the Edit stage)
+  await expect(page.getByTestId('export-stage')).toBeVisible();
 });
