@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// The full three-stage pipeline walkthrough: candidates > board > lock > scenes (skill-drafted)
-// > take > judge (failing) > one-click taxonomy fix > animate > keeper > film export.
+// The Director's Monitor walkthrough: cast (candidates > crown > lock) > draft scenes >
+// takes > judge (failing) > one-click taxonomy fix > animate > crown the clip > export.
 // Model + assemble calls are mocked (deterministic + free); the pipeline store is real
 // (isolated under RECUT_DATA_DIR).
 
@@ -33,7 +33,6 @@ async function mockModels(page: Page) {
   await page.route('**/api/generate', async (route) => {
     const body = route.request().postDataJSON() as { kind: string };
     if (body.kind === 'critique') {
-      // first judgement fails (exercises the taxonomy card), later ones pass
       const payload = judged ? { score: 0.95, verdict: { ...FAIL_VERDICT.verdict, prop_match: 1, framing_match: 0.97 }, spentUsd: 0.5, capUsd: 8 } : FAIL_VERDICT;
       judged = true;
       return route.fulfill({ json: payload });
@@ -44,44 +43,53 @@ async function mockModels(page: Page) {
   await page.route('**/api/assemble', (r) => r.fulfill({ json: { videoUrl: '/clips/1000.mp4' } }));
 }
 
-test('three-stage pipeline: curate, direct, iterate, repair, assemble', async ({ page }) => {
+test('director monitor: cast, direct, iterate, repair, crown, export', async ({ page }) => {
   await mockModels(page);
   await page.goto('/');
-  await page.getByTestId('new-project-title').fill('Pipeline e2e');
+  await page.getByTestId('new-project-title').fill('Monitor e2e');
   await page.getByTestId('create-project').click();
   await expect(page).toHaveURL(/\/pipeline/);
 
-  // Stage 1: batch candidates > drag one onto the board > lock it
+  // Cast: batch candidates > crown one > it lands in the rail > lock it
+  await page.getByTestId('cast-new').click();
   await page.getByTestId('candidate-prompt').fill('two-panel character sheet of the watchmaker');
   await page.getByTestId('generate-candidates').click();
-  await expect(page.locator('[data-testid^=candidate-][draggable]')).toHaveCount(4, { timeout: 15_000 });
-  await page.locator('[data-testid^=candidate-][draggable]').first().dragTo(page.getByTestId('board'), { targetPosition: { x: 500, y: 300 } });
-  await expect(page.locator('[data-testid^=board-]')).toHaveCount(1);
+  await expect(page.locator('[data-testid^=crown-]')).toHaveCount(4, { timeout: 15_000 });
+  await page.locator('[data-testid^=crown-]').first().click();
+  await expect(page.locator('[data-testid^=draft-]')).toHaveCount(1);
+  await expect(page.locator('text=✓ in bible')).toBeVisible(); // tray keeps the original
   await page.locator('[data-testid^=lock-]').first().click();
-  await expect(page.locator('[data-testid^=board-]').first()).toContainText('Unlock');
+  await expect(page.locator('[data-testid^=bible-]')).toHaveCount(1);
 
-  // Stage 2: skill-drafted scenes arrive with camera presets pre-set
-  await page.getByTestId('tab-scenes').click();
+  // Direct: draft scenes from beats; storyboard cells appear; presets pre-set
+  await page.getByTestId('beats').waitFor({ state: 'visible', timeout: 5_000 }).catch(async () => {
+    await page.locator('nav[data-testid=phases] button', { hasText: 'Direct' }).click();
+  });
   await page.getByTestId('beats').fill('an old watchmaker closes his shop');
   await page.getByTestId('draft-shotlist').click();
-  await expect(page.getByTestId('cut-1A')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('cell-1A')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('cut-controls')).toBeVisible(); // auto-selected first cut
+  await page.getByTestId('cell-2A').click();
   await expect(page.locator('[data-testid=cine-2A] select').first()).toHaveValue('extreme close-up');
 
-  // take > judge fails > taxonomy card with one-click fix
+  // Takes on 1A: default x2 batch > judge fails > taxonomy fix > new take
+  await page.getByTestId('cell-1A').click();
   await page.getByTestId('run-1A').click();
-  await expect(page.locator('[data-testid=takes-1A] img')).toHaveCount(1, { timeout: 15_000 });
-  await page.locator('[data-testid=takes-1A] button', { hasText: 'Judge' }).click();
+  await expect(page.locator('[data-testid=cut-stage] img')).toHaveCount(2, { timeout: 15_000 });
+  await page.locator('[data-testid=cut-stage] button', { hasText: 'judge' }).first().click();
   await expect(page.locator('[data-testid^=diagnosis-]')).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('[data-testid^=diagnosis-]')).toContainText('prompt'); // layer badge (CSS uppercases visually)
   await page.locator('[data-testid^=fix-]').first().click();
-  await expect(page.locator('[data-testid=takes-1A] img')).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.locator('[data-testid=cut-stage] img')).toHaveCount(3, { timeout: 15_000 });
 
-  // animate the repaired take > it becomes a video take (mocked, instant)
-  await page.locator('[data-testid=takes-1A] [title="Animate (i2v)"]').first().click();
-  await expect(page.locator('[data-testid=takes-1A] video')).toHaveCount(1, { timeout: 15_000 });
+  // Animate (latest frame) > crown the clip > storyboard cell shows the keeper
+  await page.getByTestId('animate-1A').click();
+  await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(1, { timeout: 15_000 });
+  const videoTake = page.locator('[data-testid^=take-]').filter({ has: page.locator('video') }).first();
+  await videoTake.locator('[data-testid^=crown-]').click();
+  await expect(page.getByTestId('cell-1A')).toContainText('👑');
 
-  // Stage 3: film gate opens, export renders the result
-  await page.getByTestId('tab-film').click();
+  // Cut: export renders the film
+  await page.getByTestId('phase-export').click();
   await expect(page.getByTestId('film-cut')).toBeVisible();
   await page.getByTestId('export-film').click();
   await expect(page.getByTestId('film-result')).toBeVisible({ timeout: 30_000 });

@@ -69,7 +69,7 @@ interface PipelineState {
   /** batch-generate n candidates into the tray (Figma-style curation: generate many, shortlist) */
   generateCandidates: (kind: AssetKind, prompt: string, n: number, fromImage?: string) => Promise<void>;
   /** drag a candidate onto the board: it becomes an (unlocked) asset at that position */
-  promoteCandidate: (candidateId: string, pos: { x: number; y: number }) => void;
+  promoteCandidate: (candidateId: string, pos?: { x: number; y: number }) => void;
   discardCandidate: (candidateId: string) => void;
   moveAsset: (id: string, pos: { x: number; y: number }) => void;
   updateAsset: (id: string, patch: Partial<AssetDoc>) => void;
@@ -216,8 +216,8 @@ export const usePipeline = create<PipelineState>((set, get) => {
         let slug = base;
         let i = 2;
         while (d.assets.some((a) => a.slug === slug)) slug = `${base}_${i++}`;
-        // fresh asset id: the same candidate can be placed more than once; the tray keeps it
-        const asset: AssetDoc = { id: crypto.randomUUID().slice(0, 8), slug, kind: cand.kind, imageUrl: cand.url, locked: false, x: pos.x, y: pos.y };
+        // fresh asset id: the same candidate can be crowned more than once; the tray keeps it
+        const asset: AssetDoc = { id: crypto.randomUUID().slice(0, 8), slug, kind: cand.kind, imageUrl: cand.url, locked: false, x: pos?.x, y: pos?.y };
         return {
           ...d,
           assets: [...d.assets, asset],
@@ -490,7 +490,8 @@ export const usePipeline = create<PipelineState>((set, get) => {
 
     removeTake: (takeId) => mutate((d) => ({ ...d, takes: d.takes.filter((t) => t.id !== takeId) })),
 
-    // exactly one keeper per prompt: starring a take un-stars its siblings
+    // exactly one crowned take per prompt PER KIND: a crowned image is the keyframe of record
+    // (what Animate uses); a crowned video is the film keeper. Crowning un-crowns siblings.
     setKeeper: (takeId) =>
       mutate((d) => {
         const target = d.takes.find((t) => t.id === takeId);
@@ -498,7 +499,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
         return {
           ...d,
           takes: d.takes.map((t) =>
-            t.promptName === target.promptName && t.kind === 'video'
+            t.promptName === target.promptName && t.kind === target.kind
               ? { ...t, keeper: t.id === takeId ? !t.keeper : false }
               : t,
           ),
