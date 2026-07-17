@@ -46,6 +46,18 @@ async function callGenerate(body: Record<string, unknown>): Promise<GenerateResp
   return j;
 }
 
+async function pollVideo(taskId: string): Promise<string> {
+  const deadline = Date.now() + 8 * 60_000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const res = await fetch(`/api/generate/status?taskId=${taskId}`);
+    const sj = (await res.json()) as { status?: string; videoUrl?: string; error?: string };
+    if (sj.status === 'done' && sj.videoUrl) return sj.videoUrl;
+    if (sj.status === 'failed') throw new Error(sj.error ?? 'video generation failed');
+  }
+  throw new Error('video generation timed out');
+}
+
 interface PipelineState {
   doc: PipelineDoc;
   loadedFor: string | null;
@@ -97,9 +109,12 @@ interface PipelineState {
   setScript: (script: string) => void;
 
   // Stage 3
-  runPrompt: (name: string) => Promise<void>;
-  /** batch: n image takes for a cut (images are cheap; shortlist, then animate the keeper) */
-  batchTakes: (name: string, n: number) => Promise<void>;
+  /** direct reference-to-video: the cut's compiled text + locked cast refs (tutorial parity) */
+  runPrompt: (name: string, durationSec?: number) => Promise<void>;
+  /** the cheap image path: a keyframe take (look-dev, judging, repair, animate source) */
+  framePrompt: (name: string) => Promise<void>;
+  /** batch: n takes for a cut; mode 'video' = direct r2v, 'frame' = image keyframes */
+  batchTakes: (name: string, n: number, mode?: 'video' | 'frame', durationSec?: number) => Promise<void>;
   setFilmOrder: (names: string[]) => void;
   /** taxonomy auto-fix: append the judge's repair instruction to the prompt (surgical, by name), re-run */
   applyRepair: (takeId: string) => Promise<void>;
@@ -391,9 +406,10 @@ export const usePipeline = create<PipelineState>((set, get) => {
     shiftScene: (sceneIdx, dir) => mutate((d) => moveScene(d, sceneIdx, dir)),
 
     // drama: a prompt's dialogue line becomes a voice take via TTS
-    batchTakes: async (name, n) => {
+    batchTakes: async (name, n, mode = 'video', durationSec = 5) => {
       for (let i = 0; i < n; i++) {
-        await get().runPrompt(name);
+        if (mode === 'frame') await get().framePrompt(name);
+        else await get().runPrompt(name, durationSec);
         if (get().error) break; // budget refusal or API error stops the batch
       }
     },
@@ -411,7 +427,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
       if (!hit.text.includes(instruction)) {
         get().updatePrompt(take.promptName, { text: `${hit.text} ${instruction}` });
       }
-      await get().runPrompt(take.promptName);
+      await get().framePrompt(take.promptName); // repair at the image layer, never burn video on a fix
     },
 
     voicePrompt: async (name) => {
@@ -434,12 +450,38 @@ export const usePipeline = create<PipelineState>((set, get) => {
       }
     },
 
-    runPrompt: async (name) => {
+    runPrompt: async (name, durationSec = 5) => {
       const { doc } = get();
       const text = compilePromptText(doc, name);
       if (!text) return;
-      const assets = resolveAssets(doc, name);
-      const imgs = assets.map((a) => a.imageUrl!) ;
+      const refs = resolveAssets(doc, name).map((a) => a.imageUrl!);
+      set({ busy: `running ${name}`, error: null });
+      try {
+        // direct r2v when the cut has locked refs; otherwise keyframe-then-animate is the path
+        if (refs.length === 0) throw new Error('attach at least one locked cast member (or use Frames + Animate)');
+        const j = await callGenerate({ kind: 'video', refs, prompt: text, duration: durationSec });
+        trackSpend(j);
+        let url = j.videoUrl;
+        if (j.taskId) {
+          set({ busy: `rendering ${name} (1-2 min)` });
+          url = await pollVideo(j.taskId);
+        }
+        if (url) {
+          const take: TakeDoc = { id: crypto.randomUUID().slice(0, 8), promptName: name, kind: 'video', url };
+          mutate((d) => ({ ...d, takes: [...d.takes, take] }));
+        }
+      } catch (e) {
+        set({ error: String(e).slice(0, 160) });
+      } finally {
+        set({ busy: null });
+      }
+    },
+
+    framePrompt: async (name) => {
+      const { doc } = get();
+      const text = compilePromptText(doc, name);
+      if (!text) return;
+      const imgs = resolveAssets(doc, name).map((a) => a.imageUrl!);
       set({ busy: `running ${name}`, error: null });
       try {
         const j =

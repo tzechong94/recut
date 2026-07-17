@@ -715,7 +715,8 @@ function CastingControls({ castSource, setCastSource }: { castSource?: CastSourc
 
 function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void }) {
   const { doc, updatePrompt, batchTakes, voicePrompt, animateTake, removePrompt, busy } = usePipeline();
-  const [variations, setVariations] = useState(2);
+  const [variations, setVariations] = useState(1);
+  const [duration, setDuration] = useState(5);
   const p = doc.scenes.flatMap((s) => s.prompts).find((x) => x.name === name);
   useEffect(() => {
     if (!p) {
@@ -790,19 +791,39 @@ function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void 
             className="rounded-md border border-white/10 bg-black/20 px-2 py-1 text-[11px] text-pink-200/90 outline-none placeholder:text-neutral-700"
           />
           <div className="flex items-center gap-1.5">
-            <select value={variations} onChange={(e) => setVariations(Number(e.target.value))} title="Image variations per go" data-testid={`variations-${name}`} className="rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] text-neutral-300 outline-none">
+            <select value={variations} onChange={(e) => setVariations(Number(e.target.value))} title="Takes per go" data-testid={`variations-${name}`} className="rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] text-neutral-300 outline-none">
               {[1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>×{n}</option>
               ))}
             </select>
-            <button onClick={() => void batchTakes(name, variations)} disabled={busy !== null} data-testid={`run-${name}`} className="btn-grad flex-1 rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-50">
-              {busy === `running ${name}` ? 'Generating…' : '▸ Takes'}
+            <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} title="Clip length (seconds)" data-testid={`duration-${name}`} className="rounded-md border border-white/10 bg-black/30 px-1.5 py-1 text-[11px] text-neutral-300 outline-none">
+              {[3, 5, 8, 10].map((n) => (
+                <option key={n} value={n}>{n}s</option>
+              ))}
+            </select>
+            <button
+              onClick={() => void batchTakes(name, variations, 'video', duration)}
+              disabled={busy !== null}
+              data-testid={`run-${name}`}
+              title="Direct video from this cut's description + the attached cast as locked references (wan r2v)"
+              className="btn-grad flex-1 rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-50"
+            >
+              {busy?.includes(name) ? 'Generating…' : '🎥 Takes'}
+            </button>
+            <button
+              onClick={() => void batchTakes(name, variations, 'frame')}
+              disabled={busy !== null}
+              data-testid={`frame-${name}`}
+              title="Cheap image keyframes: look-dev, judging, repair; animate the keeper after"
+              className="rounded-md border border-white/12 px-2 py-1 text-[11px] font-semibold text-neutral-300 hover:bg-white/5 disabled:opacity-50"
+            >
+              🖼
             </button>
             <button
               onClick={() => animTarget && void animateTake(animTarget.id)}
               disabled={busy !== null || !animTarget}
               data-testid={`animate-${name}`}
-              title={crownedImage ? 'Animate the keeper keyframe' : latestImage ? 'No keeper yet: animates the latest frame' : 'Generate a keyframe first'}
+              title={crownedImage ? 'Animate the keeper keyframe (i2v)' : latestImage ? 'No keeper yet: animates the latest frame' : 'Generate a frame first'}
               className="rounded-md border border-white/12 px-2 py-1 text-[11px] font-semibold text-neutral-200 hover:bg-white/5 disabled:opacity-40"
             >
               🎬 {crownedImage ? '★' : ''}

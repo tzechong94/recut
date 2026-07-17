@@ -9,8 +9,9 @@ import { selectModel } from '../../../lib/gateway/router';
 import { CRITIC_MODEL_ID } from '../../../manifests/qwen-vl-critic';
 import { buildCritiquePayload, parseVerdict, continuityScore } from '../../../lib/agent/critic';
 import { buildKenBurnsArgs } from '../../../lib/post/export';
-import { submitI2V } from '../../../adapters/dashscope-video';
+import { submitI2V, submitR2V } from '../../../adapters/dashscope-video';
 import { WAN_I2V, I2V_MODEL_ID } from '../../../manifests/wan-i2v';
+import { WAN_R2V, R2V_MODEL_ID } from '../../../manifests/wan-r2v';
 import { TTS_MODEL_ID } from '../../../manifests/qwen-tts';
 
 export const runtime = 'nodejs';
@@ -126,7 +127,22 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     if (body.kind === 'video') {
-      if (!body.image) return Response.json({ error: 'video needs an input image' }, { status: 400 });
+      // Reference-to-video (the tutorial's direct path): shot description + locked cast refs.
+      // Takes priority over i2v when refs are attached and no keyframe image is given.
+      if (!body.image && body.refs?.length) {
+        const hosted = body.refs.filter((u) => /^https?:\/\//.test(u));
+        if (hosted.length === 0) {
+          return Response.json({ error: 'direct video needs hosted reference images (uploaded photos are not yet supported here; generate the cast member instead)' }, { status: 400 });
+        }
+        const durationSec = Math.max(3, Math.min(10, Math.round(body.duration ?? 5)));
+        const cost = WAN_R2V.cost.amount * durationSec;
+        gov.assertCanSpend(cost);
+        const prompt = body.prompt?.trim() || 'cinematic shot, natural motion';
+        const taskId = await submitR2V(R2V_MODEL_ID, hosted.slice(0, WAN_R2V.supports.maxRefImages ?? 4), prompt, { durationSec, resolution: '720P' });
+        gov.record(cost);
+        return Response.json({ taskId, spentUsd: gov.spent(), capUsd: gov.cap() });
+      }
+      if (!body.image) return Response.json({ error: 'video needs an input image or reference images' }, { status: 400 });
       const genDir = resolve(process.cwd(), 'public/generated');
       mkdirSync(genDir, { recursive: true });
       const name = `${randomUUID()}.mp4`;

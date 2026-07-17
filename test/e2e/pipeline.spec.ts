@@ -61,6 +61,8 @@ test('director monitor: cast, script, shots, repair, crown, export', async ({ pa
   await page.locator('[data-testid^=promote-]').first().click();
   await expect(page.locator('[data-testid^=member-]')).toHaveCount(1);
   await expect(page.locator('text=✓ cast')).toBeVisible(); // stage keeps the original
+  // name it so the drafted script binds to it (Elias -> elias)
+  await page.locator('[data-testid^=member-] input').fill('elias');
   await page.locator('[data-testid^=lock-]').first().click();
   await expect(page.locator('[data-testid^=member-]').first()).toContainText('Unlock'); // edited in place, no jumping
 
@@ -73,18 +75,22 @@ test('director monitor: cast, script, shots, repair, crown, export', async ({ pa
   await page.getByTestId('cell-2A').click();
   await expect(page.locator('[data-testid=cine-2A] select').first()).toHaveValue('extreme close-up');
 
-  // Takes on 1A: default x2 batch > judge fails > taxonomy fix > new take
+  // Takes on 1A are DIRECT video (r2v with locked refs; mocked returns instantly)
   await page.getByTestId('cell-1A').click();
   await page.getByTestId('run-1A').click();
-  await expect(page.locator('[data-testid=cut-stage] img')).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(1, { timeout: 15_000 });
+
+  // Frames: the cheap image path for judging + repair
+  await page.getByTestId('frame-1A').click();
+  await expect(page.locator('[data-testid=cut-stage] img')).toHaveCount(1, { timeout: 15_000 });
   await page.locator('[data-testid=cut-stage] button', { hasText: 'judge' }).first().click();
   await expect(page.locator('[data-testid^=diagnosis-]')).toBeVisible({ timeout: 15_000 });
   await page.locator('[data-testid^=fix-]').first().click();
-  await expect(page.locator('[data-testid=cut-stage] img')).toHaveCount(3, { timeout: 15_000 });
+  await expect(page.locator('[data-testid=cut-stage] img')).toHaveCount(2, { timeout: 15_000 });
 
-  // Animate (latest frame) > crown the clip > storyboard cell shows the keeper
+  // Animate (latest frame) > another clip lands
   await page.getByTestId('animate-1A').click();
-  await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(2, { timeout: 15_000 });
   const videoTake = page.locator('[data-testid^=take-]').filter({ has: page.locator('video') }).first();
   await videoTake.locator('[data-testid^=keep-]').click();
   await expect(page.getByTestId('cell-1A')).toContainText('★');

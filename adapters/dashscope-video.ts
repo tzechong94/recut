@@ -41,6 +41,30 @@ export async function submitI2V(modelId: string, imgUrl: string, prompt: string,
   return taskId;
 }
 
+/** Submit a reference-to-video job: prompt + reference IMAGES as media entries. Refs must be
+ *  hosted urls; data URIs are rejected upstream. Model id comes from the manifest (hard rule 1).
+ *  Returns the task id (same poll as i2v). */
+export async function submitR2V(modelId: string, refUrls: string[], prompt: string, params: I2VParams = {}): Promise<string> {
+  const key = process.env.RECUT_DASHSCOPE_API_KEY ?? '';
+  if (!key) throw new VideoGenError('RECUT_DASHSCOPE_API_KEY unset');
+  const parameters: Record<string, unknown> = {
+    duration: Math.max(3, Math.min(15, Math.round(params.durationSec ?? 5))),
+    resolution: params.resolution ?? '720P',
+    watermark: false,
+  };
+  if (params.seed) parameters.seed = params.seed % 2147483647;
+  const media = refUrls.map((url) => ({ type: 'reference_image', url }));
+  const res = await fetch(`${base()}/services/aigc/video-generation/video-synthesis`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-DashScope-Async': 'enable' },
+    body: JSON.stringify({ model: modelId, input: { prompt, media }, parameters }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string; output?: { task_id?: string } };
+  const taskId = body.output?.task_id;
+  if (!res.ok || !taskId) throw new VideoGenError(`r2v submit ${res.status} ${body.code ?? ''}: ${String(body.message ?? '').slice(0, 160)}`);
+  return taskId;
+}
+
 export interface I2VStatus {
   status: 'running' | 'succeeded' | 'failed';
   videoUrl?: string;
