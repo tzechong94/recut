@@ -165,7 +165,8 @@ export function Tour({ projectId, setSel, onExit }: { projectId: string; setSel:
           stage({ candidates: [{ id: `demo_${a.id}`, kind: a.kind, url: a.imageUrl!, prompt: castingPromptFor(a) }] });
           line(null);
           await sleep(900);
-          const prev = usePipeline.getState().doc.assets;
+          // replaying a step (back then forward) must not double-cast the member
+          const prev = usePipeline.getState().doc.assets.filter((x) => x.id !== a.id);
           stage({ assets: [...prev, a], candidates: [] });
           clearInput('[data-testid=candidate-prompt]'); // field resets for the next member
           await sleep(400);
