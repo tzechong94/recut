@@ -137,8 +137,8 @@ interface PipelineState {
   resetTimeline: () => void;
   /** replace the whole timeline (undo restore) */
   setTimeline: (segs: import('./doc').FilmSegment[] | undefined) => void;
-  /** append a full-length segment of this take to the timeline (the media-bin add) */
-  appendSegment: (takeId: string) => void;
+  /** insert a full-length segment of this take; beforeSegId places it, absent = append */
+  insertSegment: (takeId: string, beforeSegId?: string) => void;
   clearFilm: () => void;
   // Stage 4
   setLut: (lut: string) => void;
@@ -655,10 +655,14 @@ export const usePipeline = create<PipelineState>((set, get) => {
       }),
     resetTimeline: () => mutate((d) => ({ ...d, timeline: undefined })),
     setTimeline: (segs) => mutate((d) => ({ ...d, timeline: segs })),
-    appendSegment: (takeId) =>
+    insertSegment: (takeId, beforeSegId) =>
       mutate((d) => {
-        const tl = d.timeline ?? deriveTimeline(d);
-        return { ...d, timeline: [...tl, { id: `seg_${takeId}_${tl.length}`, takeId, start: 0 }] };
+        const tl = [...(d.timeline ?? deriveTimeline(d))];
+        const seg = { id: `seg_${takeId}_${crypto.randomUUID().slice(0, 4)}`, takeId, start: 0 };
+        const i = beforeSegId ? tl.findIndex((sg) => sg.id === beforeSegId) : -1;
+        if (i === -1) tl.push(seg);
+        else tl.splice(i, 0, seg);
+        return { ...d, timeline: tl };
       }),
     clearFilm: () => set({ filmUrl: null }),
 

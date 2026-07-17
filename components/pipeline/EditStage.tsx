@@ -14,10 +14,8 @@ const MAX_ZOOM = 320;
 export function EditStage() {
   const {
     doc, vertical, setVertical, exportFilm, exporting, filmUrl, clearFilm,
-    updateSegment, splitSegmentAt, removeSegment, moveSegmentTo, resetTimeline, setTimeline, appendSegment,
+    updateSegment, splitSegmentAt, removeSegment, moveSegmentTo, resetTimeline, setTimeline, insertSegment,
   } = usePipeline();
-  // every video take not currently on the timeline is available in the bin
-  const binTakes = doc.takes.filter((t) => t.kind === 'video' && !filmSegments(doc).some((sg) => sg.takeId === t.id));
 
   const segs = filmSegments(doc);
   const voices = voiceTracks(doc);
@@ -225,7 +223,33 @@ export function EditStage() {
         }} />
       ))}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_15rem] gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[11rem_1fr_13rem] gap-4">
+        {/* media panel: every video take, drag into the timeline */}
+        <aside className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-white/8 bg-white/[0.02] p-2" data-testid="media-panel">
+          <span className="mb-1.5 px-1 text-[9px] font-bold tracking-wide text-neutral-500 uppercase">Media · {doc.takes.filter((t) => t.kind === 'video').length} clips</span>
+          {doc.takes.filter((t) => t.kind === 'video').length === 0 && (
+            <p className="px-1 text-[10px] leading-relaxed text-neutral-600">No clips yet: generate takes in Shots.</p>
+          )}
+          {doc.takes.filter((t) => t.kind === 'video').map((t) => {
+            const uses = segs.filter((sg) => sg.takeId === t.id).length;
+            return (
+              <div
+                key={t.id}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData('take', t.id)}
+                onClick={() => withUndo(() => insertSegment(t.id))}
+                data-testid={`media-${t.id}`}
+                title={`${t.promptName}${t.keeper ? ' · ★' : ''} · drag into the timeline (or click to append)`}
+                className="group relative mb-1.5 shrink-0 cursor-grab overflow-hidden rounded-lg border border-white/10 hover:border-[#ff3d8b]/60 active:cursor-grabbing"
+              >
+                <video src={t.url} muted playsInline preload="metadata" className="pointer-events-none aspect-video w-full object-cover" />
+                <span className="absolute top-1 left-1 rounded bg-black/70 px-1 font-mono text-[9px] font-bold text-neutral-200">{t.promptName}{t.keeper ? ' ★' : ''}</span>
+                {uses > 0 && <span className="absolute right-1 bottom-1 rounded bg-emerald-500/85 px-1 font-mono text-[8px] font-bold text-black">in film{uses > 1 ? ` ×${uses}` : ''}</span>}
+                <span className="absolute inset-0 hidden place-items-center bg-black/40 text-lg font-bold text-white group-hover:grid">＋</span>
+              </div>
+            );
+          })}
+        </aside>
         {/* player: always the film */}
         <div className="relative min-h-0">
           {filmUrl ? (
@@ -289,7 +313,13 @@ export function EditStage() {
           </div>
         </div>
 
-        <div ref={railRef} className="overflow-x-auto rounded-xl border border-white/8 bg-black/40" data-testid="film-cut">
+        <div
+          ref={railRef}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); const take = e.dataTransfer.getData('take'); if (take) withUndo(() => insertSegment(take)); }}
+          className="overflow-x-auto rounded-xl border border-white/8 bg-black/40"
+          data-testid="film-cut"
+        >
           <div
             className="relative"
             style={{ width: contentW }}
@@ -320,7 +350,15 @@ export function EditStage() {
                     onDragStart={(e) => e.dataTransfer.setData('seg', sg.id)}
                     onDragOver={(e) => { e.preventDefault(); setDropTarget(sg.id); }}
                     onDragLeave={() => setDropTarget((d) => (d === sg.id ? null : d))}
-                    onDrop={(e) => { e.preventDefault(); setDropTarget(null); const from = e.dataTransfer.getData('seg'); if (from) withUndo(() => moveSegmentTo(from, sg.id)); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDropTarget(null);
+                      const from = e.dataTransfer.getData('seg');
+                      const take = e.dataTransfer.getData('take');
+                      if (from) withUndo(() => moveSegmentTo(from, sg.id));
+                      else if (take) withUndo(() => insertSegment(take, sg.id));
+                    }}
                     data-testid={`seg-${sg.id}`}
                     style={{ width: w }}
                     className={`group relative shrink-0 cursor-pointer overflow-hidden rounded-md border bg-neutral-900 ${isSel ? 'border-[#ff3d8b] ring-1 ring-[#ff3d8b]/50' : 'border-white/10 hover:border-white/30'} ${dropTarget === sg.id ? 'ring-2 ring-sky-400/70' : ''}`}
@@ -355,25 +393,6 @@ export function EditStage() {
           </div>
         </div>
 
-        {binTakes.length > 0 && (
-          <div className="mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-1.5" data-testid="media-bin">
-            <span className="shrink-0 text-[9px] font-bold tracking-wide text-neutral-500 uppercase">Bin · {binTakes.length}</span>
-            {binTakes.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => withUndo(() => appendSegment(t.id))}
-                data-testid={`bin-${t.id}`}
-                title={`${t.promptName}: add to the end of the timeline`}
-                className="group relative h-12 w-20 shrink-0 overflow-hidden rounded-md border border-white/10 hover:border-[#ff3d8b]/60"
-              >
-                <video src={t.url} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
-                <span className="absolute top-0.5 left-1 rounded bg-black/70 px-1 font-mono text-[8px] font-bold text-neutral-200">{t.promptName}</span>
-                <span className="absolute inset-0 hidden place-items-center bg-black/50 text-sm font-bold text-white group-hover:grid">＋</span>
-              </button>
-            ))}
-            <span className="shrink-0 text-[9px] text-neutral-700">click to add · starring in Shots also adds</span>
-          </div>
-        )}
         <div className="mt-1 flex items-center justify-between">
           <span className="text-[10px] text-neutral-700">space play · click timeline to seek · S split at playhead · del remove · ⌘Z undo · drag edges trim · drag body reorder · scroll zoom</span>
           {doc.timeline && (
