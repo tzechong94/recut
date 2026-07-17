@@ -69,7 +69,7 @@ interface TourStep {
   action?: (setBusyLine: (s: string | null) => void) => Promise<void>; // runs when Next is clicked
 }
 
-export function Tour({ projectId, setSel, onExit }: { projectId: string; setSel: (s: TourSel) => void; onExit: () => void }) {
+export function Tour({ projectId, setSel, onExit, onReady }: { projectId: string; setSel: (s: TourSel) => void; onExit: () => void; onReady?: () => void }) {
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [running, setRunning] = useState<string | null>(null);
@@ -223,6 +223,7 @@ export function Tour({ projectId, setSel, onExit }: { projectId: string; setSel:
     ];
     steps.current[0]!.prep?.();
     setI(0);
+    onReady?.(); // the stage is set (stripped bare): the curtain in Monitor can lift
 
     return () => {
       if (full.current) usePipeline.setState({ doc: full.current, busy: null, ...ledger.current });

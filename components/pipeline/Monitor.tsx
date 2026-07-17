@@ -37,11 +37,15 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
   const [sel, setSel] = useState<Sel>({ t: 'casting' });
   const [castSource, setCastSource] = useState<CastSource | undefined>(undefined);
   const [tourOn, setTourOn] = useState(false);
+  // curtain: with ?tour=1 the finished project must never flash on screen before the
+  // tour strips the stage; keep it covered until the tour says it has set the scene
+  const [tourStaged, setTourStaged] = useState(false);
   const booted = useRef(false);
 
   // guided demo: same UI, coach-marks anchored to the real controls (?tour=1)
   useEffect(() => {
     setTourOn(new URLSearchParams(window.location.search).get('tour') === '1');
+    setTourStaged(false);
   }, [projectId]);
   const exitTour = () => {
     setTourOn(false);
@@ -115,7 +119,8 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
 
       {error && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{error}</div>}
 
-      {tourOn && loadedFor === projectId && <Tour projectId={projectId} setSel={setSel} onExit={exitTour} />}
+      {tourOn && !tourStaged && <div className="fixed inset-0 z-[85] bg-[#07070c]" />}
+      {tourOn && loadedFor === projectId && <Tour projectId={projectId} setSel={setSel} onExit={exitTour} onReady={() => setTourStaged(true)} />}
       <div className={`grid min-h-0 flex-1 ${showRail ? 'grid-cols-[13rem_1fr]' : 'grid-cols-1'}`}>
         {showRail && <CastRail setSel={setSel} setCastSource={setCastSource} />}
         <div className="flex min-h-0 flex-col">
