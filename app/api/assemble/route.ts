@@ -21,6 +21,20 @@ interface Body {
   vertical?: boolean;
 }
 
+/** Probe a clip's duration + audio presence (carries the native bed into the export). */
+function probeClip(path: string): { durSec?: number; hasAudio?: boolean } {
+  const r = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'json', path], { encoding: 'utf8' });
+  if (r.status !== 0) return {};
+  try {
+    const j = JSON.parse(r.stdout) as { format?: { duration?: string }; streams?: Array<{ codec_type?: string }> };
+    const durSec = j.format?.duration ? Number(j.format.duration) : undefined;
+    const hasAudio = (j.streams ?? []).some((st) => st.codec_type === 'audio');
+    return { durSec: Number.isFinite(durSec) ? durSec : undefined, hasAudio };
+  } catch {
+    return {};
+  }
+}
+
 /** Map a public URL path to a local file under public/. Rejects anything outside public/. */
 function localOf(pub: string): string | null {
   if (!pub.startsWith('/') || pub.includes('..')) return null;
@@ -42,7 +56,7 @@ export async function POST(req: Request): Promise<Response> {
     if (!path) return null;
     const trimIn = typeof c.trimIn === 'number' && c.trimIn > 0 ? c.trimIn : undefined;
     const trimOut = typeof c.trimOut === 'number' && c.trimOut > 0 ? c.trimOut : undefined;
-    return { path, trimIn, trimOut };
+    return { path, trimIn, trimOut, ...probeClip(path) };
   });
   if (clips.length === 0 || clips.some((c) => c === null)) {
     return Response.json({ error: 'need clips that exist under public/' }, { status: 400 });
@@ -56,7 +70,7 @@ export async function POST(req: Request): Promise<Response> {
   const out = join(genDir, name);
   const lut = lutByName(body.lut ?? 'teal-orange');
   const args = buildAssembleArgs({
-    clips: clips as Array<{ path: string; trimIn?: number; trimOut?: number }>,
+    clips: clips as Array<{ path: string; trimIn?: number; trimOut?: number; durSec?: number; hasAudio?: boolean }>,
     audio: audio.length ? audio : undefined,
     lutCube: resolve(process.cwd(), 'public', lut.cube.replace(/^\//, '')),
     out,

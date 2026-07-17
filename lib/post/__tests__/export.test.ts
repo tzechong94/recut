@@ -110,3 +110,52 @@ describe('assemble with keeper-phase trims', () => {
     expect(filter).not.toContain('[1:v]trim'); // untrimmed clip has no trim stage
   });
 });
+
+describe('native audio bed carried into the assemble', () => {
+  it('probed clips produce per-clip fades + bed concat + voice amix', () => {
+    const args = buildAssembleArgs({
+      clips: [
+        { path: '/a.mp4', trimIn: 1, trimOut: 3, durSec: 5, hasAudio: true },
+        { path: '/b.mp4', durSec: 4, hasAudio: false },
+      ],
+      audio: ['/vo.wav'],
+      lutCube: '/lut.cube',
+      out: '/out.mp4',
+    });
+    const filter = args[args.indexOf('-filter_complex') + 1]!;
+    expect(filter).toContain('atrim=start=1:end=3');
+    expect(filter).toContain('afade=t=in:st=0:d=0.15');
+    expect(filter).toContain('aevalsrc=0:d=4.000'); // silent stand-in for the audio-less clip
+    expect(filter).toContain('concat=n=2:v=0:a=1[bed]');
+    expect(filter).toContain('amix=inputs=2');
+  });
+  it('unprobed clips keep the legacy video-only path', () => {
+    const args = buildAssembleArgs({ clips: ['/a.mp4', '/b.mp4'], lutCube: '/l.cube', out: '/o.mp4' });
+    const filter = args[args.indexOf('-filter_complex') + 1]!;
+    expect(filter).not.toContain('[bed]');
+  });
+  it('real ffmpeg: assembled film keeps an audio stream from clip beds', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'recut-bed-'));
+    const mk = (name: string) => {
+      const p = join(tmp, name);
+      const r = spawnSync('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=12:duration=1', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', p], { stdio: 'ignore' });
+      expect(r.status).toBe(0);
+      return p;
+    };
+    const a = mk('a.mp4');
+    const b = mk('b.mp4');
+    const out = join(tmp, 'out.mp4');
+    const args = buildAssembleArgs({
+      clips: [
+        { path: a, trimIn: 0.2, trimOut: 0.8, durSec: 1, hasAudio: true },
+        { path: b, durSec: 1, hasAudio: true },
+      ],
+      lutCube: resolve('public/luts/identity.cube'),
+      out,
+    });
+    const r = spawnSync('ffmpeg', args, { stdio: 'ignore' });
+    expect(r.status).toBe(0);
+    const probe = spawnSync('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', out], { encoding: 'utf8' });
+    expect(probe.stdout.trim()).toContain('audio');
+  });
+});

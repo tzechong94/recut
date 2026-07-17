@@ -51,6 +51,10 @@ export interface ClipSpec {
   /** trim window in seconds (keeper-phase editing); omitted = full clip */
   trimIn?: number;
   trimOut?: number;
+  /** probed metadata (route-side ffprobe); when present on EVERY clip, the native audio bed
+   *  is carried into the export with short edge fades softening the joins */
+  durSec?: number;
+  hasAudio?: boolean;
 }
 
 export function buildAssembleArgs(spec: Omit<ExportSpec, 'clips'> & { clips: Array<string | ClipSpec>; audio?: string[] }): string[] {
@@ -77,14 +81,44 @@ export function buildAssembleArgs(spec: Omit<ExportSpec, 'clips'> & { clips: Arr
     return `trim=${args},setpts=PTS-STARTPTS,`;
   };
   const perClip = clips.map((c, i) => `[${i}:v]${trimOf(c)}${geom}[v${i}]`).join(';');
+
+  // native audio bed: only when every clip was probed (durations known for fades/silence)
+  const withBed = clips.every((c) => c.durSec !== undefined && c.hasAudio !== undefined);
+  const FADE = 0.15;
+  const bedParts: string[] = [];
+  if (withBed) {
+    clips.forEach((c, i) => {
+      const inT = c.trimIn ?? 0;
+      const outT = c.trimOut ?? c.durSec!;
+      const len = Math.max(0.15, outT - inT);
+      if (c.hasAudio) {
+        const fades = `afade=t=in:st=0:d=${FADE},afade=t=out:st=${Math.max(0, len - FADE).toFixed(3)}:d=${FADE}`;
+        bedParts.push(`[${i}:a]atrim=start=${inT}:end=${outT},asetpts=PTS-STARTPTS,aresample=48000,${fades}[ba${i}]`);
+      } else {
+        bedParts.push(`aevalsrc=0:d=${len.toFixed(3)}:s=48000[ba${i}]`);
+      }
+    });
+  }
   const concatV = clips.map((_, i) => `[v${i}]`).join('') + `concat=n=${n}:v=1:a=0[cat]`;
   let filter = `${perClip};${concatV};[cat]lut3d=file='${spec.lutCube}'[v]`;
 
   const maps = ['-map', '[v]'];
-  if (audio.length) {
+  let hasAudioOut = false;
+  if (withBed) {
+    filter += ';' + bedParts.join(';') + ';' + clips.map((_, i) => `[ba${i}]`).join('') + `concat=n=${n}:v=0:a=1[bed]`;
+    if (audio.length) {
+      const concatA = audio.map((_, i) => `[${n + i}:a]aresample=48000[va${i}]`).join(';') + ';' + audio.map((_, i) => `[va${i}]`).join('') + `concat=n=${audio.length}:v=0:a=1[voice]`;
+      filter += `;${concatA};[bed][voice]amix=inputs=2:duration=first:dropout_transition=0[a]`;
+    } else {
+      filter += `;[bed]anull[a]`;
+    }
+    maps.push('-map', '[a]');
+    hasAudioOut = true;
+  } else if (audio.length) {
     const concatA = audio.map((_, i) => `[${n + i}:a]`).join('') + `concat=n=${audio.length}:v=0:a=1[a]`;
     filter += `;${concatA}`;
     maps.push('-map', '[a]');
+    hasAudioOut = true;
   }
 
   return [
@@ -97,7 +131,7 @@ export function buildAssembleArgs(spec: Omit<ExportSpec, 'clips'> & { clips: Arr
     '-pix_fmt', 'yuv420p',
     // no -shortest: the VO is shorter than the film, so trimming to it would cut the video.
     // The video runs full length; the voice plays over the opening then silence.
-    ...(audio.length ? ['-c:a', 'aac'] : []),
+    ...(hasAudioOut ? ['-c:a', 'aac'] : []),
     '-movflags', '+faststart',
     spec.out,
   ];

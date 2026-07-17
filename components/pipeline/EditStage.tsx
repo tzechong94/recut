@@ -217,9 +217,10 @@ export function EditStage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col p-4" data-testid="export-stage">
-      {/* metadata probes: real durations per take */}
+      {/* metadata probes: real durations per take. The segment AFTER the playhead preloads
+          fully so the src swap at a join is instant instead of a visible hiccup. */}
       {[...new Map(segs.map((sg) => [sg.takeId, sg.url])).entries()].map(([takeId, url]) => (
-        <video key={takeId} src={url} preload="metadata" className="hidden" onLoadedMetadata={(e) => {
+        <video key={takeId} src={url} preload={segs[locate(T).i + 1]?.takeId === takeId ? 'auto' : 'metadata'} className="hidden" onLoadedMetadata={(e) => {
           const dur = e.currentTarget?.duration;
           if (dur && Number.isFinite(dur)) setDurations((d) => (d[takeId] ? d : { ...d, [takeId]: dur }));
         }} />
