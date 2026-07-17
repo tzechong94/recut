@@ -1,28 +1,66 @@
-// The showrunner planner: a premise → a structured story plan (characters + shots). The plan is
-// deterministically compiled into a node graph by build-graph.ts. qwen3-max returns strict JSON.
+// The showrunner planner: a premise/beat sheet → a structured shotlist. Directing discipline
+// follows docs/skills/seedance-shotlist-director.md: character anchors with state carry-forward,
+// geo-spatial scene blocking, motivated camera, concrete acting beats, one beat per prompt.
+// qwen-max returns strict JSON which build code maps onto the pipeline document.
+
+export interface PlannedShot {
+  description: string;
+  characters: string[];
+  animate: boolean;
+  dialogue?: string;
+  // camera hints constrained to the wizard's preset vocabulary (dropdowns arrive pre-set)
+  shotSize?: string;
+  angle?: string;
+  lens?: string;
+  light?: string;
+}
 
 export interface StoryPlan {
   title: string;
   style: string;
   characters: { name: string; description: string }[];
-  shots: { description: string; characters: string[]; animate: boolean; dialogue?: string }[];
+  shots: PlannedShot[];
 }
+
+// Preset vocabulary shared with the Scenes UI. The planner must pick from these exact strings
+// (or omit) so its choices land directly in the per-cut dropdowns.
+export const SHOT_SIZES = ['extreme close-up', 'close-up', 'medium close-up', 'medium shot', 'wide shot', 'extreme wide shot'];
+export const ANGLES = ['low angle', 'eye level', 'high angle', 'overhead', 'three-quarter view', 'profile view'];
+export const LENSES = ['24mm wide-angle lens', '35mm lens', '50mm lens', '85mm portrait lens', '135mm telephoto lens'];
+export const LIGHTS = ['Rembrandt lighting', 'split lighting', 'butterfly lighting', 'loop lighting', 'high-key soft light', 'low-key dramatic light', 'natural window light', 'golden hour'];
 
 export function planSystem(): string {
   return (
-    'You are a film showrunner. Given a premise, break it into a shootable plan: ONE consistent visual ' +
-    'style for the whole film (medium, palette, lighting mood — e.g. "soft Studio Ghibli watercolor, warm ' +
-    'palette"), a small cast of characters (each with a vivid, specific visual description), and an ordered ' +
-    'list of shots. Each shot has a cinematic description (shot size, angle, action), the names of ' +
-    'characters featured (subset of the cast), whether to animate it, and an optional spoken line. Keep it ' +
-    'tight: 1-3 characters, 3-6 shots. Return STRICT JSON only, no prose:\n' +
+    'You are a top-tier film director and cinematographer (the seedance-shotlist-director discipline). ' +
+    'Given a premise or beat sheet, DIRECT it, do not transcribe it. The craft:\n' +
+    '- ONE consistent visual style for the whole film (medium, palette, lighting mood). This becomes the global Style Prefix.\n' +
+    '- Cast 1-3 characters, each with a vivid, specific visual anchor (age, hair, wardrobe, one distinguishing detail). ' +
+    'Carry state forward between shots: wet stays wet, mud stays mud, the same scar, the same jacket.\n' +
+    '- 3-6 shots, one dramatic beat each, each written to fill a 5-10 second clip. Every description must contain: ' +
+    'geo-spatial blocking (where each character is relative to the space and to each other), one concrete acting beat ' +
+    '(never "she is sad"; write "her eyes drop to the table, jaw tightens, she swallows once before answering"), and a ' +
+    'motivated camera move from frame one. Restraint by default; big emotion only when the moment earns it.\n' +
+    '- Per shot, choose camera presets from EXACTLY these lists (or omit the field):\n' +
+    `  shotSize: ${SHOT_SIZES.join(' | ')}\n` +
+    `  angle: ${ANGLES.join(' | ')}\n` +
+    `  lens: ${LENSES.join(' | ')}\n` +
+    `  light: ${LIGHTS.join(' | ')}\n` +
+    '- Optional spoken line per shot (dialogue), only when the beat earns it. English only.\n' +
+    'Return STRICT JSON only, no prose:\n' +
     '{"title": str, "style": str, "characters": [{"name": str, "description": str}], ' +
-    '"shots": [{"description": str, "characters": [str], "animate": bool, "dialogue": str|null}]}'
+    '"shots": [{"description": str, "characters": [str], "animate": bool, "dialogue": str|null, ' +
+    '"shotSize": str|null, "angle": str|null, "lens": str|null, "light": str|null}]}'
   );
 }
 
 export function planUser(premise: string): string {
-  return `Premise: ${premise}\n\nReturn the JSON plan.`;
+  return `Premise: ${premise}\n\nDirect it. Return the JSON plan.`;
+}
+
+function pickPreset(value: unknown, vocab: string[]): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const v = value.trim().toLowerCase();
+  return vocab.find((x) => x.toLowerCase() === v) ?? vocab.find((x) => x.toLowerCase().includes(v) || v.includes(x.toLowerCase()));
 }
 
 export function parsePlan(text: string): StoryPlan {
@@ -41,6 +79,10 @@ export function parsePlan(text: string): StoryPlan {
           characters: Array.isArray(s.characters) ? s.characters.map(String) : [],
           animate: Boolean(s.animate),
           dialogue: s.dialogue ? String(s.dialogue) : undefined,
+          shotSize: pickPreset((s as PlannedShot).shotSize, SHOT_SIZES),
+          angle: pickPreset((s as PlannedShot).angle, ANGLES),
+          lens: pickPreset((s as PlannedShot).lens, LENSES),
+          light: pickPreset((s as PlannedShot).light, LIGHTS),
         }))
     : [];
   if (shots.length === 0) throw new Error('plan has no shots');

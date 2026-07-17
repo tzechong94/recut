@@ -236,11 +236,24 @@ function ScenesPanel() {
             cut name.
           </p>
         </div>
-        {gates.film && (
-          <button onClick={() => setTab('film')} data-testid="to-film" className="btn-grad shrink-0 rounded-lg px-4 py-2 text-xs font-semibold">
-            Assemble the film →
-          </button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {doc.scenes.length > 0 && (
+            <a
+              href={`/api/shotlist/${doc.projectId}`}
+              target="_blank"
+              data-testid="shotlist-html"
+              title="The director's shotlist as a self-contained HTML artifact (seedance-shotlist-director format)"
+              className="rounded-lg border border-white/12 px-4 py-2 text-xs font-medium text-neutral-300 hover:bg-white/5"
+            >
+              ⬇ Shotlist.html
+            </a>
+          )}
+          {gates.film && (
+            <button onClick={() => setTab('film')} data-testid="to-film" className="btn-grad rounded-lg px-4 py-2 text-xs font-semibold">
+              Assemble the film →
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="glass mb-6 rounded-2xl p-4">

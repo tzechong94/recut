@@ -44,3 +44,21 @@ describe('build graph from plan', () => {
     expect(composeNode.inputs).toHaveLength(2);
   });
 });
+
+describe('camera preset hints (seedance skill vocabulary)', () => {
+  it('parses exact preset strings and fuzzy-matches near misses', () => {
+    const p = parsePlan(JSON.stringify({
+      title: 'T', style: 's',
+      characters: [{ name: 'a', description: 'd' }],
+      shots: [{ description: 'x', characters: [], animate: true, shotSize: 'Close-Up', angle: 'low', lens: '85mm', light: 'golden hour' }],
+    }));
+    expect(p.shots[0]!.shotSize).toBe('close-up');
+    expect(p.shots[0]!.angle).toBe('low angle');
+    expect(p.shots[0]!.lens).toBe('85mm portrait lens');
+    expect(p.shots[0]!.light).toBe('golden hour');
+  });
+  it('garbage presets are dropped, not passed through', () => {
+    const p = parsePlan(JSON.stringify({ title: 'T', style: 's', characters: [], shots: [{ description: 'x', characters: [], animate: false, shotSize: 'dutch zoom crash' }] }));
+    expect(p.shots[0]!.shotSize).toBeUndefined();
+  });
+});

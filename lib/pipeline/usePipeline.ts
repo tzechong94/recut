@@ -196,7 +196,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
           plan?: {
             style: string;
             characters?: Array<{ name: string; description: string }>;
-            shots: Array<{ description: string; characters: string[]; animate: boolean; dialogue?: string }>;
+            shots: Array<{ description: string; characters: string[]; animate: boolean; dialogue?: string; shotSize?: string; angle?: string; lens?: string; light?: string }>;
           };
           error?: string;
           spentUsd?: number;
@@ -238,6 +238,10 @@ export const usePipeline = create<PipelineState>((set, get) => {
               assetSlugs: allSlugs(shot.characters),
               animate: shot.animate,
               dialogue: shot.dialogue || undefined,
+              shotSize: shot.shotSize,
+              angle: shot.angle,
+              lens: shot.lens,
+              light: shot.light,
             },
           ],
         }));
