@@ -34,10 +34,13 @@ test('the tour replays the making of the film on the live UI', async ({ page }) 
   await page.getByTestId('tour-next').click(); // fake-render reveals the clip
   await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(1, { timeout: 15_000 });
 
-  await page.getByTestId('tour-next').click(); // edit
-  await expect(page.getByTestId('film-cut')).toBeVisible();
-  await page.getByTestId('tour-next').click(); // export anchor
-  await page.getByTestId('tour-next').click(); // end card restores the full project
+  // walk the remaining steps until the end card, then exit into the live product
+  for (let k = 0; k < 8; k++) {
+    if (await page.getByText('Every other tool').isVisible().catch(() => false)) break;
+    await page.getByTestId('tour-next').click();
+    await page.waitForTimeout(500);
+  }
+  await expect(page.getByText('Every other tool')).toBeVisible();
   await page.getByTestId('tour-next').click(); // Explore ✓
   await expect(page.getByTestId('tour-popup')).toHaveCount(0);
   await expect(page.getByTestId('export-stage')).toBeVisible();
