@@ -621,15 +621,10 @@ export const usePipeline = create<PipelineState>((set, get) => {
         const target = d.takes.find((t) => t.id === takeId);
         if (!target) return d;
         if (target.kind === 'video') {
-          const nowKeeper = !target.keeper;
-          let timeline = d.timeline;
-          // once the timeline is materialized, stars keep it in sync: star = append, unstar = remove
-          if (timeline) {
-            timeline = nowKeeper
-              ? [...timeline, { id: `seg_${takeId}_${timeline.length}`, takeId, start: 0 }]
-              : timeline.filter((sg) => sg.takeId !== takeId);
-          }
-          return { ...d, timeline, takes: d.takes.map((t) => (t.id === takeId ? { ...t, keeper: nowKeeper } : t)) };
+          // pure shortlist marker: seeds the DERIVED film and sorts first in Edit's media panel.
+          // It never mutates a materialized timeline (unstar must not destroy trims/splits);
+          // once you edit, the timeline is the truth and the media panel is how clips enter it.
+          return { ...d, takes: d.takes.map((t) => (t.id === takeId ? { ...t, keeper: !t.keeper } : t)) };
         }
         return {
           ...d,

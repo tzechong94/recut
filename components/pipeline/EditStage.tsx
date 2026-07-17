@@ -232,7 +232,7 @@ export function EditStage() {
           {doc.takes.filter((t) => t.kind === 'video').length === 0 && (
             <p className="px-1 text-[10px] leading-relaxed text-neutral-600">No clips yet: generate takes in Shots.</p>
           )}
-          {doc.takes.filter((t) => t.kind === 'video').map((t) => {
+          {[...doc.takes.filter((t) => t.kind === 'video')].sort((a, b) => Number(b.keeper ?? false) - Number(a.keeper ?? false)).map((t) => {
             const uses = segs.filter((sg) => sg.takeId === t.id).length;
             return (
               <div
