@@ -242,19 +242,22 @@ export function keeperClips(doc: PipelineDoc): KeeperClip[] {
       if (excluded.has(p.name)) continue;
       const vids = doc.takes.filter((t) => t.promptName === p.name && t.kind === 'video');
       if (vids.length === 0) continue;
-      const pick = vids.find((t) => t.keeper) ?? vids[vids.length - 1]!;
-      out.push({ promptName: p.name, url: pick.url, takeId: pick.id, trimIn: pick.trimIn, trimOut: pick.trimOut });
+      // ALL starred clips ride into the film (multi-keeper); none starred = newest as before
+      const starred = vids.filter((t) => t.keeper);
+      const picks = starred.length ? starred : [vids[vids.length - 1]!];
+      for (const pick of picks) out.push({ promptName: p.name, url: pick.url, takeId: pick.id, trimIn: pick.trimIn, trimOut: pick.trimOut });
     }
   }
-  // manual film order wins where present: listed names first (that have clips), rest follow scene order
+  // manual film order wins where present: listed names first (all their clips), rest follow scene order
   if (doc.filmOrder?.length) {
-    const byName = new Map(out.map((c) => [c.promptName, c]));
+    const byName = new Map<string, KeeperClip[]>();
+    for (const c of out) byName.set(c.promptName, [...(byName.get(c.promptName) ?? []), c]);
     const ordered: KeeperClip[] = [];
     for (const n of doc.filmOrder) {
-      const hit = byName.get(n);
-      if (hit) { ordered.push(hit); byName.delete(n); }
+      const hits = byName.get(n);
+      if (hits) { ordered.push(...hits); byName.delete(n); }
     }
-    for (const c of out) if (byName.has(c.promptName)) ordered.push(c);
+    for (const c of out) if (byName.has(c.promptName)) { ordered.push(...byName.get(c.promptName)!); byName.delete(c.promptName); }
     return ordered;
   }
   return out;

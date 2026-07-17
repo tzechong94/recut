@@ -596,12 +596,15 @@ export const usePipeline = create<PipelineState>((set, get) => {
 
     removeTake: (takeId) => mutate((d) => ({ ...d, takes: d.takes.filter((t) => t.id !== takeId) })),
 
-    // exactly one crowned take per prompt PER KIND: a crowned image is the keyframe of record
-    // (what Animate uses); a crowned video is the film keeper. Crowning un-crowns siblings.
+    // videos: multiple keepers per cut, each starred clip joins the film (independent toggle).
+    // images: exactly one keeper (the keyframe of record Animate uses), starring un-stars siblings.
     setKeeper: (takeId) =>
       mutate((d) => {
         const target = d.takes.find((t) => t.id === takeId);
         if (!target) return d;
+        if (target.kind === 'video') {
+          return { ...d, takes: d.takes.map((t) => (t.id === takeId ? { ...t, keeper: !t.keeper } : t)) };
+        }
         return {
           ...d,
           takes: d.takes.map((t) =>

@@ -295,3 +295,27 @@ describe('film timeline (EDL): derive, resolve, split', () => {
     expect(splitSegment(tl, 's1', 4.95)).toBe(tl);
   });
 });
+
+describe('multi-keeper: several starred clips of one cut all join the film', () => {
+  it('all starred videos ride, in take order; unstarred cuts fall back to newest', () => {
+    const d = doc();
+    d.takes = [
+      { id: 'v1', promptName: '1A', kind: 'video', url: '/a1.mp4', keeper: true },
+      { id: 'v2', promptName: '1A', kind: 'video', url: '/a2.mp4' },
+      { id: 'v3', promptName: '1A', kind: 'video', url: '/a3.mp4', keeper: true },
+      { id: 'v4', promptName: '2A', kind: 'video', url: '/b1.mp4' },
+    ];
+    const clips = keeperClips(d);
+    expect(clips.map((c) => c.takeId)).toEqual(['v1', 'v3', 'v4']);
+  });
+  it('filmOrder moves ALL clips of a named cut together', () => {
+    const d = doc();
+    d.takes = [
+      { id: 'v1', promptName: '1A', kind: 'video', url: '/a1.mp4', keeper: true },
+      { id: 'v3', promptName: '1A', kind: 'video', url: '/a3.mp4', keeper: true },
+      { id: 'v4', promptName: '2A', kind: 'video', url: '/b1.mp4' },
+    ];
+    d.filmOrder = ['2A', '1A'];
+    expect(keeperClips(d).map((c) => c.takeId)).toEqual(['v4', 'v1', 'v3']);
+  });
+});

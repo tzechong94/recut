@@ -517,7 +517,7 @@ function StageTake({ t }: { t: TakeDoc }) {
         <button
           onClick={() => setKeeper(t.id)}
           data-testid={`keep-${t.id}`}
-          title={t.kind === 'video' ? 'Keeper: this clip represents the cut in the film' : 'Keeper: this frame is the keyframe Animate uses'}
+          title={t.kind === 'video' ? 'Keeper: include this clip in the film (star as many takes as you want)' : 'Keeper: this frame is the keyframe Animate uses (one per cut)'}
           className={`absolute top-2 right-2 rounded-lg px-2 py-1 text-sm backdrop-blur ${t.keeper ? 'bg-amber-400/90 text-black' : 'bg-black/50 text-white/70 hover:bg-black/70 hover:text-white'}`}
         >
           {t.keeper ? '★' : '☆'}
