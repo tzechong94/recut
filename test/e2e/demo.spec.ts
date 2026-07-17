@@ -14,7 +14,7 @@ test('demo walkthrough steps from title to final cut', async ({ page }) => {
   await page.route('**/api/projects/demo-e2e', (r) => r.fulfill({ json: { id: 'demo-e2e', title: 'Demo Film', createdAt: 0 } }));
   await page.goto('/demo/demo-e2e');
   await expect(page.getByTestId('walkthrough')).toBeVisible();
-  await expect(page.getByText('Demo Film')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Demo Film' })).toBeVisible();
 
   await page.getByTestId('demo-next').click(); // cast
   await expect(page.getByText('🔒 yoopi')).toBeVisible();
