@@ -24,7 +24,7 @@ test('the tour replays the making of the film on the live UI', async ({ page }) 
   await page.getByTestId('tour-next').click(); // types the prompt, fakes generation, reveals the member
   await expect(page.locator('[data-testid^=member-]')).toHaveCount(1, { timeout: 15_000 });
 
-  await expect(page.getByText('The script')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'The script' })).toBeVisible();
   await page.getByTestId('tour-next').click(); // types the script, drafts the shots
   await expect(page.getByTestId('cell-1A')).toBeVisible({ timeout: 15_000 });
 
