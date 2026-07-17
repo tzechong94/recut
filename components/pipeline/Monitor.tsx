@@ -165,13 +165,23 @@ function CastRail({ setSel, setCastSource }: { setSel: (s: Sel) => void; setCast
                   {a.locked ? 'Unlock' : '🔒 Lock'}
                 </button>
                 {a.imageUrl && (
-                  <button
-                    onClick={() => { setCastSource({ url: a.imageUrl!, label: a.slug }); setSel({ t: 'casting' }); }}
-                    title="Use as the source for new candidates (e.g. re-style or make a state variant)"
-                    className="rounded border border-white/12 px-1.5 text-[10px] text-neutral-300 hover:bg-white/5"
-                  >
-                    ↻
-                  </button>
+                  <>
+                    <button
+                      onClick={() => { setCastSource({ url: a.imageUrl!, label: a.slug }); setSel({ t: 'casting' }); }}
+                      title="Use as the source for new candidates (e.g. re-style or make a state variant)"
+                      className="rounded border border-white/12 px-1.5 text-[10px] text-neutral-300 hover:bg-white/5"
+                    >
+                      ↻
+                    </button>
+                    <a
+                      href={`/api/pipeline/${doc.projectId}/download/${a.id}`}
+                      title={`Download as ${a.slug}.png`}
+                      data-testid={`download-${a.id}`}
+                      className="rounded border border-white/12 px-1.5 text-[10px] text-neutral-300 hover:bg-white/5"
+                    >
+                      ⬇
+                    </a>
+                  </>
                 )}
                 {!a.locked && (
                   <button onClick={() => removeAsset(a.id)} className="rounded border border-white/12 px-1.5 text-[10px] text-rose-300 hover:bg-rose-950/40">✕</button>
@@ -283,13 +293,14 @@ function StylePrefixRow() {
   const { doc, setStylePrefix } = usePipeline();
   return (
     <div className="flex items-center gap-2 border-b border-white/8 px-4 py-1.5">
-      <span className="grad-text shrink-0 text-[9px] font-bold tracking-wide uppercase">Style prefix</span>
+      <span className="grad-text shrink-0 text-[9px] font-bold tracking-wide uppercase">✎ Style prefix</span>
       <input
         value={doc.stylePrefix}
         onChange={(e) => setStylePrefix(e.target.value)}
-        placeholder="the film's one look: lighting, camera, colour, realism rules, glued to every cut…"
+        placeholder="the film's one look: lighting, camera, colour, realism rules, glued to every cut… (click to edit)"
+        title="The global look, glued to every cut. Edit once, changes everywhere."
         data-testid="style-prefix"
-        className="w-full bg-transparent text-[11px] text-neutral-300 outline-none placeholder:text-neutral-700"
+        className="w-full rounded-md border border-white/8 bg-black/20 px-2 py-1 text-[11px] text-neutral-300 outline-none transition placeholder:text-neutral-700 hover:border-white/20 focus:border-[color:var(--c2)]"
       />
     </div>
   );
