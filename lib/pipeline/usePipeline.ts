@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import {
   compilePromptText,
+  deletePrompt,
   deleteScene,
   emptyPipeline,
   keeperClips,
@@ -88,7 +89,9 @@ interface PipelineState {
   addCoverage: (sceneIdx: number) => void;
   addScene: () => void;
   removeScene: (sceneIdx: number) => void;
+  removePrompt: (name: string) => void;
   shiftScene: (sceneIdx: number, dir: -1 | 1) => void;
+  setScript: (script: string) => void;
 
   // Stage 3
   runPrompt: (name: string) => Promise<void>;
@@ -302,7 +305,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
             },
           ],
         }));
-        mutate((d) => ({ ...d, stylePrefix: d.stylePrefix || j.plan!.style, assets: [...d.assets, ...stubs], scenes }));
+        mutate((d) => ({ ...d, script: beats, stylePrefix: d.stylePrefix || j.plan!.style, assets: [...d.assets, ...stubs], scenes }));
       } catch (e) {
         set({ error: String(e).slice(0, 160) });
       } finally {
@@ -355,6 +358,8 @@ export const usePipeline = create<PipelineState>((set, get) => {
       })),
 
     removeScene: (sceneIdx) => mutate((d) => deleteScene(d, sceneIdx)),
+    removePrompt: (name) => mutate((d) => deletePrompt(d, name)),
+    setScript: (script) => mutate((d) => ({ ...d, script })),
     shiftScene: (sceneIdx, dir) => mutate((d) => moveScene(d, sceneIdx, dir)),
 
     // drama: a prompt's dialogue line becomes a voice take via TTS

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  deletePrompt,
   deleteScene,
   keeperClips,
   moveScene,
@@ -188,5 +189,29 @@ describe('filmOrder overrides scene order in keeperClips', () => {
     ];
     d.filmOrder = ['2A', 'ZZ', '1A'];
     expect(keeperClips(d).map((c) => c.promptName)).toEqual(['2A', '1A', '1B']);
+  });
+});
+
+describe('deletePrompt (cut-level delete)', () => {
+  it('removes one cut, renumbers siblings, drops its takes, keeps others', () => {
+    const d = doc();
+    d.takes = [
+      { id: 't1', promptName: '1A', kind: 'image', url: '/a.png' },
+      { id: 't2', promptName: '1B', kind: 'image', url: '/b.png' },
+    ];
+    const out = deletePrompt(d, '1A');
+    expect(out.scenes[0]!.prompts.map((p) => p.name)).toEqual(['1A']); // old 1B renamed
+    expect(out.takes.length).toBe(1);
+    expect(out.takes[0]!.id).toBe('t2');
+    expect(out.takes[0]!.promptName).toBe('1A');
+  });
+  it('deleting a scene\'s last cut removes the scene entirely', () => {
+    const d = doc();
+    const out = deletePrompt(d, '2A'); // scene 2 has only 2A
+    expect(out.scenes.length).toBe(1);
+  });
+  it('unknown name is a no-op', () => {
+    const d = doc();
+    expect(deletePrompt(d, '9Z')).toBe(d);
   });
 });

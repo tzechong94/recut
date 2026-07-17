@@ -74,6 +74,8 @@ export interface TakeDoc {
 
 export interface PipelineDoc {
   projectId: string;
+  /** the film's script / beat sheet (the Script stage feeds the director skill with this) */
+  script?: string;
   /** global Style Prefix (spec Stage 2): glued to every prompt; change once, changes everywhere */
   stylePrefix: string;
   assets: AssetDoc[];
@@ -173,6 +175,15 @@ export function renumberScenes(doc: PipelineDoc): PipelineDoc {
 export function deleteScene(doc: PipelineDoc, sceneIdx: number): PipelineDoc {
   if (sceneIdx < 0 || sceneIdx >= doc.scenes.length) return doc;
   return renumberScenes({ ...doc, scenes: doc.scenes.filter((_, i) => i !== sceneIdx) });
+}
+
+/** Delete a single cut by name; a scene emptied of cuts is removed; renumber, takes follow. Pure. */
+export function deletePrompt(doc: PipelineDoc, name: string): PipelineDoc {
+  const scenes = doc.scenes
+    .map((s) => ({ ...s, prompts: s.prompts.filter((p) => p.name !== name) }))
+    .filter((s) => s.prompts.length > 0);
+  if (scenes.length === doc.scenes.length && scenes.every((s, i) => s.prompts.length === doc.scenes[i]!.prompts.length)) return doc;
+  return renumberScenes({ ...doc, scenes });
 }
 
 /** Move a scene up (-1) or down (+1); prompts renumber and takes follow. Pure. */

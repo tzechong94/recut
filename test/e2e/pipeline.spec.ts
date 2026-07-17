@@ -43,28 +43,27 @@ async function mockModels(page: Page) {
   await page.route('**/api/assemble', (r) => r.fulfill({ json: { videoUrl: '/clips/1000.mp4' } }));
 }
 
-test('director monitor: cast, direct, iterate, repair, crown, export', async ({ page }) => {
+test('director monitor: cast, script, shots, repair, crown, export', async ({ page }) => {
   await mockModels(page);
   await page.goto('/');
   await page.getByTestId('new-project-title').fill('Monitor e2e');
   await page.getByTestId('create-project').click();
   await expect(page).toHaveURL(/\/pipeline/);
 
-  // Cast: batch candidates > crown one > it lands in the rail > lock it
-  await page.getByTestId('cast-new').click();
+  // Cast: batch candidates > crown one > it lands in the rail > lock it IN PLACE
   await page.getByTestId('candidate-prompt').fill('two-panel character sheet of the watchmaker');
   await page.getByTestId('generate-candidates').click();
   await expect(page.locator('[data-testid^=crown-]')).toHaveCount(4, { timeout: 15_000 });
+  // iterate affordance exists on candidates
+  await expect(page.locator('[data-testid^=iterate-]').first()).toBeVisible();
   await page.locator('[data-testid^=crown-]').first().click();
-  await expect(page.locator('[data-testid^=draft-]')).toHaveCount(1);
-  await expect(page.locator('text=✓ in bible')).toBeVisible(); // tray keeps the original
+  await expect(page.locator('[data-testid^=member-]')).toHaveCount(1);
+  await expect(page.locator('text=✓ cast')).toBeVisible(); // stage keeps the original
   await page.locator('[data-testid^=lock-]').first().click();
-  await expect(page.locator('[data-testid^=bible-]')).toHaveCount(1);
+  await expect(page.locator('[data-testid^=member-]').first()).toContainText('Unlock'); // edited in place, no jumping
 
-  // Direct: draft scenes from beats; storyboard cells appear; presets pre-set
-  await page.getByTestId('beats').waitFor({ state: 'visible', timeout: 5_000 }).catch(async () => {
-    await page.locator('nav[data-testid=phases] button', { hasText: 'Direct' }).click();
-  });
+  // Script: the skill drafts the shots
+  await page.getByTestId('step-script').click();
   await page.getByTestId('beats').fill('an old watchmaker closes his shop');
   await page.getByTestId('draft-shotlist').click();
   await expect(page.getByTestId('cell-1A')).toBeVisible({ timeout: 15_000 });
@@ -88,8 +87,14 @@ test('director monitor: cast, direct, iterate, repair, crown, export', async ({ 
   await videoTake.locator('[data-testid^=crown-]').click();
   await expect(page.getByTestId('cell-1A')).toContainText('👑');
 
-  // Cut: export renders the film
-  await page.getByTestId('phase-export').click();
+  // delete a cut: 2A goes away, storyboard renumbers
+  page.on('dialog', (d) => void d.accept());
+  await page.getByTestId('cell-2A').click();
+  await page.getByTestId('delete-cut-2A').click();
+  await expect(page.getByTestId('cell-2A')).toHaveCount(0);
+
+  // Edit: export renders the film
+  await page.getByTestId('step-edit').click();
   await expect(page.getByTestId('film-cut')).toBeVisible();
   await page.getByTestId('export-film').click();
   await expect(page.getByTestId('film-result')).toBeVisible({ timeout: 30_000 });

@@ -1,9 +1,9 @@
 'use client';
 
 // The Director's Monitor: the whole product on one screen, one loop everywhere.
-// LEFT the bible (what you have) · TOP the storyboard (the film taking shape) ·
-// CENTER the stage (options compared big, one gets crowned) · BOTTOM the controls.
-// Everything reads/writes the same pipeline document as before; only the surface changed.
+// Steps: CAST (the cast rail + candidate stage) → SCRIPT (the director skill turns the
+// script into shots) → SHOTS (takes compared big, crowned) → EDIT (the cut, export).
+// LEFT the cast (only in Cast/Script) · TOP the storyboard · CENTER the stage · BOTTOM controls.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -28,11 +28,14 @@ const ANGLE = ['low angle', 'eye level', 'high angle', 'overhead', 'three-quarte
 const LENS = ['24mm wide-angle lens', '35mm lens', '50mm lens', '85mm portrait lens', '135mm telephoto lens'];
 const LIGHT = ['Rembrandt lighting', 'split lighting', 'butterfly lighting', 'loop lighting', 'high-key soft light', 'low-key dramatic light', 'natural window light', 'golden hour'];
 
-type Sel = { t: 'cut'; name: string } | { t: 'casting' } | { t: 'export' } | { t: 'draft' };
+type Sel = { t: 'cut'; name: string } | { t: 'casting' } | { t: 'script' } | { t: 'export' };
+/** source image feeding candidate generation: a photo, a cast member, or a candidate to iterate on */
+export interface CastSource { url: string; label: string }
 
 export function Monitor({ projectId, title }: { projectId: string; title: string }) {
   const { doc, load, busy, error, spentUsd, capUsd } = usePipeline();
-  const [sel, setSel] = useState<Sel>({ t: 'draft' });
+  const [sel, setSel] = useState<Sel>({ t: 'casting' });
+  const [castSource, setCastSource] = useState<CastSource | undefined>(undefined);
   const booted = useRef(false);
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
     if (booted.current || usePipeline.getState().loadedFor !== projectId) return;
     booted.current = true;
     const first = doc.scenes[0]?.prompts[0]?.name;
-    setSel(first ? { t: 'cut', name: first } : doc.assets.length || (doc.candidates ?? []).length ? { t: 'casting' } : { t: 'draft' });
+    setSel(first ? { t: 'cut', name: first } : { t: 'casting' });
   }, [doc, projectId]);
 
   useEffect(() => {
@@ -60,9 +63,15 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
     };
   }, []);
 
-  const lockedCount = doc.assets.filter((a) => a.locked && a.imageUrl).length;
-  const cutCount = doc.scenes.reduce((n, s) => n + s.prompts.length, 0);
-  const keeperCount = keeperClips(doc).length;
+  const hasShots = doc.scenes.length > 0;
+  const hasKeepers = keeperClips(doc).length > 0;
+  const showRail = sel.t === 'casting' || sel.t === 'script';
+  const steps: Array<{ key: string; label: string; active: boolean; enabled: boolean; go: () => void }> = [
+    { key: 'cast', label: 'Cast', active: sel.t === 'casting', enabled: true, go: () => setSel({ t: 'casting' }) },
+    { key: 'script', label: 'Script', active: sel.t === 'script', enabled: true, go: () => setSel({ t: 'script' }) },
+    { key: 'shots', label: 'Shots', active: sel.t === 'cut', enabled: hasShots, go: () => { const f = doc.scenes[0]?.prompts[0]?.name; if (f) setSel({ t: 'cut', name: f }); } },
+    { key: 'edit', label: 'Edit', active: sel.t === 'export', enabled: hasKeepers, go: () => setSel({ t: 'export' }) },
+  ];
 
   return (
     <main className="flex h-screen flex-col bg-[#07070c]">
@@ -74,88 +83,99 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
           </Link>
           <span className="max-w-[16rem] truncate text-xs text-neutral-500">/ {title}</span>
         </div>
-        {/* phase checklist: passive progress, active navigation */}
-        <nav className="flex items-center gap-1 text-[11px]" data-testid="phases">
-          <button onClick={() => setSel({ t: 'casting' })} className={`rounded-md px-2.5 py-1 font-semibold ${sel.t === 'casting' ? 'btn-grad' : 'text-neutral-400 hover:bg-white/5'}`}>
-            1 Cast <span className="opacity-70">{lockedCount}🔒</span>
-          </button>
-          <span className="text-neutral-700">→</span>
-          <button
-            onClick={() => { const f = doc.scenes[0]?.prompts[0]?.name; setSel(f ? { t: 'cut', name: f } : { t: 'draft' }); }}
-            className={`rounded-md px-2.5 py-1 font-semibold ${sel.t === 'cut' || sel.t === 'draft' ? 'btn-grad' : 'text-neutral-400 hover:bg-white/5'}`}
-          >
-            2 Direct <span className="opacity-70">{cutCount} cuts</span>
-          </button>
-          <span className="text-neutral-700">→</span>
-          <button onClick={() => setSel({ t: 'export' })} disabled={keeperCount === 0} data-testid="phase-export" className={`rounded-md px-2.5 py-1 font-semibold disabled:opacity-40 ${sel.t === 'export' ? 'btn-grad' : 'text-neutral-400 hover:bg-white/5'}`}>
-            3 Cut <span className="opacity-70">{keeperCount} clips</span>
-          </button>
+        <nav className="flex items-center gap-1 text-[11px]" data-testid="steps">
+          {steps.map((st, i) => (
+            <span key={st.key} className="flex items-center gap-1">
+              {i > 0 && <span className="text-neutral-700">→</span>}
+              <button onClick={st.go} disabled={!st.enabled} data-testid={`step-${st.key}`} className={`rounded-md px-3 py-1 font-semibold disabled:opacity-40 ${st.active ? 'btn-grad' : 'text-neutral-400 hover:bg-white/5'}`}>
+                {st.label}
+              </button>
+            </span>
+          ))}
         </nav>
         <div className="flex items-center gap-3">
           {busy && <span className="animate-pulse text-[11px] text-[#ff9ac4]">{busy}…</span>}
           <span className="text-xs tabular-nums text-neutral-500" data-testid="spend">${spentUsd.toFixed(3)}{capUsd !== null ? ` / $${capUsd.toFixed(0)}` : ''}</span>
-          {doc.scenes.length > 0 && <a href={`/api/shotlist/${doc.projectId}`} target="_blank" className="text-[11px] text-neutral-600 hover:text-neutral-400" title="Director's shotlist (HTML artifact)">shotlist ↧</a>}
+          {hasShots && <a href={`/api/shotlist/${doc.projectId}`} target="_blank" className="text-[11px] text-neutral-600 hover:text-neutral-400" title="Director's shotlist (HTML artifact)">shotlist ↧</a>}
         </div>
       </header>
 
       {error && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{error}</div>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[13rem_1fr]">
-        <BibleRail sel={sel} setSel={setSel} />
+      <div className={`grid min-h-0 flex-1 ${showRail ? 'grid-cols-[13rem_1fr]' : 'grid-cols-1'}`}>
+        {showRail && <CastRail setSel={setSel} setCastSource={setCastSource} />}
         <div className="flex min-h-0 flex-col">
           <Storyboard sel={sel} setSel={setSel} />
           <StylePrefixRow />
-          <Stage sel={sel} setSel={setSel} />
-          <ControlBar sel={sel} setSel={setSel} />
+          <Stage sel={sel} setSel={setSel} castSource={castSource} setCastSource={setCastSource} />
+          <ControlBar sel={sel} setSel={setSel} castSource={castSource} setCastSource={setCastSource} />
         </div>
       </div>
     </main>
   );
 }
 
-/* ---------------- the bible rail: what you have ---------------- */
+/* ---------------- the cast rail: who and what you have ---------------- */
 
-function BibleRail({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
-  const { doc, updateAsset, lockAsset, removeAsset } = usePipeline();
-  const locked = doc.assets.filter((a) => a.locked);
-  const drafts = doc.assets.filter((a) => !a.locked);
+function CastRail({ setSel, setCastSource }: { setSel: (s: Sel) => void; setCastSource: (c: CastSource | undefined) => void }) {
+  const { doc, updateAsset, lockAsset, removeAsset, addAsset, setAssetImage } = usePipeline();
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   return (
     <aside className="flex min-h-0 flex-col border-r border-white/8" data-testid="rail">
       <div className="flex items-center justify-between px-3 pt-3 pb-1.5">
-        <span className="text-[10px] font-bold tracking-wide text-neutral-500 uppercase">Bible</span>
-        <button onClick={() => setSel({ t: 'casting' })} data-testid="cast-new" className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${sel.t === 'casting' ? 'btn-grad' : 'border border-white/12 text-neutral-300 hover:bg-white/5'}`}>
-          ＋ Cast
-        </button>
+        <span className="text-[10px] font-bold tracking-wide text-neutral-500 uppercase">Cast</span>
+        <button onClick={() => uploadRef.current?.click()} title="Upload an image as a cast member" className="rounded-md border border-white/12 px-1.5 py-0.5 text-[10px] text-neutral-400 hover:bg-white/5">⬆ upload</button>
+        <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          const r = new FileReader();
+          r.onload = () => {
+            const a = addAsset(f.name.replace(/\.[a-z]+$/i, ''), 'product');
+            setAssetImage(a.id, String(r.result));
+          };
+          r.readAsDataURL(f);
+        }} />
       </div>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
-        {locked.length === 0 && drafts.length === 0 && (
-          <p className="pt-2 text-[11px] leading-relaxed text-neutral-600">Nothing cast yet. Hit ＋ Cast: generate candidates, crown the winner, lock it here.</p>
+        {doc.assets.length === 0 && (
+          <p className="pt-2 text-[11px] leading-relaxed text-neutral-600">Nobody cast yet. Generate candidates on the right, crown the winner, then name + lock it here.</p>
         )}
-        {locked.map((a) => (
-          <div key={a.id} className="group overflow-hidden rounded-lg border border-emerald-500/30 bg-white/[0.02]" data-testid={`bible-${a.slug}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {a.imageUrl && <img src={a.imageUrl} alt={a.slug} className="aspect-video w-full object-cover" />}
-            <div className="flex items-center justify-between px-1.5 py-1">
-              <span className="truncate font-mono text-[10px] text-neutral-200">🔒 {a.slug}</span>
-              <button onClick={() => lockAsset(a.id, false)} title="Unlock to edit" className="hidden text-[9px] text-neutral-500 group-hover:block">unlock</button>
-            </div>
-          </div>
-        ))}
-        {drafts.length > 0 && <div className="pt-1 text-[9px] font-bold tracking-wide text-neutral-600 uppercase">Uncast (name + lock)</div>}
-        {drafts.map((a) => (
-          <div key={a.id} className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]" data-testid={`draft-${a.id}`}>
+        {doc.assets.map((a) => (
+          <div key={a.id} className={`group overflow-hidden rounded-lg border bg-white/[0.02] ${a.locked ? 'border-emerald-500/30' : 'border-white/10'}`} data-testid={`member-${a.id}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {a.imageUrl && <img src={a.imageUrl} alt={a.slug} className="aspect-video w-full object-cover" />}
             <div className="space-y-1 p-1.5">
-              <input
-                value={a.slug}
-                onChange={(e) => updateAsset(a.id, { slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
-                className="w-full rounded border border-white/10 bg-black/30 px-1.5 py-0.5 font-mono text-[10px] text-neutral-200 outline-none"
-              />
+              <div className="flex items-center gap-1">
+                {a.locked && <span className="text-[10px]">🔒</span>}
+                <input
+                  value={a.slug}
+                  disabled={a.locked}
+                  onChange={(e) => updateAsset(a.id, { slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
+                  className="w-full rounded border border-white/10 bg-black/30 px-1.5 py-0.5 font-mono text-[10px] text-neutral-200 outline-none disabled:border-transparent disabled:bg-transparent"
+                />
+              </div>
               <div className="flex gap-1">
-                <button onClick={() => lockAsset(a.id, true)} disabled={!a.imageUrl} data-testid={`lock-${a.id}`} className="flex-1 rounded bg-emerald-500 py-0.5 text-[10px] font-bold text-black hover:bg-emerald-400 disabled:opacity-40">🔒 Lock</button>
-                <button onClick={() => removeAsset(a.id)} className="rounded border border-white/12 px-1.5 text-[10px] text-rose-300 hover:bg-rose-950/40">✕</button>
+                <button
+                  onClick={() => lockAsset(a.id, !a.locked)}
+                  disabled={!a.imageUrl}
+                  data-testid={`lock-${a.id}`}
+                  className={`flex-1 rounded py-0.5 text-[10px] font-bold disabled:opacity-40 ${a.locked ? 'border border-white/12 text-neutral-400 hover:bg-white/5' : 'bg-emerald-500 text-black hover:bg-emerald-400'}`}
+                >
+                  {a.locked ? 'Unlock' : '🔒 Lock'}
+                </button>
+                {a.imageUrl && (
+                  <button
+                    onClick={() => { setCastSource({ url: a.imageUrl!, label: a.slug }); setSel({ t: 'casting' }); }}
+                    title="Use as the source for new candidates (e.g. re-style or make a state variant)"
+                    className="rounded border border-white/12 px-1.5 text-[10px] text-neutral-300 hover:bg-white/5"
+                  >
+                    ↻
+                  </button>
+                )}
+                {!a.locked && (
+                  <button onClick={() => removeAsset(a.id)} className="rounded border border-white/12 px-1.5 text-[10px] text-rose-300 hover:bg-rose-950/40">✕</button>
+                )}
               </div>
             </div>
           </div>
@@ -186,7 +206,9 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
     keeper: 'border-emerald-400/80',
   };
 
-  if (doc.scenes.length === 0) return <div className="border-b border-white/8 px-4 py-2 text-[11px] text-neutral-600">Storyboard: draft your film below and the cells appear here.</div>;
+  if (doc.scenes.length === 0) {
+    return <div className="border-b border-white/8 px-4 py-2 text-[11px] text-neutral-600">No shots yet: write your <button onClick={() => setSel({ t: 'script' })} className="text-neutral-400 underline hover:text-neutral-200">Script</button> and the shots appear here.</div>;
+  }
 
   return (
     <div className="flex items-stretch gap-2 overflow-x-auto border-b border-white/8 px-3 py-2" data-testid="storyboard">
@@ -209,9 +231,8 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
                   <button onClick={() => { shiftScene(si, 1); setMenuScene(null); }} disabled={si === doc.scenes.length - 1} className="flex-1 rounded border border-white/12 py-0.5 text-[10px] text-neutral-300 disabled:opacity-30">▼ later</button>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { addPrompt(si); setMenuScene(null); }} className="flex-1 rounded border border-white/12 py-0.5 text-[10px] text-neutral-300">＋ cut</button>
-                  <button onClick={() => { addCoverage(si); setMenuScene(null); }} className="flex-1 rounded border border-white/12 py-0.5 text-[10px] text-neutral-300">＋ coverage</button>
-                  <button onClick={() => { if (confirm(`Delete Scene ${si + 1} and its takes?`)) removeScene(si); setMenuScene(null); }} className="rounded border border-white/12 px-1.5 py-0.5 text-[10px] text-rose-300">✕</button>
+                  <button onClick={() => { addCoverage(si); setMenuScene(null); }} className="flex-1 rounded border border-white/12 py-0.5 text-[10px] text-neutral-300">＋ coverage (new angle)</button>
+                  <button onClick={() => { if (confirm(`Delete Scene ${si + 1} and its takes?`)) removeScene(si); setMenuScene(null); }} className="rounded border border-white/12 px-1.5 py-0.5 text-[10px] text-rose-300">✕ scene</button>
                 </div>
               </div>
             )}
@@ -239,9 +260,16 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
               </button>
             );
           })}
+          {/* another cut INSIDE this beat: 1A -> 1B (tutorial: split/insert shots per scene) */}
+          <button onClick={() => addPrompt(si)} data-testid={`add-cut-${si}`} title={`Add a cut to Scene ${si + 1} (${scene.prompts.length ? scene.prompts[scene.prompts.length - 1]!.name + ' exists, this adds the next letter' : ''})`} className="h-[4.5rem] w-7 shrink-0 rounded-lg border border-dashed border-white/12 text-[11px] text-neutral-600 hover:border-white/30 hover:text-neutral-400">
+            ＋
+          </button>
         </div>
       ))}
-      <button onClick={addScene} className="h-[4.5rem] w-16 shrink-0 rounded-lg border border-dashed border-white/15 text-[11px] text-neutral-600 hover:border-white/30 hover:text-neutral-400" title="Add a scene">＋</button>
+      <button onClick={addScene} data-testid="add-scene" className="flex h-[4.5rem] w-20 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-white/15 text-neutral-600 hover:border-white/30 hover:text-neutral-400" title="New story beat (next scene number)">
+        <span className="text-sm">＋</span>
+        <span className="text-[9px]">scene</span>
+      </button>
       <div className="ml-auto flex shrink-0 items-center pl-2">
         <button onClick={() => setSel({ t: 'export' })} disabled={keeperClips(usePipeline.getState().doc).length === 0} data-testid="storyboard-export" className="btn-grad rounded-lg px-3.5 py-2 text-xs font-semibold disabled:opacity-40">
           ▶ Export
@@ -267,48 +295,67 @@ function StylePrefixRow() {
   );
 }
 
-/* ---------------- the stage: options compared big, one gets crowned ---------------- */
+/* ---------------- the stage ---------------- */
 
-function Stage({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
-  if (sel.t === 'draft') return <DraftStage setSel={setSel} />;
-  if (sel.t === 'casting') return <CastingStage />;
+function Stage({ sel, setSel, castSource, setCastSource }: { sel: Sel; setSel: (s: Sel) => void; castSource?: CastSource; setCastSource: (c: CastSource | undefined) => void }) {
+  if (sel.t === 'script') return <ScriptStage setSel={setSel} />;
+  if (sel.t === 'casting') return <CastingStage setCastSource={setCastSource} />;
   if (sel.t === 'export') return <ExportStage />;
   return <CutStage name={sel.name} />;
 }
 
-function DraftStage({ setSel }: { setSel: (s: Sel) => void }) {
-  const { planShotlist, addScene, busy, doc } = usePipeline();
-  const [beats, setBeats] = useState('');
+function ScriptStage({ setSel }: { setSel: (s: Sel) => void }) {
+  const { doc, setScript, planShotlist, addScene, busy } = usePipeline();
+  const prevScenes = useRef(doc.scenes.length);
+  // after a successful draft, jump to the first shot
   useEffect(() => {
-    const first = doc.scenes[0]?.prompts[0]?.name;
-    if (first) setSel({ t: 'cut', name: first });
+    if (doc.scenes.length > 0 && prevScenes.current === 0) {
+      const first = doc.scenes[0]?.prompts[0]?.name;
+      if (first) setSel({ t: 'cut', name: first });
+    }
+    prevScenes.current = doc.scenes.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.scenes.length]);
+
+  const draft = () => {
+    if (!doc.script?.trim()) return;
+    if (doc.scenes.length > 0 && !confirm('Re-drafting replaces the current shots (their takes go with them). Continue?')) return;
+    void planShotlist(doc.script);
+  };
+
   return (
-    <div className="grid min-h-0 flex-1 place-items-center p-6">
-      <div className="glass w-full max-w-xl rounded-2xl p-5">
-        <div className="grad-text mb-1.5 text-[10px] font-bold tracking-wide uppercase">Draft your film</div>
+    <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6" data-testid="script-stage">
+      <div className="glass w-full max-w-2xl rounded-2xl p-5">
+        <div className="grad-text mb-1 text-[10px] font-bold tracking-wide uppercase">Script</div>
+        <p className="mb-2 text-[11px] leading-relaxed text-neutral-500">
+          Write the script or beat sheet, one beat per scene. The director (seedance-shotlist skill) breaks it into
+          shots with camera, blocking, and acting beats, referencing your cast by name.
+        </p>
         <textarea
-          value={beats}
-          onChange={(e) => setBeats(e.target.value)}
-          rows={3}
-          placeholder="One beat per scene. 'A 30s ad for the LUNA sofa: evening reveal, she sinks in, stitching closeup, hero shot.' Or a drama premise."
+          value={doc.script ?? ''}
+          onChange={(e) => setScript(e.target.value)}
+          rows={7}
+          placeholder={'A 30s ad for the LUNA sofa.\nBeats:\n1. Evening loft, warm lamps, the empty room waits.\n2. maya walks in, drops her bag, sinks into luna_sofa.\n3. Extreme closeup of the boucle stitching.\n4. Hero shot: luna_sofa dead center, city lights behind.'}
           data-testid="beats"
-          className="mb-3 w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-neutral-200 outline-none placeholder:text-neutral-600 focus:border-[color:var(--c2)]"
+          className="mb-3 w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-relaxed text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-[color:var(--c2)]"
         />
         <div className="flex items-center gap-3">
-          <button onClick={() => beats.trim() && void planShotlist(beats)} disabled={busy !== null || !beats.trim()} data-testid="draft-shotlist" className="btn-grad rounded-lg px-5 py-2 text-sm font-semibold disabled:opacity-50">
-            {busy ? 'Directing…' : 'Draft scenes'}
+          <button onClick={draft} disabled={busy !== null || !doc.script?.trim()} data-testid="draft-shotlist" className="btn-grad rounded-lg px-5 py-2 text-sm font-semibold disabled:opacity-50">
+            {busy ? 'Directing…' : doc.scenes.length ? '↻ Re-draft shots' : 'Draft shots'}
           </button>
-          <button onClick={addScene} className="rounded-lg border border-white/12 px-4 py-2 text-sm text-neutral-300 hover:bg-white/5">Start blank</button>
-          <p className="text-[10px] text-neutral-600">Tip: cast your assets first (＋ Cast, left) so the director can reference them by name.</p>
+          <button onClick={addScene} className="rounded-lg border border-white/12 px-4 py-2 text-sm text-neutral-300 hover:bg-white/5">Add a blank scene</button>
+          {doc.scenes.length > 0 && (
+            <button onClick={() => { const f = doc.scenes[0]?.prompts[0]?.name; if (f) setSel({ t: 'cut', name: f }); }} className="text-xs text-neutral-500 hover:text-neutral-300">
+              → to Shots ({doc.scenes.reduce((n, s) => n + s.prompts.length, 0)})
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function CastingStage() {
+function CastingStage({ setCastSource }: { setCastSource: (c: CastSource | undefined) => void }) {
   const { doc, promoteCandidate, discardCandidate, busy } = usePipeline();
   const candidates = doc.candidates ?? [];
   return (
@@ -316,7 +363,7 @@ function CastingStage() {
       {candidates.length === 0 ? (
         <div className="grid h-full place-items-center">
           <p className="max-w-sm text-center text-sm text-neutral-600">
-            {busy?.startsWith('candidate') ? 'Generating candidates…' : 'Describe an asset below and generate a batch. Candidates appear here, big, side by side. Crown the winner.'}
+            {busy?.startsWith('candidate') ? 'Generating candidates…' : 'Describe a cast member below and generate a batch. Candidates appear here, big, side by side. Crown the winner.'}
           </p>
         </div>
       ) : (
@@ -326,9 +373,17 @@ function CastingStage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={c.url} alt="" className="aspect-video w-full object-cover" />
               <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-2.5 pt-6 pb-2">
-                <span className="text-[10px] text-neutral-400">{KIND_ICON[c.kind]} {c.used ? '✓ in bible' : 'candidate'}</span>
+                <span className="text-[10px] text-neutral-400">{KIND_ICON[c.kind]} {c.used ? '✓ cast' : 'candidate'}</span>
                 <div className="flex gap-1.5">
-                  <button onClick={() => promoteCandidate(c.id)} data-testid={`crown-${c.id}`} className="btn-grad rounded-md px-2.5 py-1 text-[11px] font-bold" title="Crown: add to the bible (name + lock it in the rail)">👑 Crown</button>
+                  <button
+                    onClick={() => setCastSource({ url: c.url, label: 'this candidate' })}
+                    data-testid={`iterate-${c.id}`}
+                    title="Iterate: use this image as the source for the next batch (tweak the prompt, regenerate)"
+                    className="rounded-md border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-neutral-200 hover:bg-black/70"
+                  >
+                    ↻ iterate
+                  </button>
+                  <button onClick={() => promoteCandidate(c.id)} data-testid={`crown-${c.id}`} className="btn-grad rounded-md px-2.5 py-1 text-[11px] font-bold" title="Crown: add to the cast (name + lock it in the rail)">👑 Crown</button>
                   <button onClick={() => discardCandidate(c.id)} className="rounded-md border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-neutral-300 hover:text-rose-300">✕</button>
                 </div>
               </div>
@@ -378,7 +433,6 @@ function StageTake({ t }: { t: TakeDoc }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img src={t.url} alt={t.promptName} className="aspect-video w-full object-cover" />
       )}
-      {/* crown: THE gesture */}
       {t.kind !== 'audio' && (
         <button
           onClick={() => setKeeper(t.id)}
@@ -498,73 +552,97 @@ function ExportStage() {
   );
 }
 
-/* ---------------- the control bar: how you steer the selection ---------------- */
+/* ---------------- the control bar ---------------- */
 
-function ControlBar({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
-  if (sel.t === 'casting') return <CastingControls />;
+function ControlBar({ sel, setSel, castSource, setCastSource }: { sel: Sel; setSel: (s: Sel) => void; castSource?: CastSource; setCastSource: (c: CastSource | undefined) => void }) {
+  if (sel.t === 'casting') return <CastingControls castSource={castSource} setCastSource={setCastSource} />;
   if (sel.t === 'cut') return <CutControls name={sel.name} setSel={setSel} />;
   return null;
 }
 
-function CastingControls() {
-  const { doc, generateCandidates, addAsset, setAssetImage, busy } = usePipeline();
+function CastingControls({ castSource, setCastSource }: { castSource?: CastSource; setCastSource: (c: CastSource | undefined) => void }) {
+  const { doc, generateCandidates, busy } = usePipeline();
   const [kind, setKind] = useState<AssetKind>('product');
   const [count, setCount] = useState(4);
   const [prompt, setPrompt] = useState('');
-  const [fromImage, setFromImage] = useState<string | undefined>(undefined);
   const fileRef = useRef<HTMLInputElement>(null);
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const readFile = (file: File, cb: (uri: string) => void) => {
-    const r = new FileReader();
-    r.onload = () => cb(String(r.result));
-    r.readAsDataURL(file);
-  };
+  const withImages = doc.assets.filter((a) => a.imageUrl);
+
+  const go = () => prompt.trim() && void generateCandidates(kind, prompt, count, castSource?.url);
+
   return (
-    <div className="flex items-center gap-2 border-t border-white/8 bg-[#0b0a11] px-4 py-2.5" data-testid="casting-controls">
-      <select value={kind} onChange={(e) => setKind(e.target.value as AssetKind)} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
-        {ASSET_KINDS.map((k) => (
-          <option key={k} value={k}>{KIND_ICON[k]} {k}</option>
-        ))}
-      </select>
-      <select value={count} onChange={(e) => setCount(Number(e.target.value))} title="Variations per go" className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
-        {[1, 2, 3, 4, 6].map((n) => (
-          <option key={n} value={n}>×{n}</option>
-        ))}
-      </select>
-      <button onClick={() => fileRef.current?.click()} title={fromImage ? 'Source photo attached: candidates are edits of it' : 'Start from a photo (your real product)'} className={`rounded-lg border px-2 py-1.5 text-xs ${fromImage ? 'border-[#ff3d8b]/60 bg-[#ff3d8b]/15 text-[#ff9ac4]' : 'border-white/12 text-neutral-400 hover:bg-white/5'}`}>
-        {fromImage ? '📎' : '⬆'} photo
-      </button>
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && readFile(e.target.files[0], setFromImage)} />
-      <input
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && prompt.trim() && void generateCandidates(kind, prompt, count, fromImage)}
-        placeholder="describe the asset: 'two-panel product sheet, front + 3/4 view on clean studio gray…'"
-        data-testid="candidate-prompt"
-        className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-neutral-200 outline-none placeholder:text-neutral-600 focus:border-[color:var(--c2)]"
-      />
-      <button onClick={() => prompt.trim() && void generateCandidates(kind, prompt, count, fromImage)} disabled={busy !== null || !prompt.trim()} data-testid="generate-candidates" className="btn-grad rounded-lg px-4 py-1.5 text-xs font-semibold disabled:opacity-50">
-        Generate ×{count}
-      </button>
-      <button onClick={() => uploadRef.current?.click()} className="rounded-lg border border-white/12 px-2.5 py-1.5 text-xs text-neutral-400 hover:bg-white/5" title="Upload an image straight into the bible">⬆ to bible</button>
-      <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
-        const f = e.target.files?.[0];
-        if (!f) return;
-        readFile(f, (uri) => {
-          const a = addAsset(f.name.replace(/\.[a-z]+$/i, ''), kind);
-          setAssetImage(a.id, uri);
-        });
-      }} />
+    <div className="space-y-1.5 border-t border-white/8 bg-[#0b0a11] px-4 py-2.5" data-testid="casting-controls">
+      <div className="flex items-center gap-2">
+        <select value={kind} onChange={(e) => setKind(e.target.value as AssetKind)} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
+          {ASSET_KINDS.map((k) => (
+            <option key={k} value={k}>{KIND_ICON[k]} {k}</option>
+          ))}
+        </select>
+        <select value={count} onChange={(e) => setCount(Number(e.target.value))} title="Variations per go" className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-200 outline-none">
+          {[1, 2, 3, 4, 6].map((n) => (
+            <option key={n} value={n}>×{n}</option>
+          ))}
+        </select>
+        {/* source: a photo, an existing cast member, or a candidate being iterated */}
+        {castSource ? (
+          <span className="flex items-center gap-1.5 rounded-lg border border-[#ff3d8b]/50 bg-[#ff3d8b]/10 px-2 py-1 text-[11px] text-[#ff9ac4]" data-testid="cast-source">
+            from: {castSource.label}
+            <button onClick={() => setCastSource(undefined)} className="text-[#ff9ac4]/70 hover:text-white">✕</button>
+          </span>
+        ) : (
+          <>
+            <button onClick={() => fileRef.current?.click()} title="Start from a photo (your real product)" className="rounded-lg border border-white/12 px-2 py-1.5 text-xs text-neutral-400 hover:bg-white/5">⬆ photo</button>
+            {withImages.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => {
+                  const a = withImages.find((x) => x.id === e.target.value);
+                  if (a) setCastSource({ url: a.imageUrl!, label: a.slug });
+                }}
+                title="Start from an existing cast member (re-style, state variant, wardrobe change)"
+                data-testid="source-from-cast"
+                className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-neutral-400 outline-none"
+              >
+                <option value="">from cast…</option>
+                {withImages.map((a) => (
+                  <option key={a.id} value={a.id}>{a.slug}</option>
+                ))}
+              </select>
+            )}
+          </>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          const r = new FileReader();
+          r.onload = () => setCastSource({ url: String(r.result), label: f.name.slice(0, 18) });
+          r.readAsDataURL(f);
+        }} />
+        <input
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && go()}
+          placeholder={castSource ? `what to make from ${castSource.label}: 'clean product sheet, front + 3/4 view…'` : "describe the cast member: 'two-panel character sheet, closeup + full body on gray…'"}
+          data-testid="candidate-prompt"
+          className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-neutral-200 outline-none placeholder:text-neutral-600 focus:border-[color:var(--c2)]"
+        />
+        <button onClick={go} disabled={busy !== null || !prompt.trim()} data-testid="generate-candidates" className="btn-grad rounded-lg px-4 py-1.5 text-xs font-semibold disabled:opacity-50">
+          Generate ×{count}
+        </button>
+      </div>
     </div>
   );
 }
 
 function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void }) {
-  const { doc, updatePrompt, batchTakes, voicePrompt, animateTake, busy } = usePipeline();
+  const { doc, updatePrompt, batchTakes, voicePrompt, animateTake, removePrompt, busy } = usePipeline();
   const [variations, setVariations] = useState(2);
   const p = doc.scenes.flatMap((s) => s.prompts).find((x) => x.name === name);
   useEffect(() => {
-    if (!p) setSel({ t: 'draft' }); // cut vanished (scene deleted)
+    if (!p) {
+      const first = usePipeline.getState().doc.scenes[0]?.prompts[0]?.name;
+      setSel(first ? { t: 'cut', name: first } : { t: 'script' });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p]);
   if (!p) return null;
@@ -601,11 +679,19 @@ function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void 
             );
           })}
         </div>
-        <div className="ml-auto flex gap-1" data-testid={`cine-${name}`}>
+        <div className="ml-auto flex items-center gap-1" data-testid={`cine-${name}`}>
           {preset(p.shotSize ?? '', SHOT, 'shot', 'shotSize')}
           {preset(p.angle ?? '', ANGLE, 'angle', 'angle')}
           {preset(p.lens ?? '', LENS, 'lens', 'lens')}
           {preset(p.light ?? '', LIGHT, 'light', 'light')}
+          <button
+            onClick={() => { if (confirm(`Delete cut ${name} and its takes?`)) removePrompt(name); }}
+            data-testid={`delete-cut-${name}`}
+            title="Delete this cut (its takes go with it; letters renumber)"
+            className="ml-1 rounded-md border border-white/12 px-1.5 py-1 text-[10px] text-rose-300/80 hover:bg-rose-950/40"
+          >
+            ✕ cut
+          </button>
         </div>
       </div>
       <div className="flex items-start gap-2">
