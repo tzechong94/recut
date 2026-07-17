@@ -442,7 +442,7 @@ function Preset({ value, options, label, onChange }: { value: string; options: s
 }
 
 function CutRow({ scene, p }: { scene: SceneDoc; p: PromptDoc }) {
-  const { doc, updatePrompt, runPrompt, voicePrompt, busy } = usePipeline();
+  const { doc, updatePrompt, runPrompt, batchTakes, voicePrompt, busy } = usePipeline();
   const takes = takesFor(doc, p.name);
   const lockedSlugs = doc.assets.filter((a) => a.locked && a.imageUrl).map((a) => a.slug);
 
@@ -493,6 +493,9 @@ function CutRow({ scene, p }: { scene: SceneDoc; p: PromptDoc }) {
         )}
         <button onClick={() => void runPrompt(p.name)} disabled={busy !== null} data-testid={`run-${p.name}`} className="btn-grad rounded-md px-3.5 py-1 text-[11px] font-semibold disabled:opacity-50">
           {busy === `running ${p.name}` ? 'Generating…' : takes.length ? '↻ New take' : '▶ Take'}
+        </button>
+        <button onClick={() => void batchTakes(p.name, 3)} disabled={busy !== null} title="Three takes back to back — shortlist the best, then animate it" data-testid={`batch-${p.name}`} className="rounded-md border border-white/12 px-2 py-1 text-[11px] font-semibold text-neutral-300 hover:bg-white/5 disabled:opacity-50">
+          ×3
         </button>
       </div>
       <p className="mt-1.5 line-clamp-2 font-mono text-[10px] leading-relaxed text-neutral-600" title={compilePromptText(doc, p.name)}>
@@ -572,16 +575,27 @@ function TakeCard({ t }: { t: TakeDoc }) {
 /* ---------------- Stage 3: Film ---------------- */
 
 function FilmPanel() {
-  const { doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl } = usePipeline();
+  const { doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl, setFilmOrder } = usePipeline();
   const cut = keeperClips(doc);
   const voices = voiceTracks(doc);
+
+  // drag a clip onto another to reorder the film (persisted as filmOrder)
+  const reorder = (fromName: string, toName: string) => {
+    if (fromName === toName) return;
+    const names = cut.map((c) => c.promptName);
+    const from = names.indexOf(fromName);
+    const to = names.indexOf(toName);
+    if (from === -1 || to === -1) return;
+    names.splice(to, 0, names.splice(from, 1)[0]!);
+    setFilmOrder(names);
+  };
 
   return (
     <section className="mx-auto max-w-5xl px-6 py-8">
       <h2 className="text-lg font-bold text-neutral-100">The film</h2>
       <p className="mt-1 mb-6 max-w-2xl text-sm text-neutral-500">
-        The cut assembles each cut's ★ keeper clip in scene order, mixes the voice takes over it, and bakes the look
-        on export. Change keepers in Scenes; change order by moving scenes.
+        The cut assembles each cut's ★ keeper clip, mixes the voice takes over it, and bakes the look on export.
+        Drag clips below to reorder the film; change keepers in Scenes.
       </p>
 
       {cut.length === 0 ? (
@@ -602,8 +616,17 @@ function FilmPanel() {
               <div className="mb-1.5 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">The cut · {cut.length} clip{cut.length === 1 ? '' : 's'}{voices.length ? ` · ${voices.length} voice` : ''}</div>
               <div className="flex gap-2 overflow-x-auto pb-1" data-testid="film-cut">
                 {cut.map((c, i) => (
-                  <div key={c.promptName} className="relative shrink-0">
-                    <video src={c.url} muted playsInline preload="metadata" className="h-20 w-32 rounded-lg border border-white/10 bg-black object-cover" />
+                  <div
+                    key={c.promptName}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('clip', c.promptName)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData('clip'); if (from) reorder(from, c.promptName); }}
+                    data-testid={`film-clip-${c.promptName}`}
+                    className="relative shrink-0 cursor-grab active:cursor-grabbing"
+                    title="Drag to reorder the film"
+                  >
+                    <video src={c.url} muted playsInline preload="metadata" className="pointer-events-none h-20 w-32 rounded-lg border border-white/10 bg-black object-cover" />
                     <span className="absolute top-1 left-1 rounded bg-black/70 px-1 font-mono text-[9px] font-bold text-neutral-200">{i + 1} · {c.promptName}</span>
                   </div>
                 ))}
