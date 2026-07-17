@@ -115,7 +115,7 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
 
       {error && <div className="border-b border-rose-900 bg-rose-950/60 px-4 py-1.5 text-xs text-rose-300">{error}</div>}
 
-      {tourOn && loadedFor === projectId && <Tour setSel={setSel} onExit={exitTour} />}
+      {tourOn && loadedFor === projectId && <Tour projectId={projectId} setSel={setSel} onExit={exitTour} />}
       <div className={`grid min-h-0 flex-1 ${showRail ? 'grid-cols-[13rem_1fr]' : 'grid-cols-1'}`}>
         {showRail && <CastRail setSel={setSel} setCastSource={setCastSource} />}
         <div className="flex min-h-0 flex-col">
@@ -278,7 +278,7 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={thumb} alt={p.name} className="h-full w-full object-cover" />
                 ) : vidThumb ? (
-                  <video src={vidThumb} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
+                  <video src={`${vidThumb}#t=0.5`} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
                 ) : (
                   <span className="grid h-full w-full place-items-center text-[10px] text-neutral-600">◌</span>
                 )}
@@ -329,7 +329,7 @@ function StylePrefixRow() {
             <span className="ml-auto shrink-0 text-[10px]">{locked ? '🔒' : <span className="text-amber-300/90">unlocked ✎</span>}</span>
           </>
         ) : (
-          <span className="text-[11px] text-neutral-600">not set: click to define the film\'s one look (or let AI draft it from a few words)</span>
+          <span className="text-[11px] text-neutral-600">not set: click to define the film&apos;s one look (or let AI draft it from a few words)</span>
         )}
       </button>
     );
@@ -339,7 +339,7 @@ function StylePrefixRow() {
     <div className="space-y-2 border-b border-white/8 bg-white/[0.02] px-4 py-3" data-testid="style-editor">
       <div className="flex items-center gap-2">
         <span className="grad-text shrink-0 text-[9px] font-bold tracking-wide uppercase">Global style</span>
-        <span className="text-[10px] text-neutral-600">the film\'s one look, glued to every cut; scene overrides win inside their scene</span>
+        <span className="text-[10px] text-neutral-600">the film&apos;s one look, glued to every cut; scene overrides win inside their scene</span>
       </div>
       {/* AI draft from plain words */}
       <div className="flex items-center gap-2">
@@ -529,7 +529,7 @@ function StageTake({ t }: { t: TakeDoc }) {
           <audio src={t.url} controls className="w-11/12" />
         </div>
       ) : t.kind === 'video' ? (
-        <video src={t.url} controls muted loop playsInline preload="metadata" className="aspect-video w-full bg-black object-cover" />
+        <video src={t.url} controls loop playsInline preload="metadata" className="aspect-video w-full bg-black object-cover" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={t.url} alt={t.promptName} className="aspect-video w-full object-cover" />

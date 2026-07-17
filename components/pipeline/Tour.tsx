@@ -11,6 +11,10 @@ import type { AssetDoc, PipelineDoc } from '../../lib/pipeline/doc';
 
 export type TourSel = { t: 'cut'; name: string } | { t: 'casting' } | { t: 'script' } | { t: 'export' };
 
+// The pristine project, captured ONCE per tour run and held outside the component: a mid-show
+// remount (fast refresh, error boundary) must never re-capture a staged doc as 'the original'.
+const pristine = new Map<string, { doc: PipelineDoc; spentUsd: number; capUsd: number | null }>();
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Type into a REAL React-controlled input using the native value setter (demo magic). */
@@ -39,6 +43,15 @@ function selectValue(selector: string, value: string): void {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+/** Instantly clear a React-controlled input (a finished field should not linger into the next beat). */
+function clearInput(selector: string): void {
+  const el = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement | null;
+  if (!el) return;
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, '');
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function castingPromptFor(a: AssetDoc): string {
   const nice = a.slug.replace(/_/g, ' ');
   if (a.kind === 'character') return `two-panel character sheet of ${nice}: closeup face and full body on a clean background, exactly on-model`;
@@ -55,12 +68,13 @@ interface TourStep {
   action?: (setBusyLine: (s: string | null) => void) => Promise<void>; // runs when Next is clicked
 }
 
-export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit: () => void }) {
+export function Tour({ projectId, setSel, onExit }: { projectId: string; setSel: (s: TourSel) => void; onExit: () => void }) {
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const raf = useRef(0);
   const full = useRef<PipelineDoc | null>(null);
+  const ledger = useRef<{ spentUsd: number; capUsd: number | null }>({ spentUsd: 0, capUsd: null });
   const steps = useRef<TourStep[]>([]);
 
   const stage = useCallback((patch: Partial<PipelineDoc>) => {
@@ -71,10 +85,19 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
 
   // build the script of the show from the finished project, then strip the stage bare
   useEffect(() => {
-    const doc = usePipeline.getState().doc;
-    full.current = JSON.parse(JSON.stringify(doc)) as PipelineDoc;
+    const st = usePipeline.getState();
+    if (!pristine.has(projectId)) {
+      pristine.set(projectId, { doc: JSON.parse(JSON.stringify(st.doc)) as PipelineDoc, spentUsd: st.spentUsd, capUsd: st.capUsd });
+    }
+    const saved = pristine.get(projectId)!;
+    full.current = saved.doc;
+    ledger.current = { spentUsd: saved.spentUsd, capUsd: saved.capUsd };
     const f = full.current;
     setDemoMode(true);
+    const charge = (usd: number) => {
+      const cur = usePipeline.getState().spentUsd;
+      usePipeline.setState({ spentUsd: cur + usd });
+    };
 
     const cast = f.assets.filter((a) => a.locked && a.imageUrl).slice(0, 3);
     // each scene is two beats: GENERATE (the fake render + reveal), then LINGER on the
@@ -90,16 +113,25 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
         action: async (line) => {
           line(`rendering ${names.join(', ')}`);
           await sleep(1500);
+          charge(0.6 * names.length);
           const upto = f.scenes.slice(0, si + 1).flatMap((sc) => sc.prompts.map((p) => p.name));
           stage({ takes: f.takes.filter((t) => upto.includes(t.promptName)) });
           line(null);
-          await sleep(300);
+          await sleep(200);
+          // the fresh clip starts playing by itself: the reveal feels alive. If the browser
+          // blocks unmuted autoplay, retry muted so the frame still comes up moving.
+          const v = document.querySelector('[data-testid=cut-stage] video') as HTMLVideoElement | null;
+          v?.play().catch(() => {
+            v.muted = true;
+            v.play().catch(() => { v.currentTime = 0.05; }); // last resort: paint a real frame
+          });
+          await sleep(200);
         },
       };
       const review: TourStep = {
         target: '[data-testid=cut-stage]',
-        title: `${names[0]} is in`,
-        body: 'Press ▶ on the clip to watch what was just generated. The ★ marks it as the keeper: the take that represents this cut in the film. Take your time; Next when ready.',
+        title: `${names.join(' + ')} ${names.length > 1 ? 'are' : 'is'} in`,
+        body: `Press ▶ on the clip to watch what was just generated. The ★ marks it as the keeper: the take that represents this cut in the film.${names.length > 1 ? ` The stage shows ${names[0]}; click ${names.slice(1).join(', ')} in the storyboard to see the rest.` : ''} Take your time; Next when ready.`,
         nextLabel: si + 1 < f.scenes.length ? `On to Scene ${si + 2} →` : 'To the edit →',
       };
       return [shoot, review];
@@ -112,6 +144,7 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
         body: 'The real product, an empty project. Watch the agent cast, script, shoot, and cut this film in front of you. → or the buttons to drive.',
         prep: () => {
           stage({ assets: [], candidates: [], scenes: [], takes: [], timeline: undefined, stylePrefix: '', script: '' });
+          usePipeline.setState({ spentUsd: 0 }); // the demo ledger tells its own story
           setSel({ t: 'casting' });
         },
         nextLabel: 'Start casting →',
@@ -128,11 +161,13 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
           await typeInto('[data-testid=candidate-prompt]', castingPromptFor(a));
           line('candidate 1/1');
           await sleep(1300);
+          charge(0.05);
           stage({ candidates: [{ id: `demo_${a.id}`, kind: a.kind, url: a.imageUrl!, prompt: castingPromptFor(a) }] });
           line(null);
           await sleep(900);
           const prev = usePipeline.getState().doc.assets;
           stage({ assets: [...prev, a], candidates: [] });
+          clearInput('[data-testid=candidate-prompt]'); // field resets for the next member
           await sleep(400);
         },
       })),
@@ -143,9 +178,11 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
         nextLabel: '🎬 Draft the shots',
         prep: () => setSel({ t: 'script' }),
         action: async (line) => {
-          await typeInto('[data-testid=beats]', (f.script ?? '').trim() || 'A short film about the cast.');
+          const castNames = f.assets.filter((a) => a.locked).map((a) => a.slug.replace(/_/g, ' ')).join(', ');
+          await typeInto('[data-testid=beats]', (f.script ?? '').trim() || `A short film starring ${castNames || 'the cast'}: one beat per scene, ending on a hero shot.`);
           line('directing');
           await sleep(1500);
+          charge(0.01);
           stage({ scenes: f.scenes, stylePrefix: f.stylePrefix, script: f.script });
           line(null);
           await sleep(300);
@@ -186,9 +223,10 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
     setI(0);
 
     return () => {
-      if (full.current) usePipeline.setState({ doc: full.current, busy: null });
+      if (full.current) usePipeline.setState({ doc: full.current, busy: null, ...ledger.current });
       setDemoMode(false);
     };
+    // (pristine entry is cleared in exit(); a remount mid-show reuses it instead of re-capturing)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -207,10 +245,11 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
   }, [i, running, busyLine]);
 
   const exit = useCallback(() => {
-    if (full.current) usePipeline.setState({ doc: full.current, busy: null });
+    if (full.current) usePipeline.setState({ doc: full.current, busy: null, ...ledger.current });
+    pristine.delete(projectId);
     setDemoMode(false);
     onExit();
-  }, [onExit]);
+  }, [onExit, projectId]);
 
   // anchor tracking
   useEffect(() => {
@@ -244,6 +283,14 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
   const pos = (() => {
     if (!rect) return { left: window.innerWidth / 2 - W / 2, top: window.innerHeight / 2 - 110 };
     const pad = 14;
+    // full-width bars (storyboard, cut controls): go below or above, never on top of the highlight
+    if (rect.width > window.innerWidth * 0.6 && rect.height <= window.innerHeight * 0.6) {
+      const left = Math.min(Math.max(12, rect.left + 16), window.innerWidth - W - 12);
+      const top = rect.top < window.innerHeight / 2
+        ? Math.min(rect.bottom + pad, window.innerHeight - 232)
+        : Math.max(12, rect.top - 210 - pad);
+      return { left, top };
+    }
     let left = rect.right + pad;
     let top = rect.top;
     if (left + W > window.innerWidth - 12) left = Math.max(12, rect.left - W - pad);
@@ -271,10 +318,8 @@ export function Tour({ setSel, onExit }: { setSel: (s: TourSel) => void; onExit:
         <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">{step.body}</p>
         <div className="mt-3 flex items-center justify-between">
           <button onClick={() => void go(i - 1)} disabled={i === 0 || !!running} className="rounded-lg border border-white/12 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5 disabled:opacity-30">←</button>
-          <div className="flex items-center gap-1">
-            {steps.current.map((_, d) => (
-              <span key={d} className={`h-1 rounded-full ${d === i ? 'w-4 bg-[#ff3d8b]' : 'w-1 bg-white/20'}`} />
-            ))}
+          <div className="h-1 w-20 overflow-hidden rounded-full bg-white/15">
+            <div className="h-full rounded-full bg-[#ff3d8b] transition-all duration-300" style={{ width: `${((i + 1) / steps.current.length) * 100}%` }} />
           </div>
           {i < steps.current.length - 1 ? (
             <button onClick={() => void go(i + 1)} disabled={!!running} data-testid="tour-next" className="btn-grad rounded-lg px-4 py-1.5 text-xs font-semibold disabled:opacity-60">
