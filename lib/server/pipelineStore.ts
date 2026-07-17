@@ -24,8 +24,20 @@ export function getPipeline(id: string): PipelineDoc {
   return JSON.parse(readFileSync(p, 'utf8')) as PipelineDoc;
 }
 
-export function savePipeline(doc: PipelineDoc): void {
+/** Save with optimistic concurrency. If the caller's rev is stale, the stored doc's takes are
+ *  UNION-merged in (takes are the expensive artifacts; losing one is never acceptable) and the
+ *  caller's view wins for everything else. Returns the saved doc (with its new rev). */
+export function savePipeline(doc: PipelineDoc): PipelineDoc {
   const p = pathOf(doc.projectId);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(doc, null, 2));
+  const stored = existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as PipelineDoc) : null;
+  let next = { ...doc };
+  if (stored && (stored.rev ?? 0) !== (doc.rev ?? 0)) {
+    const have = new Set(next.takes.map((t) => t.id));
+    const missing = stored.takes.filter((t) => !have.has(t.id));
+    next = { ...next, takes: [...next.takes, ...missing] };
+  }
+  next.rev = (stored?.rev ?? 0) + 1;
+  writeFileSync(p, JSON.stringify(next, null, 2));
+  return next;
 }

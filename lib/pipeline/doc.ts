@@ -77,6 +77,8 @@ export interface TakeDoc {
 
 export interface PipelineDoc {
   projectId: string;
+  /** monotonic revision, bumped by the server on every save (stale-tab clobber guard) */
+  rev?: number;
   /** the film's script / beat sheet (the Script stage feeds the director skill with this) */
   script?: string;
   /** global Style Prefix (spec Stage 2): glued to every prompt; change once, changes everywhere */

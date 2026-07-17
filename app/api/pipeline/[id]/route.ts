@@ -15,6 +15,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!body || !Array.isArray(body.assets) || !Array.isArray(body.scenes)) {
     return Response.json({ error: 'bad pipeline doc' }, { status: 400 });
   }
-  savePipeline({ ...body, projectId: id });
-  return Response.json({ ok: true });
+  const saved = savePipeline({ ...body, projectId: id });
+  return Response.json({ ok: true, rev: saved.rev });
 }

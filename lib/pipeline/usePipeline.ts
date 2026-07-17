@@ -186,13 +186,26 @@ export const usePipeline = create<PipelineState>((set, get) => {
     save: async () => {
       const { doc, loadedFor } = get();
       if (loadedFor !== doc.projectId || !doc.projectId) return;
-      // keepalive: a flush on tab-hide/unload still lands even as the page goes away
-      await fetch(`/api/pipeline/${doc.projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(doc),
-        keepalive: true,
-      }).catch(() => undefined);
+      try {
+        // keepalive: a flush on tab-hide/unload still lands even as the page goes away
+        const res = await fetch(`/api/pipeline/${doc.projectId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(doc),
+          keepalive: true,
+        });
+        if (!res.ok) throw new Error(`save HTTP ${res.status}`);
+        const j = (await res.json()) as { rev?: number };
+        // adopt the server's rev silently (no dirty-loop: bypass mutate)
+        const cur = get();
+        if (cur.doc.projectId === doc.projectId && typeof j.rev === 'number') {
+          set({ doc: { ...cur.doc, rev: j.rev }, error: cur.error?.startsWith('saving failed') ? null : cur.error });
+        }
+      } catch {
+        // NEVER lose work silently: surface it and retry until the save lands
+        set({ error: 'saving failed, retrying…' });
+        setTimeout(() => void get().save(), 3000);
+      }
     },
     setTab: (tab) => set({ tab }),
     patchDoc: (patch) => mutate((d) => ({ ...d, ...patch })),
