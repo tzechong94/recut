@@ -206,8 +206,10 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
     const img = takes.filter((t) => t.kind === 'image');
     const vid = takes.filter((t) => t.kind === 'video');
     const thumb = (img.find((t) => t.keeper) ?? img[img.length - 1])?.url;
+    // direct-video cuts have no image takes: use the keeper/latest CLIP as the cell thumbnail
+    const vidThumb = thumb ? undefined : (vid.find((t) => t.keeper) ?? vid[vid.length - 1])?.url;
     const state: 'empty' | 'framed' | 'animated' | 'keeper' = vid.some((t) => t.keeper) ? 'keeper' : vid.length ? 'animated' : img.length ? 'framed' : 'empty';
-    return { thumb, state };
+    return { thumb, vidThumb, state };
   };
   const ring: Record<string, string> = {
     empty: 'border-dashed border-white/15',
@@ -248,7 +250,7 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
             )}
           </div>
           {scene.prompts.map((p) => {
-            const { thumb, state } = cellFor(p);
+            const { thumb, vidThumb, state } = cellFor(p);
             const active = sel.t === 'cut' && sel.name === p.name;
             return (
               <button
@@ -261,6 +263,8 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
                 {thumb ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={thumb} alt={p.name} className="h-full w-full object-cover" />
+                ) : vidThumb ? (
+                  <video src={vidThumb} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
                 ) : (
                   <span className="grid h-full w-full place-items-center text-[10px] text-neutral-600">◌</span>
                 )}

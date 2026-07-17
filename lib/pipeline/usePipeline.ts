@@ -137,6 +137,8 @@ interface PipelineState {
   resetTimeline: () => void;
   /** replace the whole timeline (undo restore) */
   setTimeline: (segs: import('./doc').FilmSegment[] | undefined) => void;
+  /** append a full-length segment of this take to the timeline (the media-bin add) */
+  appendSegment: (takeId: string) => void;
   clearFilm: () => void;
   // Stage 4
   setLut: (lut: string) => void;
@@ -169,7 +171,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     capUsd: null,
     filmUrl: null,
     exporting: false,
-    lut: 'warm-film',
+    lut: 'identity',
     vertical: false,
 
     load: async (projectId) => {
@@ -606,7 +608,15 @@ export const usePipeline = create<PipelineState>((set, get) => {
         const target = d.takes.find((t) => t.id === takeId);
         if (!target) return d;
         if (target.kind === 'video') {
-          return { ...d, takes: d.takes.map((t) => (t.id === takeId ? { ...t, keeper: !t.keeper } : t)) };
+          const nowKeeper = !target.keeper;
+          let timeline = d.timeline;
+          // once the timeline is materialized, stars keep it in sync: star = append, unstar = remove
+          if (timeline) {
+            timeline = nowKeeper
+              ? [...timeline, { id: `seg_${takeId}_${timeline.length}`, takeId, start: 0 }]
+              : timeline.filter((sg) => sg.takeId !== takeId);
+          }
+          return { ...d, timeline, takes: d.takes.map((t) => (t.id === takeId ? { ...t, keeper: nowKeeper } : t)) };
         }
         return {
           ...d,
@@ -645,6 +655,11 @@ export const usePipeline = create<PipelineState>((set, get) => {
       }),
     resetTimeline: () => mutate((d) => ({ ...d, timeline: undefined })),
     setTimeline: (segs) => mutate((d) => ({ ...d, timeline: segs })),
+    appendSegment: (takeId) =>
+      mutate((d) => {
+        const tl = d.timeline ?? deriveTimeline(d);
+        return { ...d, timeline: [...tl, { id: `seg_${takeId}_${tl.length}`, takeId, start: 0 }] };
+      }),
     clearFilm: () => set({ filmUrl: null }),
 
     setLut: (lut) => set({ lut, filmUrl: null }),

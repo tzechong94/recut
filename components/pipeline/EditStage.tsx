@@ -7,16 +7,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePipeline } from '../../lib/pipeline/usePipeline';
 import { deriveTimeline, filmSegments, voiceTracks, type FilmSegment } from '../../lib/pipeline/doc';
-import { LUTS } from '../../lib/post/lut';
 
 const MIN_ZOOM = 16;
 const MAX_ZOOM = 320;
 
 export function EditStage() {
   const {
-    doc, lut, vertical, setLut, setVertical, exportFilm, exporting, filmUrl, clearFilm,
-    updateSegment, splitSegmentAt, removeSegment, moveSegmentTo, resetTimeline, setTimeline,
+    doc, vertical, setVertical, exportFilm, exporting, filmUrl, clearFilm,
+    updateSegment, splitSegmentAt, removeSegment, moveSegmentTo, resetTimeline, setTimeline, appendSegment,
   } = usePipeline();
+  // every video take not currently on the timeline is available in the bin
+  const binTakes = doc.takes.filter((t) => t.kind === 'video' && !filmSegments(doc).some((sg) => sg.takeId === t.id));
 
   const segs = filmSegments(doc);
   const voices = voiceTracks(doc);
@@ -248,16 +249,8 @@ export function EditStage() {
           )}
         </div>
 
-        {/* right rail: look + export */}
+        {/* right rail: export */}
         <aside className="space-y-3 overflow-y-auto">
-          <div>
-            <div className="mb-1 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">Look (LUT)</div>
-            <select value={lut} onChange={(e) => setLut(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-xs text-neutral-200 outline-none">
-              {LUTS.map((l) => (
-                <option key={l.name} value={l.name}>{l.label}</option>
-              ))}
-            </select>
-          </div>
           <div>
             <div className="mb-1 text-[10px] font-bold tracking-wide text-neutral-500 uppercase">Aspect</div>
             <div className="flex gap-2">
@@ -362,6 +355,25 @@ export function EditStage() {
           </div>
         </div>
 
+        {binTakes.length > 0 && (
+          <div className="mt-2 flex items-center gap-2 overflow-x-auto rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-1.5" data-testid="media-bin">
+            <span className="shrink-0 text-[9px] font-bold tracking-wide text-neutral-500 uppercase">Bin · {binTakes.length}</span>
+            {binTakes.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => withUndo(() => appendSegment(t.id))}
+                data-testid={`bin-${t.id}`}
+                title={`${t.promptName}: add to the end of the timeline`}
+                className="group relative h-12 w-20 shrink-0 overflow-hidden rounded-md border border-white/10 hover:border-[#ff3d8b]/60"
+              >
+                <video src={t.url} muted playsInline preload="metadata" className="pointer-events-none h-full w-full object-cover" />
+                <span className="absolute top-0.5 left-1 rounded bg-black/70 px-1 font-mono text-[8px] font-bold text-neutral-200">{t.promptName}</span>
+                <span className="absolute inset-0 hidden place-items-center bg-black/50 text-sm font-bold text-white group-hover:grid">＋</span>
+              </button>
+            ))}
+            <span className="shrink-0 text-[9px] text-neutral-700">click to add · starring in Shots also adds</span>
+          </div>
+        )}
         <div className="mt-1 flex items-center justify-between">
           <span className="text-[10px] text-neutral-700">space play · click timeline to seek · S split at playhead · del remove · ⌘Z undo · drag edges trim · drag body reorder · scroll zoom</span>
           {doc.timeline && (
