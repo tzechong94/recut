@@ -9,7 +9,7 @@ import { selectModel } from '../../../lib/gateway/router';
 import { CRITIC_MODEL_ID } from '../../../manifests/qwen-vl-critic';
 import { buildCritiquePayload, parseVerdict, continuityScore } from '../../../lib/agent/critic';
 import { buildKenBurnsArgs } from '../../../lib/post/export';
-import { submitI2V, submitR2V } from '../../../adapters/dashscope-video';
+import { submitI2V, submitR2V, uploadToDashscope } from '../../../adapters/dashscope-video';
 import { WAN_I2V, I2V_MODEL_ID } from '../../../manifests/wan-i2v';
 import { WAN_R2V, R2V_MODEL_ID } from '../../../manifests/wan-r2v';
 import { TTS_MODEL_ID } from '../../../manifests/qwen-tts';
@@ -47,6 +47,23 @@ async function toLocalFile(image: string): Promise<string> {
   }
   return out;
 }
+/** OSS links expire in ~a day; every produced image is mirrored locally like videos are. */
+async function mirrorImage(url: string): Promise<string> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return url;
+    const type = res.headers.get('content-type') ?? 'image/png';
+    const ext = type.includes('jpeg') ? 'jpg' : type.includes('webp') ? 'webp' : 'png';
+    const dir = resolve(process.cwd(), 'public/generated');
+    mkdirSync(dir, { recursive: true });
+    const name = `img-${randomUUID()}.${ext}`;
+    writeFileSync(join(dir, name), Buffer.from(await res.arrayBuffer()));
+    return `/generated/${name}`;
+  } catch {
+    return url;
+  }
+}
+
 function mkdtemp(): string {
   const d = join(tmpdir(), `recut-gen-${randomUUID()}`);
   mkdirSync(d, { recursive: true });
@@ -77,14 +94,14 @@ export async function POST(req: Request): Promise<Response> {
         const payload = { messages: [{ role: 'user', content: [{ image: body.styleRef }, { text: instruction }] }] };
         const r = await dashscopeImageCall(manifest.id, payload);
         gov.record(manifest.cost.amount);
-        return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
+        return Response.json({ imageUrl: await mirrorImage(r.imageUrl), spentUsd: gov.spent(), capUsd: gov.cap() });
       }
       const manifest = selectModel('image.generate');
       gov.assertCanSpend(manifest.cost.amount);
       const payload = { messages: [{ role: 'user', content: [{ text: `${body.prompt ?? ''}.${aspectHint} Avoid: ${body.negative ?? NEGATIVE}.` }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
-      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
+      return Response.json({ imageUrl: await mirrorImage(r.imageUrl), spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     // Consistency directive: the #1 lever for character/style consistency across shots is telling
@@ -107,7 +124,7 @@ export async function POST(req: Request): Promise<Response> {
       const payload = { messages: [{ role: 'user', content }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
-      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
+      return Response.json({ imageUrl: await mirrorImage(r.imageUrl), spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'compose') {
@@ -123,22 +140,38 @@ export async function POST(req: Request): Promise<Response> {
       const payload = { messages: [{ role: 'user', content: [...refImgs.map((i) => ({ image: i })), { text: instruction }] }] };
       const r = await dashscopeImageCall(manifest.id, payload);
       gov.record(manifest.cost.amount);
-      return Response.json({ imageUrl: r.imageUrl, spentUsd: gov.spent(), capUsd: gov.cap() });
+      return Response.json({ imageUrl: await mirrorImage(r.imageUrl), spentUsd: gov.spent(), capUsd: gov.cap() });
     }
 
     if (body.kind === 'video') {
       // Reference-to-video (the tutorial's direct path): shot description + locked cast refs.
       // Takes priority over i2v when refs are attached and no keyframe image is given.
       if (!body.image && body.refs?.length) {
-        const hosted = body.refs.filter((u) => /^https?:\/\//.test(u));
-        if (hosted.length === 0) {
-          return Response.json({ error: 'direct video needs hosted reference images (uploaded photos are not yet supported here; generate the cast member instead)' }, { status: 400 });
-        }
+        // refs must be reachable by the MODEL: local files and data URIs are uploaded to
+        // DashScope hosting (oss://); remote urls that resolve to localhost are rewritten too.
         const durationSec = Math.max(3, Math.min(10, Math.round(body.duration ?? 5)));
         const cost = WAN_R2V.cost.amount * durationSec;
         gov.assertCanSpend(cost);
+        const refs: string[] = [];
+        for (const u of body.refs.slice(0, WAN_R2V.supports.maxRefImages ?? 4)) {
+          const localMatch = u.match(/^(?:https?:\/\/(?:127\.0\.0\.1|localhost)[^/]*)?(\/generated\/[^?]+)$/);
+          if (localMatch) {
+            const fp = resolve(process.cwd(), 'public', localMatch[1]!.replace(/^\//, ''));
+            if (!existsSync(fp)) return Response.json({ error: `reference not found: ${localMatch[1]}` }, { status: 400 });
+            const mime = fp.endsWith('.jpg') ? 'image/jpeg' : fp.endsWith('.webp') ? 'image/webp' : 'image/png';
+            refs.push(await uploadToDashscope(R2V_MODEL_ID, readFileSync(fp), fp.split('/').pop()!, mime));
+          } else if (u.startsWith('data:')) {
+            const [head, b64] = u.split(',');
+            const mime = head?.match(/data:([^;]+)/)?.[1] ?? 'image/png';
+            const ext = mime.includes('jpeg') ? 'jpg' : mime.includes('webp') ? 'webp' : 'png';
+            refs.push(await uploadToDashscope(R2V_MODEL_ID, Buffer.from(b64 ?? '', 'base64'), `ref-${randomUUID()}.${ext}`, mime));
+          } else if (/^https?:\/\//.test(u) || u.startsWith('oss://')) {
+            refs.push(u);
+          }
+        }
+        if (refs.length === 0) return Response.json({ error: 'no usable reference images' }, { status: 400 });
         const prompt = body.prompt?.trim() || 'cinematic shot, natural motion';
-        const taskId = await submitR2V(R2V_MODEL_ID, hosted.slice(0, WAN_R2V.supports.maxRefImages ?? 4), prompt, { durationSec, resolution: '720P' });
+        const taskId = await submitR2V(R2V_MODEL_ID, refs, prompt, { durationSec, resolution: '720P' });
         gov.record(cost);
         return Response.json({ taskId, spentUsd: gov.spent(), capUsd: gov.cap() });
       }

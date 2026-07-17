@@ -25,7 +25,9 @@ function ProjectCard({ p, onDelete }: { p: ProjectMeta; onDelete: (id: string) =
     >
       {/* poster */}
       <div className="relative aspect-video w-full overflow-hidden bg-neutral-900">
-        {p.thumbUrl ? (
+        {p.thumbUrl?.endsWith('.mp4') ? (
+          <video src={p.thumbUrl} muted playsInline preload="metadata" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" />
+        ) : p.thumbUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.thumbUrl} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]" />
         ) : (
@@ -34,9 +36,11 @@ function ProjectCard({ p, onDelete }: { p: ProjectMeta; onDelete: (id: string) =
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        <span className="absolute bottom-2 left-2.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-neutral-200 backdrop-blur">
-          {p.nodeCount} {p.nodeCount === 1 ? 'node' : 'nodes'}
-        </span>
+        {p.clipCount > 0 && (
+          <span className="absolute bottom-2 left-2.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-neutral-200 backdrop-blur">
+            🎬 {p.clipCount} {p.clipCount === 1 ? 'clip' : 'clips'}
+          </span>
+        )}
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -103,8 +107,8 @@ export function ProjectsHome() {
             Recut gives you a <span className="serif-em grad-text">series</span>.
           </h1>
           <p className="mt-4 max-w-xl text-[15px] text-neutral-400">
-            A node canvas for AI film: generate, edit, and animate, wiring outputs into inputs, with a Canon and a
-            continuity critic keeping every shot on-model.
+            Cast locked references, let the director skill write the shots, generate takes, and cut the film: one
+            pipeline that keeps every frame on-model.
           </p>
 
           <div className="mt-8 flex max-w-xl gap-2.5">

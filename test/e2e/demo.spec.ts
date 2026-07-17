@@ -1,27 +1,30 @@
 import { test, expect } from '@playwright/test';
 
-// The guided demo IS the canvas: nodes reveal as you click Next, and clicking a node inspects
-// its real prompt / model / continuity axes (all from committed fixtures, zero network).
-test('guided demo reveals nodes on Next and inspects them', async ({ page }) => {
-  await page.route('**/*aliyuncs.com/**', (r) => r.abort()); // zero network
+// The judge demo: index lists demo-able projects; a walkthrough steps through the pipeline.
+const DOC = {
+  projectId: 'demo-e2e', rev: 1, stylePrefix: 'soft watercolor',
+  script: 'two birds by the river',
+  assets: [{ id: 'a1', slug: 'yoopi', kind: 'character', imageUrl: '/takes/1000.png', locked: true }],
+  scenes: [{ title: 'Scene 1', prompts: [{ name: '1A', text: 'yoopi preens on a branch', assetSlugs: ['yoopi'], shotSize: 'close-up' }] }],
+  takes: [{ id: 'v1', promptName: '1A', kind: 'video', url: '/clips/1000.mp4', keeper: true }],
+};
 
-  await page.goto('/demo');
-  await expect(page.getByTestId('demo-step')).toHaveText('step 1/6');
-  await expect(page.getByText('Cast · Mei').first()).toBeVisible();
+test('demo walkthrough steps from title to final cut', async ({ page }) => {
+  await page.route('**/api/pipeline/demo-e2e', (r) => r.fulfill({ json: DOC }));
+  await page.route('**/api/projects/demo-e2e', (r) => r.fulfill({ json: { id: 'demo-e2e', title: 'Demo Film', createdAt: 0 } }));
+  await page.goto('/demo/demo-e2e');
+  await expect(page.getByTestId('walkthrough')).toBeVisible();
+  await expect(page.getByText('Demo Film')).toBeVisible();
 
-  // the first node's prompt/detail is inspectable
-  await expect(page.getByTestId('demo-inspector')).toContainText('Canon');
-
-  // Next reveals the keyframe node + auto-selects it, showing the real compiled prompt
-  await page.getByTestId('demo-next').click();
-  await expect(page.getByTestId('demo-step')).toHaveText('step 2/6');
-  await expect(page.getByText('Keyframe · Take').first()).toBeVisible();
-  await expect(page.getByTestId('inspect-prompt')).toContainText('camera framing');
-
-  // step to the continuity node and confirm the wardrobe break axis is shown
-  await page.getByTestId('demo-next').click(); // break
-  await page.getByTestId('demo-next').click(); // continuity
-  await expect(page.getByTestId('demo-step')).toHaveText('step 4/6');
-  await expect(page.getByTestId('demo-inspector')).toContainText('wardrobe');
-  await expect(page.getByTestId('demo-inspector')).toContainText('0.30');
+  await page.getByTestId('demo-next').click(); // cast
+  await expect(page.getByText('🔒 yoopi')).toBeVisible();
+  await page.getByTestId('demo-next').click(); // script
+  await expect(page.getByText('two birds by the river')).toBeVisible();
+  await page.getByTestId('demo-next').click(); // scene 1
+  await expect(page.getByText('yoopi preens on a branch')).toBeVisible();
+  await expect(page.getByText('★ keeper')).toBeVisible();
+  await page.getByTestId('demo-next').click(); // final cut
+  await expect(page.getByTestId('final-cut')).toBeVisible();
+  await page.getByTestId('demo-next').click(); // end card
+  await expect(page.getByText('gives you a')).toBeVisible();
 });

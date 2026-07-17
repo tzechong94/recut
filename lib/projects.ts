@@ -5,7 +5,7 @@ export interface ProjectMeta {
   title: string;
   createdAt: number;
   updatedAt: number;
-  nodeCount: number;
+  clipCount: number;
   thumbUrl: string | null;
 }
 

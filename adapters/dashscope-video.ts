@@ -2,6 +2,32 @@
 // submit returns a task_id, then poll /tasks/{id} until SUCCEEDED for the video_url. Model id is
 // passed in (it lives in the manifest, never here).
 
+/** Upload a local file to DashScope's hosting; returns an oss:// url the models CAN read
+ *  (localhost is unreachable to them; public OSS links expire). Ported from the proven v2 impl. */
+export async function uploadToDashscope(modelId: string, bytes: Buffer, filename: string, mime: string): Promise<string> {
+  const key = process.env.RECUT_DASHSCOPE_API_KEY ?? '';
+  if (!key) throw new VideoGenError('RECUT_DASHSCOPE_API_KEY unset');
+  const r = await fetch(`${base()}/uploads?action=getPolicy&model=${encodeURIComponent(modelId)}`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  const d = (await r.json().catch(() => ({}))) as { data?: Record<string, string> };
+  const p = d.data;
+  if (!r.ok || !p?.upload_host) throw new VideoGenError(`getPolicy failed: ${JSON.stringify(d).slice(0, 160)}`);
+  const objKey = `${p.upload_dir}/${filename}`;
+  const form = new FormData();
+  form.set('OSSAccessKeyId', p.oss_access_key_id!);
+  form.set('Signature', p.signature!);
+  form.set('policy', p.policy!);
+  form.set('x-oss-object-acl', p.x_oss_object_acl!);
+  form.set('x-oss-forbid-overwrite', p.x_oss_forbid_overwrite!);
+  form.set('key', objKey);
+  form.set('success_action_status', '200');
+  form.set('file', new Blob([new Uint8Array(bytes)], { type: mime }), filename);
+  const up = await fetch(p.upload_host, { method: 'POST', body: form });
+  if (!up.ok) throw new VideoGenError(`oss upload failed: ${up.status}`);
+  return `oss://${objKey}`;
+}
+
 function base(): string {
   return (process.env.RECUT_DASHSCOPE_BASE_URL ?? 'https://dashscope-intl.aliyuncs.com/api/v1').replace(/\/$/, '');
 }
@@ -54,9 +80,11 @@ export async function submitR2V(modelId: string, refUrls: string[], prompt: stri
   };
   if (params.seed) parameters.seed = params.seed % 2147483647;
   const media = refUrls.map((url) => ({ type: 'reference_image', url }));
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-DashScope-Async': 'enable' };
+  if (refUrls.some((u) => u.startsWith('oss://'))) headers['X-DashScope-OssResourceResolve'] = 'enable';
   const res = await fetch(`${base()}/services/aigc/video-generation/video-synthesis`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'X-DashScope-Async': 'enable' },
+    headers,
     body: JSON.stringify({ model: modelId, input: { prompt, media }, parameters }),
   });
   const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string; output?: { task_id?: string } };
