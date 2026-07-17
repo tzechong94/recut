@@ -397,10 +397,10 @@ function ScriptStage({ setSel }: { setSel: (s: Sel) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.scenes.length]);
 
-  const draft = () => {
+  const draft = (mode: 'replace' | 'append') => {
     if (!doc.script?.trim()) return;
-    if (doc.scenes.length > 0 && !confirm('Re-drafting replaces the current shots (their takes go with them). Continue?')) return;
-    void planShotlist(doc.script);
+    if (mode === 'replace' && doc.scenes.length > 0 && !confirm('Replace the shotlist? Your generated clips are NOT deleted: they stay available in Edit\'s media panel (and any timeline you built), but they detach from the old cut names.')) return;
+    void planShotlist(doc.script, mode);
   };
 
   return (
@@ -420,9 +420,14 @@ function ScriptStage({ setSel }: { setSel: (s: Sel) => void }) {
           className="mb-3 w-full resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-relaxed text-neutral-200 outline-none placeholder:text-neutral-700 focus:border-[color:var(--c2)]"
         />
         <div className="flex items-center gap-3">
-          <button onClick={draft} disabled={busy !== null || !doc.script?.trim()} data-testid="draft-shotlist" className="btn-grad rounded-lg px-5 py-2 text-sm font-semibold disabled:opacity-50">
-            {busy ? 'Directing…' : doc.scenes.length ? '↻ Re-draft shots' : 'Draft shots'}
+          <button onClick={() => draft(doc.scenes.length ? 'append' : 'replace')} disabled={busy !== null || !doc.script?.trim()} data-testid="draft-shotlist" className="btn-grad rounded-lg px-5 py-2 text-sm font-semibold disabled:opacity-50">
+            {busy ? 'Directing…' : doc.scenes.length ? '＋ Draft as new scenes' : 'Draft shots'}
           </button>
+          {doc.scenes.length > 0 && (
+            <button onClick={() => draft('replace')} disabled={busy !== null || !doc.script?.trim()} data-testid="redraft-replace" title="Rewrite the whole shotlist; existing clips stay in Edit's media panel" className="rounded-lg border border-white/12 px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 disabled:opacity-50">
+            ↻ Replace shotlist
+            </button>
+          )}
           <button onClick={addScene} className="rounded-lg border border-white/12 px-4 py-2 text-sm text-neutral-300 hover:bg-white/5">Add a blank scene</button>
           {doc.scenes.length > 0 && (
             <button onClick={() => { const f = doc.scenes[0]?.prompts[0]?.name; if (f) setSel({ t: 'cut', name: f }); }} className="text-xs text-neutral-500 hover:text-neutral-300">

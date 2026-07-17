@@ -101,7 +101,9 @@ interface PipelineState {
   /** AI: expand the user's plain words into a proper style prefix */
   draftStyle: (hint: string) => Promise<void>;
   setSceneOverride: (sceneIdx: number, override: string) => void;
-  planShotlist: (beats: string) => Promise<void>;
+  /** mode 'append' adds the drafted scenes AFTER the existing ones (media keeps its cuts);
+   *  'replace' rewrites the shotlist (existing takes stay available in Edit's media panel) */
+  planShotlist: (beats: string, mode?: 'replace' | 'append') => Promise<void>;
   updatePrompt: (name: string, patch: Partial<PromptDoc>) => void;
   addPrompt: (sceneIdx: number) => void;
   /** coverage cut: duplicate the scene's master cut at the next shot size (editorial coverage) */
@@ -147,12 +149,30 @@ interface PipelineState {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let dirty = false; // this tab has unsaved mutations; clean tabs never save (stale-tab guard)
+
+const backupKey = (id: string) => `recut-backup-${id}`;
+function writeBackup(doc: PipelineDoc): void {
+  try { localStorage.setItem(backupKey(doc.projectId), JSON.stringify(doc)); } catch { /* quota: skip */ }
+}
+function clearBackup(id: string): void {
+  try { localStorage.removeItem(backupKey(id)); } catch { /* ignore */ }
+}
+function readBackup(id: string): PipelineDoc | null {
+  try {
+    const raw = localStorage.getItem(backupKey(id));
+    return raw ? (JSON.parse(raw) as PipelineDoc) : null;
+  } catch { return null; }
+}
 
 export const usePipeline = create<PipelineState>((set, get) => {
   const mutate = (fn: (doc: PipelineDoc) => PipelineDoc) => {
     const s = get();
     if (s.loadedFor !== s.doc.projectId) return; // never mutate before load completes
-    set({ doc: fn(s.doc) });
+    const next = fn(s.doc);
+    set({ doc: next });
+    dirty = true;
+    writeBackup(next); // crash backup: survives a dead server + refresh
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => void get().save(), 800);
   };
@@ -175,10 +195,19 @@ export const usePipeline = create<PipelineState>((set, get) => {
     vertical: false,
 
     load: async (projectId) => {
+      dirty = false;
       set({ loadedFor: null, doc: emptyPipeline(projectId), tab: 'assets', error: null, filmUrl: null });
       try {
         const res = await fetch(`/api/pipeline/${projectId}`);
-        if (res.ok) set({ doc: (await res.json()) as PipelineDoc });
+        let doc = res.ok ? ((await res.json()) as PipelineDoc) : emptyPipeline(projectId);
+        // crash recovery: a local backup newer than the server copy means a save never landed
+        const backup = readBackup(projectId);
+        if (backup && (backup.rev ?? 0) >= (doc.rev ?? 0)) {
+          doc = backup;
+          dirty = true; // push it to the server as soon as we're loaded
+          setTimeout(() => void get().save(), 500);
+        }
+        set({ doc });
       } finally {
         set({ loadedFor: projectId });
       }
@@ -186,6 +215,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     save: async () => {
       const { doc, loadedFor } = get();
       if (loadedFor !== doc.projectId || !doc.projectId) return;
+      if (!dirty) return; // clean tabs never save: a stale background tab must not clobber
       try {
         // keepalive: a flush on tab-hide/unload still lands even as the page goes away
         const res = await fetch(`/api/pipeline/${doc.projectId}`, {
@@ -201,6 +231,8 @@ export const usePipeline = create<PipelineState>((set, get) => {
         if (cur.doc.projectId === doc.projectId && typeof j.rev === 'number') {
           set({ doc: { ...cur.doc, rev: j.rev }, error: cur.error?.startsWith('saving failed') ? null : cur.error });
         }
+        dirty = false;
+        clearBackup(doc.projectId);
       } catch {
         // NEVER lose work silently: surface it and retry until the save lands
         set({ error: 'saving failed, retrying…' });
@@ -307,7 +339,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
         scenes: d.scenes.map((s, i) => (i === sceneIdx ? { ...s, styleOverride: override || undefined } : s)),
       })),
 
-    planShotlist: async (beats) => {
+    planShotlist: async (beats, mode = 'replace') => {
       set({ busy: 'planning shotlist', error: null });
       try {
         // the tutorial's rule: the director sees the cast, named. Locked members go with the script.
@@ -353,12 +385,14 @@ export const usePipeline = create<PipelineState>((set, get) => {
           }
           return matched;
         };
-        // one beat per scene (the ideal structure for ads and dramas alike)
+        // one beat per scene (the ideal structure for ads and dramas alike); in append mode
+        // the new scenes number on from the existing ones so nothing is renamed
+        const offset = mode === 'append' ? get().doc.scenes.length : 0;
         const scenes = j.plan.shots.map((shot, i) => ({
-          title: `Scene ${i + 1}`,
+          title: `Scene ${offset + i + 1}`,
           prompts: [
             {
-              name: promptName(i, 0),
+              name: promptName(offset + i, 0),
               text: shot.description,
               assetSlugs: allSlugs(shot.characters),
               animate: shot.animate,
@@ -377,7 +411,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
           script: beats,
           stylePrefix: d.styleLocked ? d.stylePrefix : j.plan!.style || d.stylePrefix,
           assets: [...d.assets, ...stubs],
-          scenes,
+          scenes: mode === 'append' ? [...d.scenes, ...scenes] : scenes,
         }));
       } catch (e) {
         set({ error: String(e).slice(0, 160) });
