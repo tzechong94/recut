@@ -1,4 +1,4 @@
-import { getPipeline, savePipeline } from '../../../../lib/server/pipelineStore';
+import { getPipeline, savePipeline, isShowcase } from '../../../../lib/server/pipelineStore';
 import type { PipelineDoc } from '../../../../lib/pipeline/doc';
 
 export const runtime = 'nodejs';
@@ -15,6 +15,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!body || !Array.isArray(body.assets) || !Array.isArray(body.scenes)) {
     return Response.json({ error: 'bad pipeline doc' }, { status: 400 });
   }
-  const saved = savePipeline({ ...body, projectId: id });
+  if (isShowcase(id)) return Response.json({ error: 'showcase project is read-only' }, { status: 403 });
+  const { readOnly: _ignored, ...clean } = body;
+  const saved = savePipeline({ ...clean, projectId: id });
   return Response.json({ ok: true, rev: saved.rev });
 }

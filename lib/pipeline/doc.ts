@@ -11,6 +11,8 @@ export interface AssetDoc {
   slug: string;
   kind: AssetKind;
   imageUrl?: string;
+  /** the casting prompt that produced the reference image (provenance; the demo tour replays it) */
+  prompt?: string;
   /** locked = motion-tested + immutable; only locked assets may be referenced by prompts */
   locked: boolean;
   /** state variant (spec 1.8): `hero_wet` is a variant of `hero` with state 'wet' */
@@ -79,6 +81,8 @@ export interface PipelineDoc {
   projectId: string;
   /** monotonic revision, bumped by the server on every save (stale-tab clobber guard) */
   rev?: number;
+  /** set by the server (RECUT_SHOWCASE_IDS) on read, never stored: edits stay in-session, saves skip */
+  readOnly?: boolean;
   /** the film's script / beat sheet (the Script stage feeds the director skill with this) */
   script?: string;
   /** global Style Prefix (spec Stage 2): glued to every prompt; change once, changes everywhere */

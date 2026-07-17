@@ -176,7 +176,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     if (s.loadedFor !== s.doc.projectId) return; // never mutate before load completes
     const next = fn(s.doc);
     set({ doc: next });
-    if (demoMode) return; // replay states are ephemeral: no dirty, no backup, no save
+    if (demoMode || s.doc.readOnly) return; // replay states and showcase projects: no dirty, no backup, no save
     dirty = true;
     writeBackup(next); // crash backup: survives a dead server + refresh
     if (saveTimer) clearTimeout(saveTimer);
@@ -221,7 +221,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     save: async () => {
       const { doc, loadedFor } = get();
       if (loadedFor !== doc.projectId || !doc.projectId) return;
-      if (!dirty || demoMode) return; // clean tabs and demo replays never save
+      if (!dirty || demoMode || doc.readOnly) return; // clean tabs, demo replays, and showcase projects never save
       try {
         // keepalive: a flush on tab-hide/unload still lands even as the page goes away
         const res = await fetch(`/api/pipeline/${doc.projectId}`, {
@@ -268,7 +268,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
           ? await callGenerate({ kind: 'edit', image: fromImage, prompt: `${style}${prompt}`, aspect: '16:9' })
           : await callGenerate({ kind: 'text2image', prompt: `${style}${prompt}`, aspect: '16:9' });
         trackSpend(j);
-        if (j.imageUrl) get().updateAsset(id, { imageUrl: j.imageUrl, locked: false });
+        if (j.imageUrl) get().updateAsset(id, { imageUrl: j.imageUrl, prompt, locked: false });
       } catch (e) {
         set({ error: String(e).slice(0, 160) });
       } finally {
@@ -306,7 +306,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
         let i = 2;
         while (d.assets.some((a) => a.slug === slug)) slug = `${base}_${i++}`;
         // fresh asset id: the same candidate can be crowned more than once; the tray keeps it
-        const asset: AssetDoc = { id: crypto.randomUUID().slice(0, 8), slug, kind: cand.kind, imageUrl: cand.url, locked: false, x: pos?.x, y: pos?.y };
+        const asset: AssetDoc = { id: crypto.randomUUID().slice(0, 8), slug, kind: cand.kind, imageUrl: cand.url, prompt: cand.prompt, locked: false, x: pos?.x, y: pos?.y };
         return {
           ...d,
           assets: [...d.assets, asset],

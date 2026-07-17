@@ -53,6 +53,7 @@ function clearInput(selector: string): void {
 }
 
 function castingPromptFor(a: AssetDoc): string {
+  if (a.prompt?.trim()) return a.prompt.trim(); // the prompt the author actually used
   const nice = a.slug.replace(/_/g, ' ');
   if (a.kind === 'character') return `two-panel character sheet of ${nice}: closeup face and full body on a clean background, exactly on-model`;
   if (a.kind === 'location') return `${nice}, seen from a three-quarter angle, warm natural light, no people`;

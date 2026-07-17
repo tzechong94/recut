@@ -18,10 +18,16 @@ function pathOf(id: string): string {
   return join(dir(), `${id}.json`);
 }
 
+/** Showcase projects (RECUT_SHOWCASE_IDS, comma-separated) are read-only: judges can explore,
+ *  nothing they do persists. Set on the deployed instance, unset locally. */
+export function isShowcase(id: string): boolean {
+  return (process.env.RECUT_SHOWCASE_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(id);
+}
+
 export function getPipeline(id: string): PipelineDoc {
   const p = pathOf(id);
-  if (!existsSync(p)) return emptyPipeline(id);
-  return JSON.parse(readFileSync(p, 'utf8')) as PipelineDoc;
+  const doc = existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as PipelineDoc) : emptyPipeline(id);
+  return isShowcase(id) ? { ...doc, readOnly: true } : doc;
 }
 
 /** Save with optimistic concurrency. If the caller's rev is stale, the stored doc's takes are
