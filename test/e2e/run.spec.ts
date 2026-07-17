@@ -23,6 +23,8 @@ test('run all executes the wired graph in order and updates the budget bar', asy
   await page.goto('/');
   await page.getByTestId('new-project-title').fill('Run test');
   await page.getByTestId('create-project').click();
+  await expect(page).toHaveURL(/\/pipeline/);
+  await page.goto(page.url().replace(/\/pipeline$/, '')); // canvas escape hatch
   await page.getByTestId('premise').fill('a keeper');
   await page.getByTestId('autonomous').check(); // Agent mode: builds AND auto-runs the graph
   await page.getByTestId('showrun').click();

@@ -27,6 +27,8 @@ test('showrun step-mode: confirm/edit each step, it generates, then advances', a
   await page.goto('/');
   await page.getByTestId('new-project-title').fill('Showrun test');
   await page.getByTestId('create-project').click();
+  await expect(page).toHaveURL(/\/pipeline/);
+  await page.goto(page.url().replace(/\/pipeline$/, '')); // canvas escape hatch
   await expect(page).toHaveURL(/\/project\//);
 
   await page.getByTestId('premise').fill('a lighthouse keeper');
@@ -53,6 +55,8 @@ test('fully autonomous: builds AND generates the whole graph', async ({ page }) 
   await page.goto('/');
   await page.getByTestId('new-project-title').fill('Auto test');
   await page.getByTestId('create-project').click();
+  await expect(page).toHaveURL(/\/pipeline/);
+  await page.goto(page.url().replace(/\/pipeline$/, '')); // canvas escape hatch
   await page.getByTestId('premise').fill('a lighthouse keeper');
   await page.getByTestId('autonomous').check();
   await page.getByTestId('showrun').click();

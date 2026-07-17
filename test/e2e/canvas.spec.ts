@@ -6,6 +6,8 @@ test('create a project → add nodes on the canvas', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('new-project-title').fill('My test film');
   await page.getByTestId('create-project').click();
+  await expect(page).toHaveURL(/\/pipeline/);
+  await page.goto(page.url().replace(/\/pipeline$/, '')); // canvas escape hatch
 
   await expect(page).toHaveURL(/\/project\/[a-z0-9]+/);
 
