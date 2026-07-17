@@ -265,7 +265,7 @@ function Storyboard({ sel, setSel }: { sel: Sel; setSel: (s: Sel) => void }) {
                   <span className="grid h-full w-full place-items-center text-[10px] text-neutral-600">◌</span>
                 )}
                 <span className="absolute top-1 left-1 rounded bg-black/70 px-1 font-mono text-[9px] font-bold text-neutral-100">{p.name}</span>
-                {state === 'keeper' && <span className="absolute right-1 bottom-1 text-[10px]">👑</span>}
+                {state === 'keeper' && <span className="absolute right-1 bottom-1 text-[10px] text-amber-300">★</span>}
                 {state === 'animated' && <span className="absolute right-1 bottom-1 text-[10px]">🎬</span>}
               </button>
             );
@@ -307,7 +307,7 @@ function StylePrefixRow() {
         <span className="grad-text shrink-0 text-[9px] font-bold tracking-wide uppercase">Global style</span>
         {doc.stylePrefix ? (
           <>
-            <span className="truncate text-[11px] text-neutral-300">{doc.stylePrefix}</span>
+            <span className="line-clamp-2 min-w-0 flex-1 text-[11px] leading-snug text-neutral-300">{doc.stylePrefix}</span>
             <span className="ml-auto shrink-0 text-[10px]">{locked ? '🔒' : <span className="text-amber-300/90">unlocked ✎</span>}</span>
           </>
         ) : (
@@ -375,7 +375,7 @@ function StylePrefixRow() {
 
 function Stage({ sel, setSel, castSource, setCastSource }: { sel: Sel; setSel: (s: Sel) => void; castSource?: CastSource; setCastSource: (c: CastSource | undefined) => void }) {
   if (sel.t === 'script') return <ScriptStage setSel={setSel} />;
-  if (sel.t === 'casting') return <CastingStage setCastSource={setCastSource} />;
+  if (sel.t === 'casting') return <CastingStage castSource={castSource} setCastSource={setCastSource} />;
   if (sel.t === 'export') return <ExportStage />;
   return <CutStage name={sel.name} />;
 }
@@ -431,7 +431,7 @@ function ScriptStage({ setSel }: { setSel: (s: Sel) => void }) {
   );
 }
 
-function CastingStage({ setCastSource }: { setCastSource: (c: CastSource | undefined) => void }) {
+function CastingStage({ castSource, setCastSource }: { castSource?: CastSource; setCastSource: (c: CastSource | undefined) => void }) {
   const { doc, promoteCandidate, discardCandidate, busy } = usePipeline();
   const candidates = doc.candidates ?? [];
   return (
@@ -439,32 +439,34 @@ function CastingStage({ setCastSource }: { setCastSource: (c: CastSource | undef
       {candidates.length === 0 ? (
         <div className="grid h-full place-items-center">
           <p className="max-w-sm text-center text-sm text-neutral-600">
-            {busy?.startsWith('candidate') ? 'Generating candidates…' : 'Describe a cast member below and generate a batch. Candidates appear here, big, side by side. Crown the winner.'}
+            {busy?.startsWith('candidate') ? 'Generating candidates…' : 'Describe a cast member below and generate a batch. Candidates appear here, big, side by side. Click one to select it, or ＋ Cast the winner.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-          {candidates.map((c) => (
-            <div key={c.id} className={`group relative overflow-hidden rounded-2xl border bg-white/[0.02] ${c.used ? 'border-emerald-500/30' : 'border-white/10'}`} data-testid={`candidate-${c.id}`} title={c.prompt}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={c.url} alt="" className="aspect-video w-full object-cover" />
-              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-2.5 pt-6 pb-2">
-                <span className="text-[10px] text-neutral-400">{KIND_ICON[c.kind]} {c.used ? '✓ cast' : 'candidate'}</span>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setCastSource({ url: c.url, label: 'this candidate' })}
-                    data-testid={`iterate-${c.id}`}
-                    title="Iterate: use this image as the source for the next batch (tweak the prompt, regenerate)"
-                    className="rounded-md border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-neutral-200 hover:bg-black/70"
-                  >
-                    ↻ iterate
-                  </button>
-                  <button onClick={() => promoteCandidate(c.id)} data-testid={`crown-${c.id}`} className="btn-grad rounded-md px-2.5 py-1 text-[11px] font-bold" title="Crown: add to the cast (name + lock it in the rail)">👑 Crown</button>
-                  <button onClick={() => discardCandidate(c.id)} className="rounded-md border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-neutral-300 hover:text-rose-300">✕</button>
+          {candidates.map((c) => {
+            const selected = castSource?.url === c.url;
+            return (
+              <div
+                key={c.id}
+                onClick={() => setCastSource(selected ? undefined : { url: c.url, label: 'selected image' })}
+                data-testid={`candidate-${c.id}`}
+                title={selected ? 'Selected as the source: type a prompt below to regenerate from it' : 'Click to select as the source for the next generation'}
+                className={`group relative cursor-pointer overflow-hidden rounded-2xl border bg-white/[0.02] transition ${selected ? 'border-[#ff3d8b] ring-2 ring-[#ff3d8b]/40' : c.used ? 'border-emerald-500/30' : 'border-white/10 hover:border-white/25'}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={c.url} alt="" className="aspect-video w-full object-cover" />
+                {selected && <span className="absolute top-2 left-2 rounded-md bg-[#ff3d8b] px-1.5 py-0.5 text-[10px] font-bold text-white">selected · prompt below ↓</span>}
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent px-2.5 pt-6 pb-2">
+                  <span className="text-[10px] text-neutral-400">{KIND_ICON[c.kind]} {c.used ? '✓ cast' : 'candidate'}</span>
+                  <div className="flex gap-1.5">
+                    <button onClick={(e) => { e.stopPropagation(); promoteCandidate(c.id); }} data-testid={`promote-${c.id}`} className="btn-grad rounded-md px-2.5 py-1 text-[11px] font-bold" title="Add to the cast (name + lock it in the rail)">＋ Cast</button>
+                    <button onClick={(e) => { e.stopPropagation(); discardCandidate(c.id); }} className="rounded-md border border-white/20 bg-black/40 px-2 py-1 text-[11px] text-neutral-300 hover:text-rose-300">✕</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -512,11 +514,11 @@ function StageTake({ t }: { t: TakeDoc }) {
       {t.kind !== 'audio' && (
         <button
           onClick={() => setKeeper(t.id)}
-          data-testid={`crown-${t.id}`}
-          title={t.kind === 'video' ? 'Crown: this clip represents the cut in the film' : 'Crown: this frame is the keyframe Animate uses'}
+          data-testid={`keep-${t.id}`}
+          title={t.kind === 'video' ? 'Keeper: this clip represents the cut in the film' : 'Keeper: this frame is the keyframe Animate uses'}
           className={`absolute top-2 right-2 rounded-lg px-2 py-1 text-sm backdrop-blur ${t.keeper ? 'bg-amber-400/90 text-black' : 'bg-black/50 text-white/70 hover:bg-black/70 hover:text-white'}`}
         >
-          👑
+          {t.keeper ? '★' : '☆'}
         </button>
       )}
       <div className="flex items-center justify-between px-2.5 py-1.5">
@@ -799,10 +801,10 @@ function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void 
               onClick={() => animTarget && void animateTake(animTarget.id)}
               disabled={busy !== null || !animTarget}
               data-testid={`animate-${name}`}
-              title={crownedImage ? 'Animate the crowned keyframe' : latestImage ? 'No crown yet: animates the latest frame' : 'Generate a keyframe first'}
+              title={crownedImage ? 'Animate the keeper keyframe' : latestImage ? 'No keeper yet: animates the latest frame' : 'Generate a keyframe first'}
               className="rounded-md border border-white/12 px-2 py-1 text-[11px] font-semibold text-neutral-200 hover:bg-white/5 disabled:opacity-40"
             >
-              🎬 {crownedImage ? '👑' : ''}
+              🎬 {crownedImage ? '★' : ''}
             </button>
             {p.dialogue?.trim() && (
               <button onClick={() => void voicePrompt(name)} disabled={busy !== null} className="rounded-md border border-pink-500/40 bg-pink-500/10 px-2 py-1 text-[11px] font-semibold text-pink-200 hover:bg-pink-500/20 disabled:opacity-50">🔊</button>

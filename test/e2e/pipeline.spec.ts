@@ -53,10 +53,12 @@ test('director monitor: cast, script, shots, repair, crown, export', async ({ pa
   // Cast: batch candidates > crown one > it lands in the rail > lock it IN PLACE
   await page.getByTestId('candidate-prompt').fill('two-panel character sheet of the watchmaker');
   await page.getByTestId('generate-candidates').click();
-  await expect(page.locator('[data-testid^=crown-]')).toHaveCount(4, { timeout: 15_000 });
-  // iterate affordance exists on candidates
-  await expect(page.locator('[data-testid^=iterate-]').first()).toBeVisible();
-  await page.locator('[data-testid^=crown-]').first().click();
+  await expect(page.locator('[data-testid^=promote-]')).toHaveCount(4, { timeout: 15_000 });
+  // clicking a candidate selects it as the regeneration source
+  await page.locator('[data-testid^=candidate-]').first().click();
+  await expect(page.getByTestId('cast-source')).toBeVisible();
+  await page.locator('[data-testid^=candidate-]').first().click(); // deselect
+  await page.locator('[data-testid^=promote-]').first().click();
   await expect(page.locator('[data-testid^=member-]')).toHaveCount(1);
   await expect(page.locator('text=✓ cast')).toBeVisible(); // stage keeps the original
   await page.locator('[data-testid^=lock-]').first().click();
@@ -84,8 +86,8 @@ test('director monitor: cast, script, shots, repair, crown, export', async ({ pa
   await page.getByTestId('animate-1A').click();
   await expect(page.locator('[data-testid=cut-stage] video')).toHaveCount(1, { timeout: 15_000 });
   const videoTake = page.locator('[data-testid^=take-]').filter({ has: page.locator('video') }).first();
-  await videoTake.locator('[data-testid^=crown-]').click();
-  await expect(page.getByTestId('cell-1A')).toContainText('👑');
+  await videoTake.locator('[data-testid^=keep-]').click();
+  await expect(page.getByTestId('cell-1A')).toContainText('★');
 
   // delete a cut: 2A goes away, storyboard renumbers
   page.on('dialog', (d) => void d.accept());
