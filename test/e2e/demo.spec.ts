@@ -22,7 +22,7 @@ test('demo walkthrough steps from title to final cut', async ({ page }) => {
   await expect(page.getByText('two birds by the river')).toBeVisible();
   await page.getByTestId('demo-next').click(); // scene 1
   await expect(page.getByText('yoopi preens on a branch')).toBeVisible();
-  await expect(page.getByText('★ keeper')).toBeVisible();
+  await expect(page.getByText('★ keeper', { exact: true })).toBeVisible();
   await page.getByTestId('demo-next').click(); // final cut
   await expect(page.getByTestId('final-cut')).toBeVisible();
   await page.getByTestId('demo-next').click(); // end card
