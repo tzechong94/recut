@@ -46,6 +46,12 @@ export function planSystem(): string {
     `  lens: ${LENSES.join(' | ')}\n` +
     `  light: ${LIGHTS.join(' | ')}\n` +
     '- Optional spoken line per shot (dialogue), only when the beat earns it. English only.\n' +
+    'RESPECT THE AUTHOR. If the input is already a written script (named characters, style/setting/lighting ' +
+    'blocks, scene descriptions): keep every character name EXACTLY as written, never invent or rename ' +
+    'characters; if a registered cast list is provided, the characters arrays MUST use those exact registry ' +
+    'names; if the input has an explicit style/setting/lighting/color/camera/motion/audio/technical block, ' +
+    'return it VERBATIM (concatenated, unparaphrased) as the style field; adapt the author\'s scenes instead ' +
+    'of inventing new ones, adding camera, blocking, and acting detail ONLY where the script is silent.\n' +
     'Return STRICT JSON only, no prose:\n' +
     '{"title": str, "style": str, "characters": [{"name": str, "description": str}], ' +
     '"shots": [{"description": str, "characters": [str], "animate": bool, "dialogue": str|null, ' +
@@ -53,8 +59,18 @@ export function planSystem(): string {
   );
 }
 
-export function planUser(premise: string): string {
-  return `Premise: ${premise}\n\nDirect it. Return the JSON plan.`;
+export interface CastEntry {
+  slug: string;
+  kind: string;
+}
+
+export function planUser(premise: string, cast: CastEntry[] = []): string {
+  const castBlock = cast.length
+    ? `Registered cast (use these EXACT names in every shot's characters array; do not rename or invent):\n${cast
+        .map((c) => `- ${c.slug} (${c.kind})`)
+        .join('\n')}\n\n`
+    : '';
+  return `${castBlock}Script:\n${premise}\n\nDirect it. Return the JSON plan.`;
 }
 
 function pickPreset(value: unknown, vocab: string[]): string | undefined {

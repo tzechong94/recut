@@ -11,9 +11,9 @@ export async function POST(req: Request): Promise<Response> {
   if (!process.env.RECUT_DASHSCOPE_API_KEY) {
     return Response.json({ error: 'server not in live mode (RECUT_DASHSCOPE_API_KEY unset)' }, { status: 501 });
   }
-  let body: { premise?: string };
+  let body: { premise?: string; cast?: Array<{ slug: string; kind: string }> };
   try {
-    body = (await req.json()) as { premise?: string };
+    body = (await req.json()) as { premise?: string; cast?: Array<{ slug: string; kind: string }> };
   } catch {
     return Response.json({ error: 'bad json' }, { status: 400 });
   }
@@ -23,7 +23,7 @@ export async function POST(req: Request): Promise<Response> {
   const gov = new BudgetGovernor();
   try {
     gov.assertCanSpend(QWEN_MAX.cost.amount);
-    const text = await dashscopeText(PLAN_MODEL_ID, planSystem(), planUser(premise));
+    const text = await dashscopeText(PLAN_MODEL_ID, planSystem(), planUser(premise, body.cast ?? []));
     const plan = parsePlan(text);
     gov.record(QWEN_MAX.cost.amount);
     const graph = buildGraphFromPlan(plan);

@@ -265,10 +265,12 @@ export const usePipeline = create<PipelineState>((set, get) => {
     planShotlist: async (beats) => {
       set({ busy: 'planning shotlist', error: null });
       try {
+        // the tutorial's rule: the director sees the cast, named. Locked members go with the script.
+        const cast = get().doc.assets.filter((a) => a.locked && a.imageUrl).map((a) => ({ slug: a.slug, kind: a.kind }));
         const res = await fetch('/api/agent/plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ premise: beats }),
+          body: JSON.stringify({ premise: beats, cast }),
         });
         const j = (await res.json()) as {
           plan?: {
@@ -323,7 +325,15 @@ export const usePipeline = create<PipelineState>((set, get) => {
             },
           ],
         }));
-        mutate((d) => ({ ...d, script: beats, stylePrefix: d.stylePrefix || j.plan!.style, assets: [...d.assets, ...stubs], scenes }));
+        // style precedence: a LOCKED style always wins; otherwise the script's authored
+        // style block (returned verbatim by the director) replaces whatever was there
+        mutate((d) => ({
+          ...d,
+          script: beats,
+          stylePrefix: d.styleLocked ? d.stylePrefix : j.plan!.style || d.stylePrefix,
+          assets: [...d.assets, ...stubs],
+          scenes,
+        }));
       } catch (e) {
         set({ error: String(e).slice(0, 160) });
       } finally {

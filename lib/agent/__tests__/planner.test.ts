@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parsePlan } from '../planner';
+import { parsePlan, planUser } from '../planner';
 import { buildGraphFromPlan } from '../build-graph';
 
 const SAMPLE = `Here is the plan:
@@ -60,5 +60,17 @@ describe('camera preset hints (seedance skill vocabulary)', () => {
   it('garbage presets are dropped, not passed through', () => {
     const p = parsePlan(JSON.stringify({ title: 'T', style: 's', characters: [], shots: [{ description: 'x', characters: [], animate: false, shotSize: 'dutch zoom crash' }] }));
     expect(p.shots[0]!.shotSize).toBeUndefined();
+  });
+});
+
+describe('cast registry in the plan request', () => {
+  it('planUser lists registered cast with exact-name instruction', () => {
+    const u = planUser('a river tale', [{ slug: 'elira', kind: 'character' }, { slug: 'cottage', kind: 'location' }]);
+    expect(u).toContain('- elira (character)');
+    expect(u).toContain('- cottage (location)');
+    expect(u).toContain('EXACT names');
+  });
+  it('no cast, no registry block', () => {
+    expect(planUser('x')).not.toContain('Registered cast');
   });
 });
