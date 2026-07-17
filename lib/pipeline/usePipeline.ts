@@ -135,6 +135,9 @@ interface PipelineState {
   removeSegment: (segId: string) => void;
   moveSegmentTo: (segId: string, beforeSegId: string) => void;
   resetTimeline: () => void;
+  /** replace the whole timeline (undo restore) */
+  setTimeline: (segs: import('./doc').FilmSegment[] | undefined) => void;
+  clearFilm: () => void;
   // Stage 4
   setLut: (lut: string) => void;
   setVertical: (vertical: boolean) => void;
@@ -641,6 +644,8 @@ export const usePipeline = create<PipelineState>((set, get) => {
         return { ...d, timeline: tl };
       }),
     resetTimeline: () => mutate((d) => ({ ...d, timeline: undefined })),
+    setTimeline: (segs) => mutate((d) => ({ ...d, timeline: segs })),
+    clearFilm: () => set({ filmUrl: null }),
 
     setLut: (lut) => set({ lut, filmUrl: null }),
     setVertical: (vertical) => set({ vertical, filmUrl: null }),
