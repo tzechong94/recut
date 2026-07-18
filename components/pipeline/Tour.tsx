@@ -203,8 +203,12 @@ export function Tour({ projectId, setSel, onExit, onReady }: { projectId: string
       {
         target: '[data-testid=film-cut]',
         title: 'The edit',
-        body: 'Keepers land on a real timeline: drag edges to trim, S splits at the playhead, drag clips in from the media panel, scroll to zoom, ⌘Z undoes.',
-        prep: () => setSel({ t: 'export' }),
+        body: 'Keepers land on a real timeline: drag edges to trim, S splits at the playhead, drag clips in from the media panel, scroll to zoom, ⌘Z undoes. This is the author’s actual cut of the film.',
+        prep: () => {
+          // the author's real edit (trims, splits, order), not the auto-derived first cut
+          stage({ timeline: f.timeline, filmOrder: f.filmOrder, filmExcluded: f.filmExcluded });
+          setSel({ t: 'export' });
+        },
       },
       {
         target: '[data-testid=export-film]',
