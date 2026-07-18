@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recut: shipping an AI showrunner, and the pivot that saved it</title>
+<meta name="description" content="How we built Recut on Qwen Cloud for the Global AI Hackathon: casting locked references, a director skill, reference-to-video, and why we abandoned image-to-video.">
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #07070c; color: #d4d4d8; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.7; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 64px 24px 96px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 48px; }
+  .mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #ff3d8b, #a855f7); display: grid; place-items: center; font-weight: 900; color: #fff; font-size: 14px; }
+  .brand span { font-weight: 800; letter-spacing: -0.02em; color: #f4f4f5; }
+  h1 { font-size: 2rem; line-height: 1.15; letter-spacing: -0.03em; color: #fafafa; margin-bottom: 10px; }
+  .meta { font-size: 0.8rem; color: #71717a; margin-bottom: 40px; }
+  h2 { font-size: 1.25rem; letter-spacing: -0.02em; color: #f4f4f5; margin: 40px 0 12px; }
+  p { margin-bottom: 18px; }
+  .lede { font-size: 1.1rem; color: #a1a1aa; }
+  .em { background: linear-gradient(90deg, #ff3d8b, #a855f7); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
+  blockquote { border-left: 3px solid #ff3d8b; padding: 4px 0 4px 18px; color: #a1a1aa; font-style: italic; margin: 24px 0; }
+  code { background: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 1px 6px; font-size: 0.85em; color: #fda4af; }
+  pre { background: #101014; border: 1px solid #1f1f27; border-radius: 12px; padding: 16px 18px; overflow-x: auto; font-size: 0.8rem; line-height: 1.55; color: #a1a1aa; margin: 24px 0; }
+  a { color: #ff9ac4; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid #1f1f27; font-size: 0.85rem; color: #71717a; }
+  ul { margin: 0 0 18px 22px; }
+  li { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="mark">R</div><span>Recut</span></div>
+
+  <h1>Shipping an AI showrunner, and the pivot that saved it</h1>
+  <p class="meta">July 2026 · Built on Qwen Cloud for the Global AI Hackathon, Track 2: AI Showrunner</p>
+
+  <p class="lede">Video models are astonishing per clip and useless per film. Every
+  generation is a fresh roll of the dice: characters drift, styles wander, and
+  scene two stars a stranger. We spent the hackathon building Recut around one
+  idea: <span class="em">fix the film, not the frame.</span></p>
+
+  <h2>The product in one breath</h2>
+  <p>You cast characters once: generate or upload reference images, crown a
+  winner, lock it. Paste a script; a director skill built on
+  <code>qwen-max</code> breaks it into named cuts (1A, 2A, 3B) with blocking,
+  acting beats, and camera presets, keeping your character names and style
+  word for word. Each cut goes to <code>wan2.7-r2v</code>, Wan's
+  reference-to-video model, with the locked references bound by name, so the
+  same characters come back in every shot, with native audio. Keepers land on
+  a real timeline: trim, split, reorder, then ffmpeg renders the film with
+  every clip's own audio bed and TTS dialogue mixed in.</p>
+
+  <h2>We built it wrong the first time</h2>
+  <p>Our first version was a node canvas around the image-to-video pattern:
+  generate a still, judge the framing, then animate the winner. On paper it is
+  the economical choice. A still costs cents and a clip costs dollars, so
+  gating every expensive video behind a cheap approved image feels like
+  discipline.</p>
+  <p>In practice, i2v only guarantees the first frame. The moment the shot
+  moves, the character starts drifting away from the reference, and the
+  cleanup bill arrives: re-roll the keyframe, re-judge, re-animate, repeat per
+  cut, per character, per revision. The cheap path quietly became the
+  expensive one, because you pay twice for every shot that goes wrong, and at
+  film length something always goes wrong.</p>
+  <blockquote>i2v looks cheaper per shot. Across a film, you pay twice for
+  every drift. Reference-to-video is consistency by construction, not by
+  cleanup.</blockquote>
+  <p>So we changed direction mid-hackathon. Locked references now go straight
+  into the video model, which holds identity through every frame and returns
+  motion plus sound in a single generation. One model call per cut. The test
+  that convinced us: a two-character scene where i2v kept merging our two
+  swallows into one average bird. With enumerated reference bindings
+  ("Reference image 1 is yeepi… never merge, swap, or average their
+  features"), both birds survived every cut of a five-cut film.</p>
+
+  <h2>What made it reliable on Qwen Cloud</h2>
+  <ul>
+    <li><strong>One manifest layer.</strong> Model ids exist in exactly one
+    directory, enforced by a guard test. The whole stack is Alibaba Cloud
+    Model Studio: <code>qwen-max</code> directs, <code>qwen-image-plus</code>
+    casts, <code>qwen3-vl-plus</code> judges continuity,
+    <code>wan2.7-r2v</code> shoots, <code>qwen3-tts-flash</code> speaks.</li>
+    <li><strong>Compiled prompts.</strong> Style, cut text, camera presets,
+    and reference bindings are typed fields assembled by a pure function,
+    never strings concatenated in UI code.</li>
+    <li><strong>A hard budget governor.</strong> Live mode requires a USD cap;
+    the submitter refuses any job that would cross it. We shipped the whole
+    product on a $19 ledger.</li>
+    <li><strong>Durability everywhere.</strong> Hosted result URLs expire, so
+    every image, clip, and voice line is mirrored to storage on arrival, and
+    references are re-uploaded through DashScope's file API at generation
+    time.</li>
+  </ul>
+
+  <h2>The demo is the product</h2>
+  <p>We did not build a slideshow. The judge demo replays a real project
+  through the live UI: prompts type themselves into the actual inputs, the
+  director's shotlist lands on the actual storyboard, and the project's real
+  media reveals in place, ending on the author's actual edited timeline. What
+  you watch is exactly what a user does.</p>
+
+  <p class="footer">Recut, built for the Qwen Cloud Global AI Hackathon ·
+  <a href="https://github.com/tzechong94/recut">source on GitHub</a> ·
+  Every other tool gives you shots. Recut gives you a series.</p>
+</div>
+</body>
+</html>
