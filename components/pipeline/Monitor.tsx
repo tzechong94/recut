@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePipeline } from '../../lib/pipeline/usePipeline';
+import { usePipeline, isDemoActive } from '../../lib/pipeline/usePipeline';
 import {
   compilePromptText,
   keeperClips,
@@ -59,9 +59,10 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
     void load(projectId);
   }, [projectId, load]);
 
-  // land somewhere sensible once the doc arrives (once per project)
+  // land somewhere sensible once the doc arrives (once per project). Stand down while the
+  // guided tour is driving: it owns `sel` and stages its own (empty) doc.
   useEffect(() => {
-    if (booted.current || usePipeline.getState().loadedFor !== projectId) return;
+    if (booted.current || isDemoActive() || usePipeline.getState().loadedFor !== projectId) return;
     booted.current = true;
     const first = doc.scenes[0]?.prompts[0]?.name;
     setSel(first ? { t: 'cut', name: first } : { t: 'casting' });
@@ -439,7 +440,7 @@ function ScriptStage({ setSel }: { setSel: (s: Sel) => void }) {
   const prevScenes = useRef(doc.scenes.length);
   // after a successful draft, jump to the first shot
   useEffect(() => {
-    if (doc.scenes.length > 0 && prevScenes.current === 0) {
+    if (doc.scenes.length > 0 && prevScenes.current === 0 && !isDemoActive()) {
       const first = doc.scenes[0]?.prompts[0]?.name;
       if (first) setSel({ t: 'cut', name: first });
     }
@@ -708,7 +709,7 @@ function CutControls({ name, setSel }: { name: string; setSel: (s: Sel) => void 
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const p = doc.scenes.flatMap((s) => s.prompts).find((x) => x.name === name);
   useEffect(() => {
-    if (!p) {
+    if (!p && !isDemoActive()) {
       const first = usePipeline.getState().doc.scenes[0]?.prompts[0]?.name;
       setSel(first ? { t: 'cut', name: first } : { t: 'script' });
     }

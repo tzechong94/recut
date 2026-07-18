@@ -159,6 +159,12 @@ export function setDemoMode(on: boolean): void {
   demoMode = on;
 }
 
+/** True while the guided tour is driving. Auto-navigation effects must stand down so they
+ *  don't clobber the tour's scripted `sel` when it stages an empty/partial doc. */
+export function isDemoActive(): boolean {
+  return demoMode;
+}
+
 const backupKey = (id: string) => `recut-backup-${id}`;
 function writeBackup(doc: PipelineDoc): void {
   try { localStorage.setItem(backupKey(doc.projectId), JSON.stringify(doc)); } catch { /* quota: skip */ }
