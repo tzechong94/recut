@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff3d8b"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b87a0"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="600" rx="16" fill="#0b0a12"/>
+  <text x="48" y="44" font-size="19" font-weight="800" fill="#fafafa">Recut · architecture</text>
+  <text x="1152" y="44" font-size="12" fill="#8b87a0" text-anchor="end">Next.js 15 · Alibaba Cloud Model Studio (DashScope, ap-southeast-1)</text>
+
+  <!-- ====== Browser column ====== -->
+  <rect x="40" y="70" width="280" height="330" rx="14" fill="#14121d" stroke="#2a2438"/>
+  <text x="60" y="98" font-size="14" font-weight="700" fill="#f4f4f5">Browser · React 19</text>
+
+  <rect x="58" y="114" width="244" height="82" rx="10" fill="#1b1826" stroke="#332c47"/>
+  <text x="72" y="140" font-size="13" font-weight="700" fill="#e4e4e7">Director&#8217;s Monitor</text>
+  <text x="72" y="160" font-size="12" fill="#a1a1aa">Cast &#183; Script &#183; Shots &#183; Edit</text>
+  <text x="72" y="178" font-size="11" fill="#71717a">one screen, typed doc, @cast mentions</text>
+
+  <rect x="58" y="210" width="244" height="60" rx="10" fill="#1b1826" stroke="#332c47"/>
+  <text x="72" y="234" font-size="13" font-weight="700" fill="#e4e4e7">Timeline editor</text>
+  <text x="72" y="253" font-size="11" fill="#71717a">trim &#183; split &#183; reorder &#183; media panel &#183; undo</text>
+
+  <rect x="58" y="284" width="244" height="60" rx="10" fill="#1b1826" stroke="#332c47"/>
+  <text x="72" y="308" font-size="13" font-weight="700" fill="#e4e4e7">Guided demo tour</text>
+  <text x="72" y="327" font-size="11" fill="#71717a">replays real projects on the live UI</text>
+
+  <text x="60" y="380" font-size="11" fill="#71717a">crash backups &#183; dirty-tab guard &#183;</text>
+  <text x="60" y="395" font-size="11" fill="#71717a">read-only showcase mode</text>
+
+  <!-- ====== Server column ====== -->
+  <rect x="460" y="70" width="280" height="400" rx="14" fill="#14121d" stroke="#2a2438"/>
+  <text x="480" y="98" font-size="14" font-weight="700" fill="#f4f4f5">Next.js API routes</text>
+
+  <rect x="478" y="114" width="244" height="52" rx="10" fill="#1b1826" stroke="#332c47"/>
+  <text x="492" y="136" font-size="13" font-weight="700" fill="#e4e4e7">/api/agent/plan</text>
+  <text x="492" y="154" font-size="11" fill="#71717a">director skill &#8594; named cuts 1A 2A 3B&#8230;</text>
+
+  <rect x="478" y="178" width="244" height="52" rx="10" fill="#1b1826" stroke="#332c47"/>
+  <text x="492" y="200" font-size="13" font-weight="700" fill="#e4e4e7">/api/generate</text>
+  <text x="492" y="218" font-size="11" fill="#71717a">image &#183; video &#183; tts &#183; continuity judge</text>
+
+  <rect x="478" y="242" width="244" height="52" rx="10" fill="#1b1826" stroke="#332c47"/>
+  <text x="492" y="264" font-size="13" font-weight="700" fill="#e4e4e7">/api/pipeline/:id</text>
+  <text x="492" y="282" font-size="11" fill="#71717a">doc store &#183; rev-checked &#183; takes union-merge</text>
+
+  <rect x="478" y="306" width="244" height="52" rx="10" fill="#1b1826" stroke="#332c47"/>
+  <text x="492" y="328" font-size="13" font-weight="700" fill="#e4e4e7">/api/assemble</text>
+  <text x="492" y="346" font-size="11" fill="#71717a">ffmpeg: trims, audio beds, voice mix</text>
+
+  <rect x="478" y="370" width="244" height="52" rx="10" fill="#1b1826" stroke="url(#grad)" stroke-width="1.5"/>
+  <text x="492" y="392" font-size="13" font-weight="700" fill="#fda4af">Budget governor</text>
+  <text x="492" y="410" font-size="11" fill="#71717a">hard USD cap &#183; persisted ledger &#183; no override</text>
+
+  <text x="480" y="448" font-size="11" fill="#71717a">every model call passes the governor;</text>
+  <text x="480" y="463" font-size="11" fill="#71717a">model ids exist only in manifests/ (guard-tested)</text>
+
+  <!-- ====== Models column ====== -->
+  <rect x="880" y="70" width="280" height="290" rx="14" fill="#14121d" stroke="#2a2438"/>
+  <text x="900" y="98" font-size="14" font-weight="700" fill="#f4f4f5">Model Studio (DashScope)</text>
+
+  <rect x="898" y="112" width="244" height="40" rx="9" fill="#1b1826" stroke="#332c47"/>
+  <text x="912" y="129" font-size="12.5" font-weight="700" fill="#e4e4e7">qwen-max</text>
+  <text x="912" y="145" font-size="10.5" fill="#71717a">directs: script &#8594; shotlist &#183; style drafting</text>
+
+  <rect x="898" y="160" width="244" height="40" rx="9" fill="#1b1826" stroke="#332c47"/>
+  <text x="912" y="177" font-size="12.5" font-weight="700" fill="#e4e4e7">qwen-image-plus / edit</text>
+  <text x="912" y="193" font-size="10.5" fill="#71717a">casting: reference images</text>
+
+  <rect x="898" y="208" width="244" height="40" rx="9" fill="#1b1826" stroke="url(#grad)" stroke-width="1.5"/>
+  <text x="912" y="225" font-size="12.5" font-weight="700" fill="#fda4af">wan2.7-r2v</text>
+  <text x="912" y="241" font-size="10.5" fill="#71717a">reference-to-video &#183; native audio &#183; per cut</text>
+
+  <rect x="898" y="256" width="244" height="40" rx="9" fill="#1b1826" stroke="#332c47"/>
+  <text x="912" y="273" font-size="12.5" font-weight="700" fill="#e4e4e7">qwen3-vl-plus</text>
+  <text x="912" y="289" font-size="10.5" fill="#71717a">continuity judge vs cast references</text>
+
+  <rect x="898" y="304" width="244" height="40" rx="9" fill="#1b1826" stroke="#332c47"/>
+  <text x="912" y="321" font-size="12.5" font-weight="700" fill="#e4e4e7">qwen3-tts-flash</text>
+  <text x="912" y="337" font-size="10.5" fill="#71717a">spoken lines &#8594; voice takes</text>
+
+  <!-- ====== Storage ====== -->
+  <rect x="880" y="390" width="280" height="130" rx="14" fill="#14121d" stroke="#2a2438"/>
+  <text x="900" y="418" font-size="14" font-weight="700" fill="#f4f4f5">Durable storage</text>
+  <rect x="898" y="432" width="244" height="34" rx="9" fill="#1b1826" stroke="#332c47"/>
+  <text x="912" y="454" font-size="11.5" fill="#a1a1aa">public/generated/ &#183; mirrored media</text>
+  <rect x="898" y="474" width="244" height="34" rx="9" fill="#1b1826" stroke="#332c47"/>
+  <text x="912" y="496" font-size="11.5" fill="#a1a1aa">.recut/ &#183; project + pipeline JSON</text>
+
+  <!-- ====== Arrows: browser -> server ====== -->
+  <line x1="320" y1="140" x2="460" y2="140" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="390" y="130" font-size="10.5" fill="#9ca3af" text-anchor="middle">script + locked cast</text>
+
+  <line x1="320" y1="170" x2="460" y2="204" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="390" y="196" font-size="10.5" fill="#9ca3af" text-anchor="middle">compiled cut + @refs</text>
+
+  <line x1="320" y1="196" x2="460" y2="268" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+  <text x="384" y="248" font-size="10.5" fill="#9ca3af" text-anchor="middle">autosave / load</text>
+
+  <line x1="320" y1="240" x2="460" y2="332" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="376" y="304" font-size="10.5" fill="#9ca3af" text-anchor="middle">export</text>
+
+  <!-- ====== Arrows: server -> models / storage ====== -->
+  <line x1="740" y1="140" x2="880" y2="132" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <line x1="740" y1="204" x2="880" y2="228" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="810" y="204" font-size="10.5" fill="#9ca3af" text-anchor="middle">governed calls</text>
+
+  <line x1="740" y1="220" x2="880" y2="448" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="796" y="356" font-size="10.5" fill="#9ca3af" text-anchor="middle" transform="rotate(52 796 356)">mirror results</text>
+
+  <line x1="740" y1="332" x2="880" y2="472" stroke="#8b87a0" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="784" y="416" font-size="10.5" fill="#9ca3af" text-anchor="middle" transform="rotate(44 784 416)">clips in, MP4 out</text>
+
+  <!-- footer -->
+  <text x="48" y="566" font-size="12" fill="#8b87a0">Every other tool gives you shots. <tspan fill="url(#grad)" font-weight="700">Recut gives you a series.</tspan></text>
+  <text x="1152" y="566" font-size="11" fill="#5b5870" text-anchor="end">github.com/tzechong94/recut</text>
+</svg>

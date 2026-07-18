@@ -27,25 +27,13 @@ No API key needed, zero spend.
 
 ## The system at a glance
 
-```
-                 ┌─────────────────────  Director's Monitor (one screen)  ─────────────────────┐
-                 │                                                                             │
-   CAST          │   SCRIPT                SHOTS                     EDIT                      │
-┌──────────┐     │ ┌──────────┐        ┌────────────┐         ┌──────────────┐                 │
-│ prompt → │     │ │ script → │        │ cut text   │         │ real timeline│                 │
-│ candidates│    │ │ director │        │ + @refs    │         │ trim · split │                 │
-│ crown →  │     │ │ skill    │───────▶│ ──────────▶│────────▶│ reorder      │──▶ ffmpeg ──▶ MP4
-│ LOCK ref │─────┼▶│ (qwen-max)│  named │ wan2.7-r2v │  takes  │ media panel  │    (audio beds │
-└──────────┘     │ │          │  cuts  │ ref-to-video│        └──────────────┘   + voice mix) │
- refs travel     │ └──────────┘  1A 2A │ native audio│                                        │
- by @name        │                3B…  └────────────┘                                        │
-                 └─────────────────────────────────────────────────────────────────────────────┘
-                          every model call passes the budget governor (hard USD cap)
-                          every result is mirrored to durable storage on arrival
-```
+![Recut architecture](docs/architecture.svg)
 
-A full component diagram (Next.js routes, DashScope models, storage) is in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Cast locks references, the director skill writes named cuts, each cut goes to
+reference-to-video with the cast bound by name, keepers land on the timeline,
+and ffmpeg renders the film. Every model call passes the budget governor and
+every result is mirrored to durable storage on arrival. Key-decision notes are
+in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## How it works, stage by stage
 

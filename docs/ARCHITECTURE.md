@@ -1,5 +1,7 @@
 # Architecture
 
+![Recut architecture](architecture.svg)
+
 Recut is a Next.js 15 app whose API routes orchestrate Alibaba Cloud Model
 Studio (DashScope, ap-southeast-1) models behind a manifest/adapter gateway.
 All generated media is mirrored to durable local storage the moment it is
