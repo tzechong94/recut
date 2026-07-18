@@ -33,7 +33,7 @@ type Sel = { t: 'cut'; name: string } | { t: 'casting' } | { t: 'script' } | { t
 export interface CastSource { url: string; label: string }
 
 export function Monitor({ projectId, title }: { projectId: string; title: string }) {
-  const { doc, load, busy, error, spentUsd, capUsd, loadedFor } = usePipeline();
+  const { doc, load, busy, error, spentUsd, capUsd, loadedFor, blockedGen, dismissBlocked } = usePipeline();
   const [sel, setSel] = useState<Sel>({ t: 'casting' });
   const [castSource, setCastSource] = useState<CastSource | undefined>(undefined);
   const [tourOn, setTourOn] = useState(false);
@@ -121,6 +121,37 @@ export function Monitor({ projectId, title }: { projectId: string; title: string
 
       {tourOn && !tourStaged && <div className="fixed inset-0 z-[85] bg-[#07070c]" />}
       {tourOn && loadedFor === projectId && <Tour projectId={projectId} setSel={setSel} onExit={exitTour} onReady={() => setTourStaged(true)} />}
+      {blockedGen && (
+        <div className="fixed inset-0 z-[95] grid place-items-center bg-black/70 p-4" onClick={dismissBlocked}>
+          <div className="w-[420px] rounded-2xl border border-white/15 bg-[#14121d] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <span className="grad-text text-[10px] font-bold tracking-wide uppercase">Demo film · locked</span>
+            <h3 className="mt-2 text-lg font-extrabold tracking-tight text-neutral-100">This film is locked</h3>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-400">
+              This is one of our finished demo films, kept read-only so it stays intact for everyone. Watch how it was
+              made step by step, or spin up your own project from the home page and generate for real, up to the shared
+              demo budget. Anything you change here stays in this session and resets on refresh.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button onClick={dismissBlocked} className="rounded-lg border border-white/12 px-4 py-2 text-xs font-medium text-neutral-300 hover:bg-white/5">
+                Keep exploring
+              </button>
+              <button
+                onClick={() => { dismissBlocked(); window.location.href = '/'; }}
+                className="rounded-lg border border-white/12 px-4 py-2 text-xs font-medium text-neutral-300 hover:bg-white/5"
+              >
+                New project
+              </button>
+              <button
+                onClick={() => { dismissBlocked(); window.location.href = `/project/${projectId}/pipeline?tour=1`; }}
+                data-testid="blocked-watch-demo"
+                className="btn-grad rounded-lg px-4 py-2 text-xs font-semibold"
+              >
+                Watch the demo →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className={`grid min-h-0 flex-1 ${showRail ? 'grid-cols-[13rem_1fr]' : 'grid-cols-1'}`}>
         {showRail && <CastRail setSel={setSel} setCastSource={setCastSource} />}
         <div className="flex min-h-0 flex-col">

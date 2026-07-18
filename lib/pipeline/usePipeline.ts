@@ -75,6 +75,9 @@ interface PipelineState {
   exporting: boolean;
   lut: string;
   vertical: boolean;
+  /** a generation was attempted on a read-only (showcase) doc: the Monitor opens the demo prompt */
+  blockedGen: boolean;
+  dismissBlocked: () => void;
 
   load: (projectId: string) => Promise<void>;
   save: () => Promise<void>;
@@ -186,6 +189,12 @@ export const usePipeline = create<PipelineState>((set, get) => {
     if (typeof j.spentUsd === 'number') set({ spentUsd: j.spentUsd });
     if (j.capUsd !== undefined) set({ capUsd: j.capUsd });
   };
+  // read-only guard: on a showcase doc, any generation is refused client-side (before any
+  // network call) and the Monitor opens the "watch the demo instead" prompt. Returns true = blocked.
+  const genBlocked = (): boolean => {
+    if (get().doc.readOnly) { set({ blockedGen: true }); return true; }
+    return false;
+  };
 
   return {
     doc: emptyPipeline(''),
@@ -199,6 +208,8 @@ export const usePipeline = create<PipelineState>((set, get) => {
     exporting: false,
     lut: 'identity',
     vertical: false,
+    blockedGen: false,
+    dismissBlocked: () => set({ blockedGen: false }),
 
     load: async (projectId) => {
       dirty = false;
@@ -206,8 +217,9 @@ export const usePipeline = create<PipelineState>((set, get) => {
       try {
         const res = await fetch(`/api/pipeline/${projectId}`);
         let doc = res.ok ? ((await res.json()) as PipelineDoc) : emptyPipeline(projectId);
-        // crash recovery: a local backup newer than the server copy means a save never landed
-        const backup = readBackup(projectId);
+        // crash recovery: a local backup newer than the server copy means a save never landed.
+        // Never on a read-only (showcase) doc: it always shows the author's committed state.
+        const backup = doc.readOnly ? null : readBackup(projectId);
         if (backup && (backup.rev ?? 0) >= (doc.rev ?? 0)) {
           doc = backup;
           dirty = true; // push it to the server as soon as we're loaded
@@ -258,6 +270,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     removeAsset: (id) => mutate((d) => ({ ...d, assets: d.assets.filter((a) => a.id !== id) })),
 
     generateAsset: async (id, prompt, fromImage) => {
+      if (genBlocked()) return;
       const { doc } = get();
       const asset = doc.assets.find((a) => a.id === id);
       if (!asset) return;
@@ -276,6 +289,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
       }
     },
     generateCandidates: async (kind, prompt, n, fromImage) => {
+      if (genBlocked()) return;
       const { doc } = get();
       const style = doc.stylePrefix ? `${doc.stylePrefix}. ` : '';
       for (let i = 0; i < n; i++) {
@@ -326,6 +340,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     setStylePrefix: (stylePrefix) => mutate((d) => ({ ...d, stylePrefix })),
     lockStyle: (styleLocked) => mutate((d) => ({ ...d, styleLocked })),
     draftStyle: async (hint) => {
+      if (genBlocked()) return;
       set({ busy: 'styling', error: null });
       try {
         const res = await fetch('/api/agent/style', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hint }) });
@@ -346,6 +361,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
       })),
 
     planShotlist: async (beats, mode = 'replace') => {
+      if (genBlocked()) return;
       set({ busy: 'planning shotlist', error: null });
       try {
         // the tutorial's rule: the director sees the cast, named. Locked members go with the script.
@@ -506,6 +522,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
       }),
 
     applyRepair: async (takeId) => {
+      if (genBlocked()) return;
       const { doc } = get();
       const take = doc.takes.find((t) => t.id === takeId);
       const instruction = take?.repairInstruction?.trim();
@@ -540,6 +557,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     },
 
     runPrompt: async (name, durationSec = 5) => {
+      if (genBlocked()) return;
       const { doc } = get();
       const text = compilePromptText(doc, name);
       if (!text) return;
@@ -567,6 +585,7 @@ export const usePipeline = create<PipelineState>((set, get) => {
     },
 
     framePrompt: async (name) => {
+      if (genBlocked()) return;
       const { doc } = get();
       const text = compilePromptText(doc, name);
       if (!text) return;
