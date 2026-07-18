@@ -142,7 +142,6 @@ adapters/           DashScope HTTP adapters (text, image, video, upload)
 manifests/          the ONLY place model ids may appear (guard-tested)
 lib/post/           ffmpeg assembly (trims, audio beds, voice mix)
 fixtures/demo-projects/  canonical demo project snapshots (deployment seed)
-docs/               architecture, product north star, pipeline spec, submission kit
 docs/               architecture, product north star, pipeline spec, submission kit, blog (Pages root)
 ```
 
@@ -151,5 +150,4 @@ docs/               architecture, product north star, pipeline spec, submission 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): component diagram + key decisions
 - [docs/PRODUCT.md](docs/PRODUCT.md): product north star
 - [docs/PIPELINE-SPEC.md](docs/PIPELINE-SPEC.md): the three-stage pipeline spec
-- [docs/SUBMISSION.md](docs/SUBMISSION.md): hackathon submission kit
 - [Blog: how we built it](https://tzechong94.github.io/recut/) (source: [docs/index.html](docs/index.html))
