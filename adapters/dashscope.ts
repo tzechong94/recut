@@ -1,6 +1,16 @@
-// DashScope adapter. The ONLY module that talks to DashScope over the wire. Invoked by the
-// Gateway's `live` thunk — never called in replay mode. Sync image path (multimodal-generation):
-// the endpoint returns the image url directly in output.choices[0].message.content.
+// ============================================================================================
+// ALIBABA CLOUD SERVICE INTEGRATION
+// Recut's backend calls Alibaba Cloud Model Studio (DashScope) over HTTPS at
+// https://dashscope-intl.aliyuncs.com (region ap-southeast-1, Singapore). Every AI capability in
+// the product is an Alibaba Cloud model: qwen-image / qwen-image-edit (image), wan2.7-r2v /
+// wan2.6-i2v (video), qwen-max (director), qwen3-vl-plus (continuity judge), qwen3-tts-flash
+// (voice). Companion adapters: dashscope-text.ts (qwen-max) and dashscope-video.ts (Wan video +
+// DashScope OSS upload). Model ids live in ../manifests/. Backend deployment: docs/DEPLOYMENT.md.
+// ============================================================================================
+//
+// DashScope image adapter. The ONLY module that talks to the DashScope image endpoint over the
+// wire. Invoked by the Gateway's `live` thunk. Sync image path (multimodal-generation): the
+// endpoint returns the image url directly in output.choices[0].message.content.
 
 import type { ProviderPayload } from '../lib/gateway/types';
 
