@@ -1,0 +1,188 @@
+{
+  "projectId": "e41ccaa2",
+  "stylePrefix": "soft Studio Ghibli watercolor, warm palette with gentle light diffusion",
+  "assets": [
+    {
+      "id": "a1",
+      "slug": "biscuit",
+      "kind": "character",
+      "imageUrl": "/generated/img-13f072e4-3720-4242-ad09-a72bb93cc1b4.png",
+      "locked": true,
+      "prompt": "biscuit, a gentle palomino foal with a cream mane and big brown eyes. Two panels: closeup portrait, and full body standing in a sunlit forest clearing. Soft Studio Ghibli watercolor."
+    },
+    {
+      "id": "a2",
+      "slug": "mika",
+      "kind": "character",
+      "imageUrl": "/generated/img-9a85943d-bdfd-42a4-a54f-fccf70261ae5.png",
+      "locked": true,
+      "prompt": "mika, a cheerful farm girl with a straw hat, brown hair, red overalls. Two panels: closeup smiling portrait, and full body waving. Soft Studio Ghibli watercolor."
+    },
+    {
+      "id": "a3",
+      "slug": "farm",
+      "kind": "location",
+      "imageUrl": "/generated/img-6cec45bb-3709-4c1c-bb57-4b5d37954067.png",
+      "locked": true,
+      "prompt": "An old wooden stable on a farm at golden hour, sunbeams through the doorway, wildflower meadow in front, soft Studio Ghibli watercolor, no people."
+    },
+    {
+      "id": "196543f2",
+      "slug": "a_tiny_glowing_yellow_bu",
+      "kind": "character",
+      "imageUrl": "/generated/img-7b8736a5-9fca-432d-accd-7dc123912a35.png",
+      "locked": false,
+      "x": 650,
+      "y": 490,
+      "prompt": null
+    }
+  ],
+  "scenes": [
+    {
+      "title": "Scene 1",
+      "prompts": [
+        {
+          "name": "1A",
+          "text": "Medium wide shot, low angle, grey dawn light filtering through stable rafters; biscuit stands alone, head lowered, ears drooping, tail still.",
+          "assetSlugs": [
+            "biscuit",
+            "farm"
+          ],
+          "animate": true
+        }
+      ],
+      "styleOverride": "soft Studio Ghibli watercolor, warm palette with gentle light diffusion, but grey-blue dawn light, muted and quiet, melancholy"
+    },
+    {
+      "title": "Scene 2",
+      "prompts": [
+        {
+          "name": "2A",
+          "text": "Close-up on stable doorway as mika bursts in, backlit by morning sun; cut to medium two-shot as she holds out a shiny red apple, biscuit’s ears perk up instantly.",
+          "assetSlugs": [
+            "biscuit",
+            "mika",
+            "farm"
+          ],
+          "animate": true
+        }
+      ]
+    },
+    {
+      "title": "Scene 3",
+      "prompts": [
+        {
+          "name": "3A",
+          "text": "Wide tracking shot at golden hour: biscuit gallops joyfully through a wildflower meadow, mane flowing; mika runs behind laughing, arms outstretched, sun flaring warmly in the lens.",
+          "assetSlugs": [
+            "biscuit",
+            "mika",
+            "farm"
+          ],
+          "animate": true
+        }
+      ]
+    }
+  ],
+  "takes": [
+    {
+      "id": "k_1A",
+      "promptName": "1A",
+      "kind": "image",
+      "url": "https://dashscope-463f.oss-ap-southeast-1.aliyuncs.com/7d/a2/20260716/7fe2d90d/daa42a44-5ca8-47aa-b2c7-7cd108de042d-1.png?Expires=1784823007&OSSAccessKeyId=LTAI5tRcsWJEymQaTsKbKqGf&Signature=CC4ZT%2BzgYhHNmKhj3VtwyHs%2B%2F5A%3D",
+      "score": 0.897,
+      "verdict": {
+        "identity_match": 0.95,
+        "wardrobe_match": 1,
+        "prop_match": 0.9,
+        "location_match": 0.85,
+        "palette_match": 0.7,
+        "framing_match": 0.8,
+        "artifacts": [
+          "biscuit's mane is slightly more voluminous and less textured than reference Image 1 (especially left panel close-up); loses subtle watercolor bleed effect",
+          "tail in FINAL image appears slightly shorter and less fluffy than reference Image 1 right panel",
+          "stable door latch is missing in FINAL image (present in both reference barn images)",
+          "dawn light in FINAL is too cool/grey-blue but lacks the *gentle diffusion* described; rays are overly sharp and contrasty vs. soft Ghibli-style glow",
+          "background horse in distance is absent in reference barn scenes (Image 2 & 3), introducing continuity inconsistency"
+        ],
+        "verdict": "repair",
+        "repair_instruction": "Reduce mane volume and add subtle watercolor bleed texture to match Image 1 left panel; extend tail length and fluffiness per Image 1 right panel; re-add stable door latch as in reference barns; soften sunbeams into diffuse, hazy glow (not sharp rays) to achieve Ghibli-style light diffusion; remove distant background horse to maintain location continuity with reference barn scenes."
+      },
+      "repairInstruction": "Reduce mane volume and add subtle watercolor bleed texture to match Image 1 left panel; extend tail length and fluffiness per Image 1 right panel; re-add stable door latch as in reference barns; soften sunbeams into diffuse, hazy glow (not sharp rays) to achieve Ghibli-style light diffusion; remove distant background horse to maintain location continuity with reference barn scenes."
+    },
+    {
+      "id": "k_2A",
+      "promptName": "2A",
+      "kind": "image",
+      "url": "https://dashscope-463f.oss-ap-southeast-1.aliyuncs.com/7d/4a/20260716/7fe2d90d/b9893978-f2db-409e-9243-5e81c7f15852-1.png?Expires=1784823048&OSSAccessKeyId=LTAI5tRcsWJEymQaTsKbKqGf&Signature=DoIhIAzi7Ew964lnZzFs7TpEqGA%3D",
+      "score": 0.935,
+      "verdict": {
+        "identity_match": 0.95,
+        "wardrobe_match": 0.9,
+        "prop_match": 1,
+        "location_match": 0.98,
+        "palette_match": 0.97,
+        "framing_match": 0.85,
+        "artifacts": [
+          "Biscuit’s tail is partially obscured/merged with Mika’s hair in the final image, creating visual ambiguity; should be clearly distinct as per reference 1 (full tail visible in side view).",
+          "Mika’s left boot is slightly misaligned—heel lifted unnaturally; reference 2 shows grounded stance with both feet planted or one stepping forward cleanly."
+        ],
+        "verdict": "repair",
+        "repair_instruction": "Separate Biscuit’s tail from Mika’s hair to ensure full visibility and anatomical clarity, matching reference 1’s tail depiction. Adjust Mika’s left boot so it rests flat on ground or steps forward consistently with reference 2’s dynamic pose; preserve her joyful expression and apple hold."
+      },
+      "repairInstruction": "Separate Biscuit’s tail from Mika’s hair to ensure full visibility and anatomical clarity, matching reference 1’s tail depiction. Adjust Mika’s left boot so it rests flat on ground or steps forward consistently with reference 2’s dynamic pose; preserve her joyful expression and apple hold."
+    },
+    {
+      "id": "k_3A",
+      "promptName": "3A",
+      "kind": "image",
+      "url": "https://dashscope-463f.oss-ap-southeast-1.aliyuncs.com/7d/bb/20260716/7fe2d90d/186c2952-cbf9-4d3f-b051-9fa4dcae5565-1.png?Expires=1784823086&OSSAccessKeyId=LTAI5tRcsWJEymQaTsKbKqGf&Signature=EkoyFBKDJUgAvHGFIQMN0c3fgXg%3D",
+      "score": 0.933,
+      "verdict": {
+        "identity_match": 0.95,
+        "wardrobe_match": 0.9,
+        "prop_match": 1,
+        "location_match": 0.85,
+        "palette_match": 0.98,
+        "framing_match": 0.92,
+        "artifacts": [
+          "Biscuit's coat has slightly more uniform tan shading vs. reference’s distinct patchy watercolor texture (e.g., left cheek lacks subtle brown splotch seen in Image 1 left panel)",
+          "Mika’s freckles are less pronounced than in Image 2 left panel; cheeks appear overly rosy without the fine dot pattern",
+          "Farm building in background (Image 4) is red with grey roof, but locked location reference (Image 3) shows weathered blue/grey barn with moss and peeling paint — mismatch in structure color and decay detail",
+          "Sun flare is lens-style (circular bloom), whereas Ghibli-style soft diffusion should avoid hard optical flares; intent says 'gentle light diffusion'"
+        ],
+        "verdict": "repair",
+        "repair_instruction": "1. Adjust Biscuit’s coat to replicate the watercolor splotch pattern from Image 1 left: add irregular brown patches on neck and face, especially left cheek. 2. Restore Mika’s freckles as fine pinkish-brown dots on nose/cheeks per Image 2 left; reduce blush saturation. 3. Replace background farm with the moss-covered, peeling blue-grey barn from Image 3 (preserve red-roof barn only if it’s a different structure; but per 'keep exactly on-model', the primary barn must match Image 3). 4. Replace sun flare with soft volumetric god rays entering from upper left, diffused through haze—no sharp lens bloom. Preserve pose, lighting direction, and golden-hour warmth."
+      },
+      "repairInstruction": "1. Adjust Biscuit’s coat to replicate the watercolor splotch pattern from Image 1 left: add irregular brown patches on neck and face, especially left cheek. 2. Restore Mika’s freckles as fine pinkish-brown dots on nose/cheeks per Image 2 left; reduce blush saturation. 3. Replace background farm with the moss-covered, peeling blue-grey barn from Image 3 (preserve red-roof barn only if it’s a different structure; but per 'keep exactly on-model', the primary barn must match Image 3). 4. Replace sun flare with soft volumetric god rays entering from upper left, diffused through haze—no sharp lens bloom. Preserve pose, lighting direction, and golden-hour warmth."
+    },
+    {
+      "id": "v_1A",
+      "promptName": "1A",
+      "kind": "video",
+      "url": "/generated/78380af6-04a1-4a72-b8d9-2b63c22bbd72.mp4"
+    },
+    {
+      "id": "v_2A",
+      "promptName": "2A",
+      "kind": "video",
+      "url": "/generated/bf8bb276-dd2f-416a-baa9-2fb5eb97b6e3.mp4"
+    },
+    {
+      "id": "v_3A",
+      "promptName": "3A",
+      "kind": "video",
+      "url": "/generated/65c28d1d-8690-413b-9cc2-0e9689872d20.mp4"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "617b2632",
+      "kind": "character",
+      "url": "/generated/img-0a72df83-1e54-4be6-90df-c89ddc51e70c.png",
+      "prompt": "a tiny glowing yellow butterfly character with a cheerful face, simple and huggable, on a plain pale background"
+    }
+  ],
+  "script": "A 15-second heartwarming short about biscuit, a gentle farm horse, soft Studio Ghibli watercolor.\nBeats, one per scene:\n1. Grey dawn in the quiet stable. biscuit stands alone, head low, waiting for the day to start.\n2. mika bursts through the stable doorway, backlit by morning sun, holding out an apple: \"Morning, Biscuit!\" His ears perk up.\n3. Golden hour on the farm. biscuit gallops through the wildflower meadow, mane flowing, mika running alongside, both laughing.",
+  "rev": 6
+}

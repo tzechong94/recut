@@ -1,0 +1,246 @@
+{
+  "projectId": "84a37d3f",
+  "stylePrefix": "Style: Hand-painted 2D animation, Studio Ghibli-inspired. Lush watercolor backgrounds, soft cel-shaded characters, painterly texture on foliage, water, and thatch.\nSetting: A tropical ravine, clear river between mossy boulders, small waterfalls. On the bank a cottage on bamboo stilts with a thick golden thatched roof, cream walls, green shutters, pink flower boxes, a hanging iron lantern under a shadowed eave. Palms, hanging vines, soft golden mist and floating light motes.\nLighting: Warm natural light. Golden god-rays through mist by day; soft moonlight and warm lantern-gold by night.\nColor: Warm greens, cream and gold with blue-grey water by day; deep indigo and amber by night. Gentle pastel palette.\nCamera: Gentle gliding tracking and pans, soft depth of field, painterly parallax.\nMotion: Fluid, buoyant flight arcs. No rigid physics.\nAudio: Environmental only — river, waterfalls, wind in palms, soft chirps, night crickets. Optional sparse acoustic underscore. No dialogue, no subtitles.\nTechnical: 24fps hand-drawn feel, clean line work, no CGI sheen, no 3D render look.\n",
+  "assets": [
+    {
+      "id": "e209eab0",
+      "slug": "yeepi_female_swallow",
+      "kind": "character",
+      "imageUrl": "/generated/img-62967e46-c98e-4c25-9a5f-1bb86e9857e4.png",
+      "locked": true,
+      "prompt": "yeepi, a gentle female barn swallow: soft blue-grey feathers, cream belly, peachy throat, big warm amber eyes. Two panels: closeup portrait among sunlit grasses, and full body in flight over a misty meadow at dawn. Hand-painted 2D animation, Studio Ghibli-inspired watercolor."
+    },
+    {
+      "id": "0feaf1fa",
+      "slug": "yoopi_male_swallow",
+      "kind": "character",
+      "imageUrl": "/generated/img-5f54cce6-ab2c-4043-914d-4cd3a1a42b63.png",
+      "locked": true,
+      "prompt": "yoopi, a male barn swallow: earthy brown wings, deep navy head, rust-orange face patch, kind dark eyes. Two panels: closeup portrait, and full body with wings spread on a mossy rock in a sunlit forest. Hand-painted 2D animation, Studio Ghibli-inspired watercolor."
+    },
+    {
+      "id": "78428311",
+      "slug": "house",
+      "kind": "location",
+      "imageUrl": "/generated/img-cb3b83ee-419a-4e01-b0d2-c976697a5645.png",
+      "locked": true,
+      "prompt": "A tropical ravine, clear river between mossy boulders, small waterfalls. On the bank a cottage on bamboo stilts with a thick golden thatched roof, cream walls, green shutters, pink flower boxes, a hanging iron lantern under a shadowed eave. Palms, hanging vines, soft golden mist and floating light motes."
+    }
+  ],
+  "scenes": [
+    {
+      "title": "Scene 1",
+      "prompts": [
+        {
+          "name": "1A",
+          "text": "CUT 1 — Sunrise, wide tracking at water level (approx 4s):\nYoopi and Yeepi streak low over the misty river, wingtips flicking silver droplets, chasing each other in a tight playful loop around a mossy boulder, golden god-rays and light motes in the air.\n",
+          "assetSlugs": [
+            "yeepi_female_swallow",
+            "house",
+            "yoopi_male_swallow"
+          ],
+          "animate": true,
+          "shotSize": "medium shot",
+          "angle": "low angle",
+          "lens": "35mm lens",
+          "light": "natural window light"
+        }
+      ]
+    },
+    {
+      "title": "Scene 2",
+      "prompts": [
+        {
+          "name": "2A",
+          "text": "CUT 2 — Late afternoon, medium shot on the bank (approx 4s):\nWarm amber light. The two land among river stones and grip either end of a long springy twig, lifting it together and rising toward the cottage, the thatched roof glowing behind them.\n",
+          "assetSlugs": [
+            "yoopi_male_swallow",
+            "house",
+            "yeepi_female_swallow"
+          ],
+          "animate": true,
+          "shotSize": "medium shot",
+          "angle": "eye level",
+          "lens": "50mm lens",
+          "light": "golden hour"
+        }
+      ]
+    },
+    {
+      "title": "Scene 3",
+      "prompts": [
+        {
+          "name": "3A",
+          "text": "CUT 3 — Dusk, close under the eave (approx 4s):\nBeneath the thatched eave beside the hanging lantern, Yoopi tucks a twig into the rim of a small mud nest while Yeepi turns inside it, smoothing the curve. The lantern begins to glow as the light fades to deep blue.",
+          "assetSlugs": [
+            "yeepi_female_swallow",
+            "yoopi_male_swallow",
+            "house"
+          ],
+          "animate": true,
+          "shotSize": "medium close-up",
+          "angle": "three-quarter view",
+          "lens": "85mm portrait lens",
+          "light": "golden hour"
+        },
+        {
+          "name": "3B",
+          "text": "@yeepi_female_swallow ",
+          "assetSlugs": [
+            "yeepi_female_swallow"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Scene 4",
+      "prompts": [
+        {
+          "name": "4A",
+          "text": "CUT 4 — Night, extreme close-up, slow push-in (approx 3s):\nMoonlight and warm lantern-gold. Yoopi and Yeepi curl together in the finished nest, his wing draped over her, her head tucked under his chin, both asleep, breathing slow — a single small shape in the glow.",
+          "assetSlugs": [
+            "yeepi_female_swallow",
+            "yoopi_male_swallow",
+            "house"
+          ],
+          "animate": true,
+          "shotSize": "extreme wide shot",
+          "angle": "overhead",
+          "lens": "24mm wide-angle lens",
+          "light": "low-key dramatic light"
+        }
+      ]
+    }
+  ],
+  "takes": [
+    {
+      "id": "158d05cd",
+      "promptName": "1A",
+      "kind": "video",
+      "url": "/generated/628b25b7-b5be-4a87-8e0e-8925f9f6cec4.mp4",
+      "keeper": false
+    },
+    {
+      "id": "787a648b",
+      "promptName": "2A",
+      "kind": "video",
+      "url": "/generated/ab634cfb-50fa-4fa5-a111-40b4e7a8519c.mp4"
+    },
+    {
+      "id": "07b2040e",
+      "promptName": "3A",
+      "kind": "video",
+      "url": "/generated/392b02e2-838e-4ef3-9080-92e494d65f70.mp4"
+    },
+    {
+      "id": "9203a73a",
+      "promptName": "4A",
+      "kind": "video",
+      "url": "/generated/efa0aa52-374b-4330-9b06-72bb40f01e3c.mp4"
+    },
+    {
+      "id": "bf3486b7",
+      "promptName": "1A",
+      "kind": "video",
+      "url": "/generated/9a13cd7b-c177-47ba-aa04-4f5c4483b30a.mp4",
+      "keeper": true
+    },
+    {
+      "id": "rec3b",
+      "promptName": "3B",
+      "kind": "video",
+      "url": "/generated/c1a78505-901e-49a2-a01e-4bd5f811da13.mp4"
+    },
+    {
+      "id": "rec1a",
+      "promptName": "1A",
+      "kind": "video",
+      "url": "/generated/b1cacb0b-ca62-40c7-8a79-23572366ef3a.mp4"
+    },
+    {
+      "id": "9e33697a",
+      "promptName": "1A",
+      "kind": "video",
+      "url": "/generated/e4cb6d4a-8284-404a-a93f-519e33cf417e.mp4",
+      "keeper": false
+    }
+  ],
+  "candidates": [
+    {
+      "id": "9f7c731a",
+      "kind": "character",
+      "url": "/generated/img-23b6bbf4-eb55-468e-99a6-82535bd389b2.png",
+      "prompt": "a swallow bird, male. 2 panel image, close up of the face and a full body front and back profile. ",
+      "used": true
+    },
+    {
+      "id": "adc63947",
+      "kind": "character",
+      "url": "/generated/img-744e5531-d9ed-4b89-b2de-40caeaa7ff2d.png",
+      "prompt": "a swallow bird, male. 2 panel image, close up of the face and a full body front and back profile. ",
+      "used": true
+    },
+    {
+      "id": "b4f26b30",
+      "kind": "character",
+      "url": "/generated/img-a9c6505f-f984-4b6b-a999-6201e6c11da8.png",
+      "prompt": "a swallow bird, female. 2 panel image, close up of the face and a full body front and back profile. "
+    },
+    {
+      "id": "1f75b2d7",
+      "kind": "character",
+      "url": "/generated/img-27a98458-80a5-4a84-929f-fa152220a0dd.png",
+      "prompt": "a swallow bird, female. 2 panel image, close up of the face and a full body front and back profile. "
+    },
+    {
+      "id": "a63cd336",
+      "kind": "location",
+      "url": "/generated/img-cb665607-0618-483f-913c-e533a131316a.png",
+      "prompt": "a house with a balcony beside a small tropical ravine with river flowing.  "
+    },
+    {
+      "id": "d03ce84c",
+      "kind": "location",
+      "url": "/generated/img-dbe63ae6-f862-4b9e-87ce-993880337107.png",
+      "prompt": "a house with a balcony beside a small tropical ravine with river flowing.  ",
+      "used": true
+    }
+  ],
+  "styleLocked": true,
+  "script": "Style: Hand-painted 2D animation, Studio Ghibli-inspired. Lush watercolor backgrounds, soft cel-shaded characters, painterly texture on foliage, water, and thatch.\nSetting: A tropical ravine, clear river between mossy boulders, small waterfalls. On the bank a cottage on bamboo stilts with a thick golden thatched roof, cream walls, green shutters, pink flower boxes, a hanging iron lantern under a shadowed eave. Palms, hanging vines, soft golden mist and floating light motes.\nLighting: Warm natural light. Golden god-rays through mist by day; soft moonlight and warm lantern-gold by night.\nColor: Warm greens, cream and gold with blue-grey water by day; deep indigo and amber by night. Gentle pastel palette.\nCamera: Gentle gliding tracking and pans, soft depth of field, painterly parallax.\nMotion: Fluid, buoyant flight arcs. No rigid physics.\nAudio: Environmental only — river, waterfalls, wind in palms, soft chirps, night crickets. Optional sparse acoustic underscore. No dialogue, no subtitles.\nTechnical: 24fps hand-drawn feel, clean line work, no CGI sheen, no 3D render look.\n\nCUT 1 — Sunrise, wide tracking at water level (approx 4s):\nYoopi and Yeepi streak low over the misty river, wingtips flicking silver droplets, chasing each other in a tight playful loop around a mossy boulder, golden god-rays and light motes in the air.\n\nCUT 2 — Late afternoon, medium shot on the bank (approx 4s):\nWarm amber light. The two land among river stones and grip either end of a long springy twig, lifting it together and rising toward the cottage, the thatched roof glowing behind them.\n\nCUT 3 — Dusk, close under the eave (approx 4s):\nBeneath the thatched eave beside the hanging lantern, Yoopi tucks a twig into the rim of a small mud nest while Yeepi turns inside it, smoothing the curve. The lantern begins to glow as the light fades to deep blue.\n\nCUT 4 — Night, extreme close-up, slow push-in (approx 3s):\nMoonlight and warm lantern-gold. Yoopi and Yeepi curl together in the finished nest, his wing draped over her, her head tucked under his chin, both asleep, breathing slow — a single small shape in the glow.",
+  "timeline": [
+    {
+      "id": "seg_9e33697a_28d5",
+      "takeId": "9e33697a",
+      "start": 0
+    },
+    {
+      "id": "seg_bf3486b7",
+      "takeId": "bf3486b7",
+      "start": 0,
+      "end": 2.3977921800432354
+    },
+    {
+      "id": "seg_158d05cd_d48a",
+      "takeId": "158d05cd",
+      "start": 0
+    },
+    {
+      "id": "seg_rec3b_28ac",
+      "takeId": "rec3b",
+      "start": 0
+    },
+    {
+      "id": "seg_787a648b",
+      "takeId": "787a648b",
+      "start": 2.0138963696469334,
+      "end": 5.038005
+    },
+    {
+      "id": "seg_rec1a_184c",
+      "takeId": "rec1a",
+      "start": 0
+    }
+  ],
+  "rev": 152
+}

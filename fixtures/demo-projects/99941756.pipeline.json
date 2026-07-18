@@ -1,0 +1,159 @@
+{
+  "projectId": "99941756",
+  "stylePrefix": "soft Studio Ghibli watercolor animation still, warm cozy palette, gentle morning light, wholesome storybook mood",
+  "assets": [
+    {
+      "id": "a1",
+      "slug": "mr_bean_soy",
+      "kind": "character",
+      "imageUrl": "/generated/img-ae066735-4d1b-4863-899b-e13f69171807.png",
+      "locked": true,
+      "judge": {
+        "identity": 0.95
+      }
+    },
+    {
+      "id": "a2",
+      "slug": "black_sesame",
+      "kind": "character",
+      "imageUrl": "/generated/img-101937dc-149d-4a88-b794-c9574dd2cbd8.png",
+      "locked": true,
+      "judge": {
+        "identity": 0.93
+      }
+    },
+    {
+      "id": "a3",
+      "slug": "kitchen",
+      "kind": "location",
+      "imageUrl": "/generated/img-223e6a19-6745-4aaa-ad7a-7ea2e744320d.png",
+      "locked": true,
+      "judge": {
+        "realism": 0.9
+      }
+    },
+    {
+      "id": "a4",
+      "slug": "soy_milk_glass",
+      "kind": "prop",
+      "imageUrl": "/generated/img-f0af315d-4546-4d76-ac3a-e2ecd5cd9ff4.png",
+      "locked": false
+    }
+  ],
+  "scenes": [
+    {
+      "title": "Scene 1",
+      "prompts": [
+        {
+          "name": "1A",
+          "text": "Wide shot of the cozy kitchen bathed in soft morning light; wooden table center frame holds a steaming glass of soy milk. mr_bean_soy stands beside it, hands clasped nervously behind his back, eyes downcast. Camera slowly pushes in from eye level as steam curls upward.",
+          "assetSlugs": [
+            "mr_bean_soy",
+            "kitchen"
+          ],
+          "animate": true,
+          "shotSize": "wide shot",
+          "angle": "eye level",
+          "lens": "35mm lens",
+          "light": "natural window light"
+        }
+      ]
+    },
+    {
+      "title": "Scene 2",
+      "prompts": [
+        {
+          "name": "2A",
+          "text": "Medium close-up on the glass of soy milk; black_sesame peeks over the rim with wide, curious eyes. mr_bean_soy’s reflection appears in the glass—his leaf suddenly perks up. Camera tilts slightly upward as black_sesame rises into view.",
+          "assetSlugs": [
+            "mr_bean_soy",
+            "black_sesame",
+            "kitchen"
+          ],
+          "animate": true,
+          "shotSize": "medium close-up",
+          "angle": "three-quarter view",
+          "lens": "50mm lens",
+          "light": "natural window light"
+        }
+      ]
+    },
+    {
+      "title": "Scene 3",
+      "prompts": [
+        {
+          "name": "3A",
+          "text": "Medium shot at table level: mr_bean_soy and black_sesame sit opposite each other on tiny stools, each holding a miniature cup of soy milk. They giggle silently—mr_bean_soy covers his mouth, black_sesame rocks back with joy—then clink cups. Warm golden light floods in from the window, casting soft halos.",
+          "assetSlugs": [
+            "mr_bean_soy",
+            "black_sesame",
+            "kitchen"
+          ],
+          "animate": true,
+          "shotSize": "medium shot",
+          "angle": "eye level",
+          "lens": "50mm lens",
+          "light": "golden hour"
+        }
+      ]
+    },
+    {
+      "title": "Scene 4",
+      "prompts": [
+        {
+          "name": "4A",
+          "text": "Extreme wide shot centered on the glass of soy milk dead center of the wooden table. mr_bean_soy leans in from screen left, black_sesame from screen right, both resting their chins happily on the rim of the glass, smiling at each other. Camera holds static, shallow depth of field blurs the cozy kitchen background.",
+          "assetSlugs": [
+            "mr_bean_soy",
+            "black_sesame",
+            "kitchen"
+          ],
+          "animate": true,
+          "dialogue": "Better together.",
+          "shotSize": "extreme wide shot",
+          "angle": "overhead",
+          "lens": "85mm portrait lens",
+          "light": "golden hour"
+        }
+      ]
+    }
+  ],
+  "takes": [
+    {
+      "id": "mb_voice",
+      "promptName": "4A",
+      "kind": "audio",
+      "url": "/generated/75cb580e-ad5a-486b-9f02-e9fc56657647.wav"
+    },
+    {
+      "id": "mb2_1A",
+      "promptName": "1A",
+      "kind": "video",
+      "url": "/generated/bd292b1a-077e-4cf8-9e5f-42b3ed8b6390.mp4",
+      "keeper": true
+    },
+    {
+      "id": "mb2_2A",
+      "promptName": "2A",
+      "kind": "video",
+      "url": "/generated/d2bf08ff-4c6d-492b-9758-6036060a729d.mp4",
+      "keeper": true
+    },
+    {
+      "id": "mb2_3A",
+      "promptName": "3A",
+      "kind": "video",
+      "url": "/generated/ba6750ef-41fe-4bc3-a24f-11457ed15048.mp4",
+      "keeper": true
+    },
+    {
+      "id": "mb2_4A",
+      "promptName": "4A",
+      "kind": "video",
+      "url": "/generated/2f1cb743-3566-47bd-80b1-5712583ab8aa.mp4",
+      "keeper": true
+    }
+  ],
+  "script": "A 20-second heartwarming brand film for Mr Bean (Singapore soya brand), Studio Ghibli watercolor style.\nBeats, one per scene:\n1. Morning. The cozy kitchen is quiet; a glass of fresh soy milk steams on the wooden table; mr_bean_soy stands alone beside it, a little shy.\n2. black_sesame peeks out from behind the glass; the two notice each other; mr_bean_soy's leaf perks up.\n3. They laugh together and clink tiny cups of soy milk, best friends already; warm light floods the kitchen.\n4. Hero shot: the glass of soy milk dead center on the table, mr_bean_soy and black_sesame leaning on it happily from both sides; one spoken line: \"Better together.\"",
+  "rev": 3
+}
