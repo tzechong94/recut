@@ -27,6 +27,14 @@
   .footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid #1f1f27; font-size: 0.85rem; color: #71717a; }
   ul { margin: 0 0 18px 22px; }
   li { margin-bottom: 8px; }
+  figure { margin: 28px 0; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid #1f1f27; border-radius: 12px; background: #0d0d12; }
+  figcaption { font-size: 0.78rem; color: #71717a; margin-top: 10px; text-align: center; }
+  .layers { list-style: none; margin: 0 0 18px 0; }
+  .layers li { margin-bottom: 14px; }
+  .layers strong { color: #f4f4f5; }
+  .tag { display: inline-block; font-size: 0.72rem; letter-spacing: 0.02em; text-transform: uppercase; color: #71717a; border: 1px solid #27272a; border-radius: 999px; padding: 2px 9px; margin-bottom: 8px; }
+  .divider { border: 0; border-top: 1px solid #1f1f27; margin: 48px 0; }
 </style>
 </head>
 <body>
@@ -75,24 +83,95 @@
   ("Reference image 1 is yeepi… never merge, swap, or average their
   features"), both birds survived every cut of a five-cut film.</p>
 
-  <h2>What made it reliable on Qwen Cloud</h2>
-  <ul>
-    <li><strong>One manifest layer.</strong> Model ids exist in exactly one
-    directory, enforced by a guard test. The whole stack is Alibaba Cloud
-    Model Studio: <code>qwen-max</code> directs, <code>qwen-image-plus</code>
-    casts, <code>qwen3-vl-plus</code> judges continuity,
-    <code>wan2.7-r2v</code> shoots, <code>qwen3-tts-flash</code> speaks.</li>
-    <li><strong>Compiled prompts.</strong> Style, cut text, camera presets,
-    and reference bindings are typed fields assembled by a pure function,
-    never strings concatenated in UI code.</li>
-    <li><strong>A hard budget governor.</strong> Live mode requires a USD cap;
-    the submitter refuses any job that would cross it. We shipped the whole
-    product on a $19 ledger.</li>
-    <li><strong>Durability everywhere.</strong> Hosted result URLs expire, so
-    every image, clip, and voice line is mirrored to storage on arrival, and
-    references are re-uploaded through DashScope's file API at generation
-    time.</li>
+  <hr class="divider">
+
+  <p class="tag">Architecture</p>
+  <h2>Under the hood: one gateway, many models</h2>
+  <p>Recut is a Next.js 15 app (React 19, a <code>@xyflow/react</code> node
+  canvas for the Director's Monitor, Zustand for editor state). The browser
+  never talks to a model. Every generation goes through App Router API routes
+  into a single gateway that fronts five Alibaba Cloud Model Studio models on
+  the <code>ap-southeast-1</code> DashScope endpoint: <code>qwen-max</code>
+  directs, <code>qwen-image-plus</code> casts, <code>qwen3-vl-plus</code>
+  judges continuity, <code>wan2.7-r2v</code> shoots, and
+  <code>qwen3-tts-flash</code> speaks.</p>
+
+  <figure>
+    <img src="architecture.svg" alt="Recut architecture: browser to Next.js API routes to the DashScope gateway and durable storage">
+    <figcaption>Browser → App Router routes → manifest/adapter gateway → DashScope, with every result mirrored to durable storage.</figcaption>
+  </figure>
+
+  <p>The design goal was to make an unreliable substrate behave. Four layers
+  do the work.</p>
+
+  <ul class="layers">
+    <li><strong>1. The manifest gateway.</strong> A model is not a code path,
+    it is a <em>capability</em>. Each model is one declarative manifest: its
+    id, provider, capability (<code>video.r2v</code>, <code>image.edit</code>,
+    <code>text.plan</code>), what it supports (max reference images, native
+    audio, seed, duration range), and its per-unit cost. A router picks a model
+    by capability plus a preference (quality, speed, or cost) and hard
+    constraints, so calling code asks for "a reference-to-video model that takes
+    at least two refs" and never names one. Model-id strings live in exactly
+    one directory (documented as hard rule 1, one line in every manifest);
+    adding Kling in Sprint 3 was one manifest file plus one serializer, with no
+    change anywhere else.</li>
+
+    <li><strong>2. The pure prompt compiler.</strong> A cut's prompt is never
+    a string glued together in a component. Typed rig state (camera, lighting,
+    lens, style prefix, scene overrides) compiles through pure functions into a
+    <code>CompiledPrompt</code>, then a per-provider serializer turns that into
+    the exact request dialect. Same input, byte-identical output, asserted in a
+    test. Because the serialized payload is <em>also</em> the cache key, prompts
+    are reproducible by construction.</li>
+
+    <li><strong>3. The Series Bible and reference binding.</strong> Cast
+    entities are referenced, never copied. At compile time a shot's entity ids
+    resolve through a single injection point to their locked reference images,
+    ordered by importance; edit an entity once and every shot that uses it
+    inherits the change. The video request carries those images as enumerated
+    <code>media</code> entries plus a binding sentence the model cannot average
+    across: <em>"Reference image 1 is yeepi (character); Reference image 2 is
+    momo (character). Each reference is a DISTINCT entity; never merge, swap, or
+    average their features."</em> This is the line that stopped two swallows
+    from collapsing into one bird.</li>
+
+    <li><strong>4. Replay/live parity through one cache key.</strong> Every job
+    is keyed by <code>sha256(modelId + canonical(payload) + seed)</code>, with
+    object keys sorted recursively so semantically identical requests hash
+    identically. The same key is used in replay mode (serve the cached result)
+    and live mode (call DashScope, then cache), so code proven against fixtures
+    runs unchanged against real models. The judge demo, the test suite, and a
+    live generation all travel the same path.</li>
   </ul>
+
+  <h2>The economics we actually shipped on</h2>
+  <p>Every manifest carries its unit cost, so the gateway knows the price of a
+  call before it makes it. A budget governor persists cumulative spend to a
+  machine-local ledger and, in live mode, checks the cap <em>before</em> each
+  submit: if <code>spent + cost</code> would cross <code>RECUT_BUDGET_USD</code>,
+  the submitter throws and the call never leaves the box. There is no override
+  flag. Combined with the replay cache (identical requests cost nothing the
+  second time), that is how a five-model pipeline got built and demoed on a
+  ledger under $20.</p>
+
+  <p>Durability is the other half. Hosted DashScope result URLs expire in about
+  a day, so every image, clip, and voice line is mirrored into
+  <code>public/generated/</code> the moment it is produced, and reference images
+  are re-uploaded through DashScope's file API at generation time (the video
+  endpoint only accepts hosted urls, never data URIs) so the model can always
+  fetch them.</p>
+
+  <h2>From clips to a film</h2>
+  <p>Keepers land on a real timeline: trim, split, reorder. Rendering is not
+  a slideshow of stills. The assemble route probes each accepted clip with
+  <code>ffprobe</code> for its true duration and whether it carries an audio
+  stream, then builds one <code>ffmpeg</code> graph that concatenates the
+  ordered clips, honours each clip's trim window, bakes the series LUT
+  (<code>lut3d</code>), and emits either 1080p landscape or a centre-cropped
+  9:16 vertical. Each clip keeps <code>wan2.7-r2v</code>'s native audio bed, and
+  TTS dialogue mixes in on top. Real ffmpeg on the host, not ffmpeg.wasm, which
+  is too slow at 1080p.</p>
 
   <h2>The demo is the product</h2>
   <p>We did not build a slideshow. The judge demo replays a real project
