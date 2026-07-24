@@ -30,7 +30,9 @@ ECS console → **Instances** → **Create Instance**.
 - **Image**: Ubuntu 22.04 64-bit.
 - **Storage**: default 40 GB ESSD is plenty.
 - **Public IP**: **do not assign one.** You bind the existing EIP in step 9.
-- **Logon**: attach an **SSH key pair**. Do not set a root password.
+- **Logon**: set a **root password**. ECS key pairs are region-scoped and reject
+  ed25519 keys, which makes them more trouble than they are worth for one box.
+  What actually protects port 22 here is the source restriction in step 2.
 
 ## 2. Open the firewall (build phase)
 
@@ -153,19 +155,30 @@ NGINX
 nginx -t && systemctl reload nginx
 ```
 
-## 9. Harden SSH
+If your terminal indents pasted text, that heredoc never closes: the terminating
+`NGINX` has to sit at column 0. Write the file with a single `printf ... > file`
+line instead when that happens.
 
-```bash
-sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sshd -t && systemctl restart ssh
-```
+## 9. SSH access policy
 
-**Open a second SSH session and confirm you can still log in before you close the
-first one.** Getting this wrong locks you out of the box (console VNC is the way
-back in if it happens).
+This deployment logs in as root with a password, so **port 22 must stay
+restricted to your own IP, permanently**. That one security group rule is the
+whole of its protection. Widened to `0.0.0.0/0` it becomes a brute-force target
+within hours.
+
+Do **not** set `PasswordAuthentication no` here. There is no key on the box, so
+it would lock you out. If your home IP changes, edit the rule, or use the ECS
+console's **Remote Connection (VNC)** to get back in.
+
+Worth keeping in perspective: the 2026-07-24 compromise came through the web
+tier, not SSH. Password auth behind an IP restriction was never the weak point.
 
 ## 10. Bind the EIP and open port 80
+
+If the instance came up with a public address of its own, the bind is refused
+with "already associated with the EIP ...". Unbind that address first, then
+**release** it so it stops billing. Read the addresses carefully:
+`47.237.143.32` is the one to keep.
 
 VPC console → **Elastic IP Addresses** → `eip-t4nn4faxkesbbsxk7gpc5`
 (`47.237.143.32`) → **Bind** → this instance.
