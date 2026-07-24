@@ -1,4 +1,5 @@
 import { getPipeline } from '../../../../../../lib/server/pipelineStore';
+import { safeFetch, BlockedUrl } from '../../../../../../lib/server/safeFetch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,9 @@ const EXT: Record<string, string> = {
 
 /** Download a cast member's image with the USER'S name (slug) as the filename.
  *  Server-side fetch because cross-origin OSS urls ignore the client `download` attribute.
- *  No arbitrary-url proxying: only urls already stored in this project's own document. */
+ *  The url comes from the project document, but PUT /api/pipeline/[id] takes that document from
+ *  the client unauthenticated, so it is caller-controlled: it goes through safeFetch or this
+ *  route proxies reads of anything the instance can reach. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string; assetId: string }> }): Promise<Response> {
   const { id, assetId } = await params;
   const doc = getPipeline(id);
@@ -25,7 +28,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     type = head?.match(/data:([^;]+)/)?.[1] ?? type;
     bytes = Buffer.from(b64 ?? '', 'base64').buffer as ArrayBuffer;
   } else {
-    const res = await fetch(asset.imageUrl);
+    let res: Response;
+    try {
+      res = await safeFetch(asset.imageUrl);
+    } catch (e) {
+      if (e instanceof BlockedUrl) return Response.json({ error: e.reason }, { status: 400 });
+      throw e;
+    }
     if (!res.ok) return Response.json({ error: `source fetch ${res.status}` }, { status: 502 });
     type = res.headers.get('content-type')?.split(';')[0] ?? type;
     bytes = await res.arrayBuffer();

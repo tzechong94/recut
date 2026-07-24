@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { BudgetGovernor } from '../../../lib/gateway/budget';
 import { BudgetExceeded } from '../../../lib/gateway/errors';
+import { safeFetch, BlockedUrl } from '../../../lib/server/safeFetch';
 import { dashscopeImageCall } from '../../../adapters/dashscope';
 import { selectModel } from '../../../lib/gateway/router';
 import { CRITIC_MODEL_ID } from '../../../manifests/qwen-vl-critic';
@@ -43,7 +44,7 @@ async function toLocalFile(image: string): Promise<string> {
   if (image.startsWith('data:')) {
     writeFileSync(out, Buffer.from(image.split(',')[1] ?? '', 'base64'));
   } else {
-    const r = await fetch(image);
+    const r = await safeFetch(image);
     writeFileSync(out, Buffer.from(await r.arrayBuffer()));
   }
   return out;
@@ -248,6 +249,7 @@ export async function POST(req: Request): Promise<Response> {
 
     return Response.json({ error: 'unknown kind' }, { status: 400 });
   } catch (e) {
+    if (e instanceof BlockedUrl) return Response.json({ error: e.reason }, { status: 400 });
     if (e instanceof BudgetExceeded) {
       return Response.json(
         { error: 'The shared demo budget has been used up for now. Thanks for trying Recut! Watch a demo film to see the full pipeline.', code: 'BUDGET' },
